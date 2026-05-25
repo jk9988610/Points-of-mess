@@ -2,7 +2,7 @@
 
 个人专用的静态 Web 应用：在混乱宇宙中创建 **点**，为每个点设定角色性格，进入后由 AI 扮演该角色与你对话。无需 Node，浏览器即可运行。
 
-**产品定义与规划见 [docs/PRODUCT.md](docs/PRODUCT.md)。**
+**产品定义见 [docs/PRODUCT.md](docs/PRODUCT.md)；v0 实现定稿见 [docs/DESIGN-v0.md](docs/DESIGN-v0.md)。**
 
 ## 快速开始
 
