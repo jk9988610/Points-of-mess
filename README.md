@@ -22,21 +22,25 @@
 
 ## 当前功能
 
-- DeepSeek 流式对话
-- 停止生成、清空会话
-- `localStorage` 保存对话记录
+- 地图点击移动、点击角色交谈（平板触屏）
+- 角色「锋利」：程序开场 + 四选项（要点 / 追问 / 换题 / 收束）
+- 漫画式文本框气泡、DeepSeek 流式短回复
+- 按角色 `localStorage` 保存对话
 
 ## 文件结构
 
 ```
 index.html
-styles/chat.css
+styles/map.css
 js/config.js
+js/presets.js
+js/dialogue.js
 js/state.js
-js/render.js
+js/map.js
 js/api.js
 js/app.js
 docs/PRODUCT.md
+docs/DESIGN-v0.md
 ```
 
 ## 说明

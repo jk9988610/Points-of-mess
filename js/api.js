@@ -7,7 +7,14 @@
     return cfg;
   }
 
-  async function streamChat({ messages, onDelta, signal }) {
+  async function streamChat({
+    systemPrompt,
+    messages,
+    onDelta,
+    signal,
+    temperature,
+    max_tokens,
+  }) {
     const cfg = getConfig();
 
     const response = await fetch(cfg.apiUrl, {
@@ -18,8 +25,10 @@
       },
       body: JSON.stringify({
         model: cfg.model,
-        messages: [{ role: "system", content: cfg.systemPrompt }, ...messages],
+        messages: [{ role: "system", content: systemPrompt }, ...messages],
         stream: true,
+        temperature: temperature ?? cfg.temperature ?? 0.6,
+        max_tokens: max_tokens ?? cfg.maxTokens ?? 80,
       }),
       signal,
     });

@@ -2,42 +2,41 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Points-of-mess</title>
-  <link rel="stylesheet" href="styles/chat.css">
+  <link rel="stylesheet" href="styles/map.css">
 </head>
 <body>
-  <main class="chat-app" aria-label="Points-of-mess 对话">
-    <header class="chat-header">
-      <div>
-        <h1 class="chat-title">Points-of-mess</h1>
-        <p class="chat-subtitle">从混乱里捞出要点。随便聊，不必先整理好。</p>
-      </div>
-      <div class="header-actions">
-        <button class="stop-button" type="button" id="stopGeneration" disabled>停止</button>
-        <button class="clear-button" type="button" id="clearChat">清空</button>
-      </div>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1 class="app-title">Points-of-mess</h1>
+      <button class="stop-button" type="button" id="stopGeneration" disabled>停止</button>
     </header>
+
+    <div class="map-stage" id="mapStage">
+      <canvas id="gameCanvas" aria-label="宇宙地图"></canvas>
+      <div class="speech-bubble" id="speechBubble" role="status" aria-live="polite">
+        <p class="speech-bubble-text" id="speechBubbleText"></p>
+      </div>
+      <p class="map-hint" id="mapHint">点击空地移动 · 靠近角色后点击交谈</p>
+    </div>
 
     <div class="status-banner" id="statusBanner" role="status"></div>
 
-    <section class="messages" id="messages" aria-live="polite"></section>
-
-    <form class="composer" id="chatForm">
-      <textarea
-        id="messageInput"
-        rows="1"
-        autocomplete="off"
-        placeholder="输入消息，Enter 发送，Shift+Enter 换行…"
-        aria-label="消息输入"
-      ></textarea>
-      <button id="sendButton" type="submit" disabled>发送</button>
-    </form>
-  </main>
+    <nav class="options-bar hidden" id="optionsBar" aria-label="对话选项">
+      <button type="button" data-option-id="1">要点</button>
+      <button type="button" data-option-id="2">追问</button>
+      <button type="button" data-option-id="3">换题</button>
+      <button type="button" data-option-id="4">收束</button>
+    </nav>
+  </div>
 
   <script src="js/config.js"></script>
+  <script src="js/presets.js"></script>
+  <script src="js/dialogue.js"></script>
   <script src="js/state.js"></script>
-  <script src="js/render.js"></script>
+  <script src="js/map.js"></script>
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
 </body>

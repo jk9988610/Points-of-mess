@@ -1,21 +1,8 @@
 (function () {
-  const STORAGE_KEY = "points-of-mess-chat-v1";
+  const STORAGE_KEY = "points-of-mess-v0";
 
   function createId() {
     return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  }
-
-  function buildStarterMessages() {
-    return [
-      {
-        id: createId(),
-        role: "assistant",
-        content:
-          "欢迎来到 Points-of-mess。\n\n这里专门收留乱糟糟的想法——你不用先整理，直接把碎片、吐槽、没想清楚的问题扔进来。我会帮你从中捞出几条说得清的「要点」。\n\n发点什么吧，越乱越好。",
-        createdAt: Date.now(),
-        status: "done",
-      },
-    ];
   }
 
   function loadFromStorage() {
@@ -30,37 +17,43 @@
     }
   }
 
-  window.ChatState = {
+  function defaultPlayerPosition() {
+    return { x: 0.28, y: 0.62 };
+  }
+
+  window.GameState = {
     createId,
-    buildStarterMessages,
     createInitialState() {
       const saved = loadFromStorage();
       return {
-        messages: saved?.messages?.length ? saved.messages : buildStarterMessages(),
+        player: saved?.player || defaultPlayerPosition(),
+        moveTarget: null,
+        talkingId: null,
+        bubbleText: "",
         isStreaming: false,
         error: null,
+        sessions: saved?.sessions || {},
       };
     },
-    getApiMessages(messages) {
-      return messages
-        .filter((m) => m.status === "done" && (m.role === "user" || m.role === "assistant"))
-        .map((m) => ({ role: m.role, content: m.content }));
+    getSession(state, characterId) {
+      if (!state.sessions[characterId]) {
+        state.sessions[characterId] = { messages: [] };
+      }
+      return state.sessions[characterId];
     },
-    saveToStorage(messages) {
+    persist(state) {
       try {
         localStorage.setItem(
           STORAGE_KEY,
           JSON.stringify({
-            messages: messages.filter((m) => m.status !== "error"),
+            player: state.player,
+            sessions: state.sessions,
             savedAt: Date.now(),
           })
         );
       } catch {
-        /* private mode or quota */
+        /* quota / private mode */
       }
-    },
-    resetMessages() {
-      return buildStarterMessages();
     },
   };
 })();

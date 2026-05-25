@@ -1,147 +1,335 @@
 (function () {
-  const { createId, createInitialState, getApiMessages, saveToStorage, resetMessages } =
-    window.ChatState;
-  const { renderMessages, setStatusBanner, updateMessageContent } = window.ChatRender;
+  const { characters, getArchetype, getCharacter } = window.GamePresets;
+  const { createId, createInitialState, getSession, persist } = window.GameState;
+  const { buildGameUserMessage, getHistoryForApi } = window.GameDialogue;
   const { streamChat } = window.ChatApi;
+  const {
+    draw,
+    tickMove,
+    canvasToWorld,
+    worldToCanvas,
+    hitCharacter,
+    isNearPlayer,
+    INTERACT_RADIUS,
+  } = window.GameMap;
 
-  const messagesEl = document.querySelector("#messages");
-  const formEl = document.querySelector("#chatForm");
-  const inputEl = document.querySelector("#messageInput");
-  const sendButtonEl = document.querySelector("#sendButton");
-  const clearButtonEl = document.querySelector("#clearChat");
-  const stopButtonEl = document.querySelector("#stopGeneration");
-  const statusBannerEl = document.querySelector("#statusBanner");
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  const bubbleEl = document.getElementById("speechBubble");
+  const bubbleTextEl = document.getElementById("speechBubbleText");
+  const optionsBar = document.getElementById("optionsBar");
+  const statusBannerEl = document.getElementById("statusBanner");
+  const stopButtonEl = document.getElementById("stopGeneration");
+  const hintEl = document.getElementById("mapHint");
+
+  const CHAR_BUBBLE_GAP = 36;
 
   const state = createInitialState();
   let abortController = null;
+  let lastFrame = performance.now();
+  let highlightId = null;
 
-  function persist() {
-    saveToStorage(state.messages);
+  function setBubble(text, streaming) {
+    state.bubbleText = text;
+    bubbleTextEl.textContent = text || (streaming ? "…" : "");
+    bubbleEl.classList.toggle("visible", Boolean(state.talkingId));
+    bubbleEl.classList.toggle("streaming", Boolean(streaming));
+    positionBubble();
   }
 
-  function setComposerEnabled(enabled) {
-    inputEl.disabled = !enabled;
-    sendButtonEl.disabled = !enabled || inputEl.value.trim().length === 0;
-    clearButtonEl.disabled = !enabled;
-    stopButtonEl.disabled = enabled;
+  function setStatus(text, isError) {
+    state.error = isError ? text : null;
+    if (!text) {
+      statusBannerEl.classList.remove("visible", "error");
+      statusBannerEl.textContent = "";
+      return;
+    }
+    statusBannerEl.textContent = text;
+    statusBannerEl.classList.add("visible");
+    statusBannerEl.classList.toggle("error", Boolean(isError));
   }
 
-  function refreshUI(options) {
-    renderMessages(messagesEl, state.messages, options);
-    setStatusBanner(statusBannerEl, state.error, { isError: Boolean(state.error) });
-    setComposerEnabled(!state.isStreaming);
+  function setOptionsVisible(visible) {
+    optionsBar.classList.toggle("hidden", !visible);
+    optionsBar.querySelectorAll("button").forEach((btn) => {
+      btn.disabled = state.isStreaming;
+    });
   }
 
-  function setSendButtonState() {
-    sendButtonEl.disabled = state.isStreaming || inputEl.value.trim().length === 0;
+  function resizeCanvas() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    positionBubble();
+    renderMap();
   }
 
-  async function sendMessage(text) {
+  function positionBubble() {
+    if (!state.talkingId) {
+      return;
+    }
+    const ch = getCharacter(state.talkingId);
+    if (!ch) {
+      return;
+    }
+    const { x, y, rect } = worldToCanvas(canvas, ch.x, ch.y);
+    const bubbleRect = bubbleEl.getBoundingClientRect();
+    const left = rect.left + x - bubbleRect.width / 2;
+    const top = rect.top + y - CHAR_BUBBLE_GAP - bubbleRect.height;
+    bubbleEl.style.left = `${Math.max(8, left)}px`;
+    bubbleEl.style.top = `${Math.max(8, top)}px`;
+  }
+
+  function renderMap() {
+    const near = characters.find((c) => isNearPlayer(state.player, c));
+    highlightId = near?.id || null;
+    draw(ctx, canvas, {
+      player: state.player,
+      characters,
+      talkingId: state.talkingId,
+      highlightId,
+    });
+    hintEl.textContent = state.talkingId
+      ? "选择下方选项"
+      : near
+        ? `点击「${near.name}」交谈`
+        : "点击空地移动 · 靠近角色后点击交谈";
+  }
+
+  function endTalking() {
+    state.talkingId = null;
+    setBubble("");
+    setOptionsVisible(false);
+    stopButtonEl.disabled = true;
+    renderMap();
+  }
+
+  function startTalking(characterId) {
+    const character = getCharacter(characterId);
+    const archetype = getArchetype(character.archetypeId);
+    if (!character || !archetype) {
+      return;
+    }
+    if (!isNearPlayer(state.player, character)) {
+      setStatus("再靠近一点才能交谈。", false);
+      return;
+    }
+
+    state.talkingId = characterId;
+    const session = getSession(state, characterId);
+    setStatus("", false);
+
+    if (session.messages.length === 0) {
+      const openingMsg = {
+        id: createId(),
+        role: "assistant",
+        content: archetype.opening,
+        createdAt: Date.now(),
+        status: "done",
+      };
+      session.messages.push(openingMsg);
+      persist(state);
+      setBubble(archetype.opening, false);
+    } else {
+      const last = [...session.messages]
+        .reverse()
+        .find((m) => m.role === "assistant" && m.status === "done");
+      setBubble(last?.content || archetype.opening, false);
+    }
+
+    setOptionsVisible(true);
+    stopButtonEl.disabled = true;
+    renderMap();
+    positionBubble();
+  }
+
+  async function pickOption(optionId) {
+    if (!state.talkingId || state.isStreaming) {
+      return;
+    }
+
+    const character = getCharacter(state.talkingId);
+    const archetype = getArchetype(character.archetypeId);
+    const pick = archetype.options.find((o) => o.id === optionId);
+    if (!pick) {
+      return;
+    }
+
+    const session = getSession(state, state.talkingId);
+
     const userMessage = {
       id: createId(),
       role: "user",
-      content: text,
+      content: pick.line,
+      intent: pick.intent,
       createdAt: Date.now(),
       status: "done",
     };
 
-    const assistantMessage = {
-      id: createId(),
-      role: "assistant",
-      content: "",
-      createdAt: Date.now(),
-      status: "streaming",
-    };
+    session.messages.push(userMessage);
+    persist(state);
 
-    state.messages.push(userMessage, assistantMessage);
+    const history = getHistoryForApi(session.messages);
+    const apiUserContent = buildGameUserMessage(character, archetype, pick);
+    const apiMessages = [
+      ...history.slice(0, -1),
+      { role: "user", content: apiUserContent },
+    ];
+
     state.isStreaming = true;
-    state.error = null;
-    refreshUI();
-    persist();
+    setOptionsVisible(true);
+    stopButtonEl.disabled = false;
+    setBubble("", true);
+    setStatus("", false);
 
+    let assistantContent = "";
     abortController = new AbortController();
 
     try {
+      const closeTokens = pick.intent === "close" ? 50 : undefined;
       await streamChat({
-        messages: getApiMessages(state.messages.slice(0, -1)),
+        systemPrompt: archetype.system,
+        messages: apiMessages,
+        max_tokens: closeTokens,
         signal: abortController.signal,
         onDelta(chunk) {
-          assistantMessage.content += chunk;
-          updateMessageContent(
-            messagesEl,
-            assistantMessage.id,
-            assistantMessage.content,
-            true
-          );
+          assistantContent += chunk;
+          setBubble(assistantContent, true);
         },
       });
 
-      assistantMessage.status = "done";
+      const assistantMessage = {
+        id: createId(),
+        role: "assistant",
+        content: assistantContent,
+        createdAt: Date.now(),
+        status: "done",
+      };
+      session.messages.push(assistantMessage);
+      persist(state);
+      setBubble(assistantContent, false);
+
+      if (pick.intent === "close") {
+        setTimeout(() => endTalking(), 600);
+      }
     } catch (error) {
       if (error.name === "AbortError") {
-        assistantMessage.status = "done";
-        if (!assistantMessage.content) {
-          assistantMessage.content = "（已停止生成）";
+        if (assistantContent) {
+          session.messages.push({
+            id: createId(),
+            role: "assistant",
+            content: assistantContent,
+            createdAt: Date.now(),
+            status: "done",
+          });
+          persist(state);
+          setBubble(assistantContent, false);
         }
       } else {
-        assistantMessage.status = "error";
-        assistantMessage.content = error.message || "生成失败，请稍后重试。";
-        state.error = assistantMessage.content;
+        const msg = error.message || "生成失败，请稍后重试。";
+        setStatus(msg, true);
+        setBubble(assistantContent || "…", false);
       }
     } finally {
       state.isStreaming = false;
       abortController = null;
-      refreshUI();
-      persist();
-      inputEl.focus();
+      stopButtonEl.disabled = true;
+      setOptionsVisible(state.talkingId !== null);
+      renderMap();
+      positionBubble();
     }
   }
 
-  formEl.addEventListener("submit", (event) => {
-    event.preventDefault();
+  function handleMapClick(clientX, clientY) {
     if (state.isStreaming) {
       return;
     }
 
-    const text = inputEl.value.trim();
-    if (!text) {
+    const world = canvasToWorld(canvas, clientX, clientY);
+    const hit = hitCharacter(characters, world);
+
+    if (hit && isNearPlayer(state.player, hit)) {
+      if (state.talkingId === hit.id) {
+        return;
+      }
+      startTalking(hit.id);
       return;
     }
 
-    inputEl.value = "";
-    inputEl.style.height = "auto";
-    setSendButtonState();
-    sendMessage(text);
-  });
-
-  inputEl.addEventListener("input", () => {
-    setSendButtonState();
-    inputEl.style.height = "auto";
-    inputEl.style.height = `${Math.min(inputEl.scrollHeight, 140)}px`;
-  });
-
-  inputEl.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      formEl.requestSubmit();
+    if (state.talkingId) {
+      return;
     }
+
+    if (hit && !isNearPlayer(state.player, hit)) {
+      state.moveTarget = { x: hit.x, y: hit.y - INTERACT_RADIUS * 0.85 };
+      setStatus(`靠近「${hit.name}」后再点击`, false);
+      return;
+    }
+
+    state.moveTarget = {
+      x: Math.max(0.05, Math.min(0.95, world.x)),
+      y: Math.max(0.05, Math.min(0.95, world.y)),
+    };
+    setStatus("", false);
+  }
+
+  function gameLoop(now) {
+    const dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+
+    if (state.moveTarget && !state.talkingId) {
+      const next = tickMove(state.player, state.moveTarget, dt);
+      state.player = next;
+      if (
+        Math.hypot(next.x - state.moveTarget.x, next.y - state.moveTarget.y) < 0.004
+      ) {
+        state.moveTarget = null;
+        persist(state);
+      }
+      renderMap();
+    }
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  canvas.addEventListener("click", (e) => {
+    handleMapClick(e.clientX, e.clientY);
+  });
+
+  canvas.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length !== 1) {
+        return;
+      }
+      e.preventDefault();
+      const t = e.touches[0];
+      handleMapClick(t.clientX, t.clientY);
+    },
+    { passive: false }
+  );
+
+  optionsBar.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-option-id]");
+    if (!btn) {
+      return;
+    }
+    pickOption(Number(btn.dataset.optionId));
   });
 
   stopButtonEl.addEventListener("click", () => {
     abortController?.abort();
   });
 
-  clearButtonEl.addEventListener("click", () => {
-    if (state.isStreaming) {
-      abortController?.abort();
-    }
-    state.messages = resetMessages();
-    state.error = null;
-    persist();
-    refreshUI();
-    inputEl.focus();
-  });
+  window.addEventListener("resize", resizeCanvas);
+  window.addEventListener("scroll", positionBubble, true);
 
-  refreshUI();
-  inputEl.focus();
+  resizeCanvas();
+  setOptionsVisible(false);
+  setBubble("");
+  requestAnimationFrame(gameLoop);
 })();
