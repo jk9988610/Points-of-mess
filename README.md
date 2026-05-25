@@ -4,11 +4,17 @@
 
 ## 在线访问（DeepSeek 分支）
 
-安卓平板浏览器打开：
+安卓平板请用下面任一链接（**不要用 jsdelivr**，会把网页当成纯文本显示源码）：
 
-**https://cdn.jsdelivr.net/gh/jk9988610/Points-of-mess@cursor/deepseek-chat-d862/index.html**
+1. **推荐（GitHub Pages）**  
+   **https://jk9988610.github.io/Points-of-mess/**  
+   仓库 Settings → Pages → Source 选 **Deploy from branch** → 分支 **gh-pages** → `/ (root)` → Save。  
+   每次推送到 `cursor/deepseek-chat-d862` 会自动更新站点。
 
-本分支：`cursor/deepseek-chat-d862`。推送到该分支后，刷新页面即可看到更新。
+2. **备用（立即可用）**  
+   **https://htmlpreview.github.io/?https://raw.githubusercontent.com/jk9988610/Points-of-mess/cursor/deepseek-chat-d862/index.html**
+
+本分支：`cursor/deepseek-chat-d862`。
 
 ## 使用方式
 
