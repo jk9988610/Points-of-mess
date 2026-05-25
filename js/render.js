@@ -11,7 +11,7 @@
       return "你";
     }
     if (role === "assistant") {
-      return "AI";
+      return "PoM";
     }
     return "?";
   }
