@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "start:pad": "HOST=0.0.0.0 node server.js",
     "dev": "node --watch server.js"
   },
   "dependencies": {

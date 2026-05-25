@@ -1,11 +1,13 @@
 import "dotenv/config";
 import express from "express";
+import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || "0.0.0.0";
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 
@@ -93,6 +95,28 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Chat server running at http://localhost:${PORT}`);
+function getLanAddresses() {
+  const addresses = new Set();
+  for (const interfaces of Object.values(os.networkInterfaces())) {
+    for (const iface of interfaces || []) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        addresses.add(iface.address);
+      }
+    }
+  }
+  return [...addresses];
+}
+
+app.listen(PORT, HOST, () => {
+  console.log(`Chat server listening on ${HOST}:${PORT}`);
+  console.log(`本机浏览器: http://localhost:${PORT}`);
+  const lan = getLanAddresses();
+  if (lan.length > 0) {
+    console.log("Pad / 平板（同一 Wi‑Fi）可访问:");
+    for (const ip of lan) {
+      console.log(`  http://${ip}:${PORT}`);
+    }
+  } else {
+    console.log("未检测到局域网 IPv4；Pad 请改用本机实际 IP 访问。");
+  }
 });
