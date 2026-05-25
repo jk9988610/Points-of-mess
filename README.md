@@ -1,47 +1,33 @@
 # Points-of-mess
 
-基于 DeepSeek API 的网页 AI 对话应用。前端为模块化静态页面，通过本地 Node 服务代理 API（密钥仅保存在服务端 `.env`，不会暴露给浏览器）。
+纯静态网页 AI 对话，**无需安装 Node**。浏览器直连 DeepSeek API，适合平板本地自用。
+
+## 使用方式
+
+1. 把整个项目文件夹拷到平板（或通过网盘/iCloud 同步）。
+2. 用浏览器打开 **`index.html`** 即可开始聊天。
+3. 若尚未配置密钥，编辑 **`js/config.js`**，填入 `apiKey`（可复制 `js/config.example.js` 作模板）。
 
 ## 功能
 
-- 与 DeepSeek `deepseek-chat` 模型进行多轮文本对话
-- 流式输出（打字机效果）
+- DeepSeek 多轮对话与流式输出
 - 停止生成、清空会话
-- 浏览器 `localStorage` 自动保存对话记录
+- `localStorage` 自动保存对话（需浏览器允许本地存储）
 
-## 快速开始
-
-1. 复制环境变量模板并填入 API Key：
-
-```bash
-cp .env.example .env
-# 编辑 .env，设置 DEEPSEEK_API_KEY=你的密钥
-```
-
-2. 安装依赖并启动：
-
-```bash
-npm install
-npm start
-```
-
-3. 在浏览器打开 [http://localhost:3000](http://localhost:3000)
-
-开发时可用 `npm run dev`（文件变更自动重启服务）。
-
-## 项目结构
+## 文件结构
 
 ```
-index.html          # 页面壳
-styles/chat.css     # 样式
-js/state.js         # 状态与本地存储
-js/render.js        # DOM 渲染
-js/api.js           # 流式 API 客户端
-js/app.js           # 应用逻辑与事件
-server.js           # DeepSeek API 代理
+index.html
+styles/chat.css
+js/config.js      ← API 密钥（自用可写在这里）
+js/state.js
+js/render.js
+js/api.js
+js/app.js
 ```
 
-## 安全说明
+## 说明
 
-- **切勿**将 `DEEPSEEK_API_KEY` 写入前端代码或提交到 Git（`.env` 已在 `.gitignore` 中）。
-- 若密钥曾在聊天或公开仓库中泄露，请在 DeepSeek 控制台轮换密钥。
+- **不需要 Node**：已移除服务端代理；请求从浏览器直接发往 `api.deepseek.com`（DeepSeek 支持跨域）。
+- **密钥在前端**：仅适合你自己玩；不要把带密钥的文件夹公开分享或上传到公开仓库。
+- 部分浏览器对 `file://` 打开本地页有限制；若无法联网，可改用「在文件 App 里用 Safari/Chrome 打开」或把整个文件夹放到任意静态网站目录下通过 `https://` 访问。

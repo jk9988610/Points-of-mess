@@ -1,3 +1,5 @@
-node_modules/
-.env
 .DS_Store
+node_modules/
+
+# 若不想把密钥提交到 Git，可取消下一行注释
+# js/config.js

@@ -11,7 +11,7 @@
     <header class="chat-header">
       <div>
         <h1 class="chat-title">AI 智能对话</h1>
-        <p class="chat-subtitle">由 DeepSeek 驱动，支持流式回复与本地会话保存。</p>
+        <p class="chat-subtitle">纯静态页面，平板直接打开即可；由 DeepSeek 驱动，支持流式回复。</p>
       </div>
       <div class="header-actions">
         <button class="stop-button" type="button" id="stopGeneration" disabled>停止</button>
@@ -35,6 +35,10 @@
     </form>
   </main>
 
-  <script type="module" src="js/app.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
