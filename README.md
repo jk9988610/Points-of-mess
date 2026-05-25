@@ -8,7 +8,7 @@
 
 1. 编辑 `js/config.js`，填入 DeepSeek `apiKey`（可参考 `js/config.example.js`）。
 2. 用浏览器打开 `index.html`（平板可直接打开项目文件夹中的该文件）。
-3. 开发在分支 **`cursor/deepseek-chat-d862`** 上进行。
+3. 日常开发在分支 **`cursor/deepseek-chat-d862`**；稳定版合并到 **`main`**。
 
 ## 在线访问
 
@@ -16,9 +16,9 @@
 
 **https://jk9988610.github.io/Points-of-mess/**
 
-未启用前可用备用预览：
+未启用前可用备用预览（**main** 分支）：
 
-**https://htmlpreview.github.io/?https://raw.githubusercontent.com/jk9988610/Points-of-mess/cursor/deepseek-chat-d862/index.html**
+**https://htmlpreview.github.io/?https://raw.githubusercontent.com/jk9988610/Points-of-mess/main/index.html**
 
 ## 当前功能
 
@@ -42,4 +42,4 @@ docs/PRODUCT.md
 ## 说明
 
 - 请求由浏览器直连 DeepSeek（支持 CORS）；个人自用可将密钥写在 `js/config.js`。
-- 推送到 `cursor/deepseek-chat-d862` 会通过 Actions 更新 `gh-pages` 分支供 Pages 发布。
+- 推送到 **`cursor/deepseek-chat-d862`** 会通过 Actions 更新 **`gh-pages`** 供 Pages 发布；合并进 **`main`** 即为当前稳定说明与代码。
