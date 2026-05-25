@@ -6,6 +6,35 @@
 
 ---
 
+## 如何访问（v0）
+
+与 [README 访问说明](../README.md#如何访问) 一致，摘要如下。
+
+### 本地（完整功能）
+
+1. 复制配置：`cp js/config.example.js js/config.js`  
+2. 在 `js/config.js` 中填写 DeepSeek `apiKey`（此文件不提交 Git）  
+3. 打开方式任选：  
+   - 双击 / 用浏览器打开项目根目录的 **`index.html`**  
+   - 或根目录执行 `python3 -m http.server 8080`，访问 **`http://localhost:8080/`**  
+
+平板：将项目拷到设备后同样建好 `js/config.js`，用浏览器打开 `index.html`。
+
+### 在线
+
+| 用途 | 地址 |
+|------|------|
+| GitHub Pages（合并 `main` 后由 Actions 发布） | https://jk9988610.github.io/Points-of-mess/ |
+| 仅预览 HTML（无 `config.js`，**不能**调 API） | https://htmlpreview.github.io/?https://raw.githubusercontent.com/jk9988610/Points-of-mess/main/index.html |
+
+Pages 默认部署**不含**密钥文件；要在线对话需在 `gh-pages` 单独维护 `js/config.js`，或只用本地访问。
+
+### 操作
+
+点击空地移动 → 靠近「锋利」并点击 → 底部四选项对话 → **收束** 结束。
+
+---
+
 ## 1. 是什么（不变）
 
 个人专用静态 Web：混乱宇宙地图上分布**预设角色**（点）。每个角色有固定性格与台词表；玩家靠近后对话，由 AI 按角色设定短句回复。

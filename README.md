@@ -1,24 +1,55 @@
 # Points-of-mess
 
-个人专用的静态 Web 应用：在混乱宇宙中创建 **点**，为每个点设定角色性格，进入后由 AI 扮演该角色与你对话。无需 Node，浏览器即可运行。
+个人专用的静态 Web 应用：在混乱宇宙地图上点击移动，靠近预设角色后通过选项对话。无需 Node，浏览器即可运行。
 
 **产品定义见 [docs/PRODUCT.md](docs/PRODUCT.md)；v0 实现定稿见 [docs/DESIGN-v0.md](docs/DESIGN-v0.md)。**
 
-## 快速开始
+## 如何访问
 
-1. 编辑 `js/config.js`，填入 DeepSeek `apiKey`（可参考 `js/config.example.js`）。
-2. 用浏览器打开 `index.html`（平板可直接打开项目文件夹中的该文件）。
-3. 在分支 **`main`** 上开发与发布稳定版。
+### 1. 本地（推荐，平板 / 电脑）
 
-## 在线访问
+v0 地图对话在 **`main`**（或功能分支合并后）。任选一种方式打开页面：
 
-启用 GitHub Pages（Settings → Pages → 分支 **gh-pages** → `/ (root)`）后：
+| 方式 | 做法 |
+|------|------|
+| **直接打开文件** | 资源管理器中双击项目里的 `index.html` |
+| **本地静态服务** | 在项目根目录执行 `python3 -m http.server 8080`，浏览器打开 `http://localhost:8080/` |
+
+**首次必须配置 API 密钥**（否则选项发送会报错）：
+
+```bash
+cp js/config.example.js js/config.js
+```
+
+编辑 `js/config.js`，将 `apiKey` 换成你的 DeepSeek 密钥。该文件已在 `.gitignore` 中，**不会提交到 Git**。
+
+**平板**：把整个项目文件夹拷到平板，按上面步骤建好 `js/config.js` 后，用文件管理器或 Safari/Chrome 打开 `index.html` 即可（与电脑相同）。
+
+### 2. 在线（GitHub Pages）
+
+仓库已配置：推送到 **`main`** 后，Actions 会发布到 **`gh-pages`**。
+
+**正式地址：**
 
 **https://jk9988610.github.io/Points-of-mess/**
 
-未启用前可用备用预览（**main** 分支）：
+> **注意：** 线上站点**不会**包含你本机的 `js/config.js`（密钥文件被忽略）。若要在 Pages 上也能调用 AI，需在 **`gh-pages` 分支**单独放置一份 `js/config.js`（勿合并回 `main`），或仅本地使用。公开仓库切勿把密钥提交到 `main`。
+
+**仅预览页面布局（无密钥、无法对话）** 可用 main 分支静态 HTML 预览：
 
 **https://htmlpreview.github.io/?https://raw.githubusercontent.com/jk9988610/Points-of-mess/main/index.html**
+
+### 3. 怎么用（v0）
+
+1. 点击地图空白处 → 玩家移动  
+2. 靠近橙色 **「锋利」** → 点击角色 → 气泡出现开场白  
+3. 点击底部 **要点 / 追问 / 换题 / 收束** → 等待短回复；选 **收束** 后结束对话  
+
+## 快速开始（开发）
+
+1. `cp js/config.example.js js/config.js` 并填写 `apiKey`  
+2. 打开 `index.html` 或 `python3 -m http.server 8080`  
+3. 功能开发可在分支 `cursor/map-sharp-touch-a1c8` 等；合并 **`main`** 后触发 Pages 更新  
 
 ## 当前功能
 
@@ -45,5 +76,5 @@ docs/DESIGN-v0.md
 
 ## 说明
 
-- 请求由浏览器直连 DeepSeek（支持 CORS）；个人自用可将密钥写在 `js/config.js`。
-- 推送到 **`main`** 会通过 Actions 更新 **`gh-pages`** 供 Pages 发布。
+- 请求由浏览器直连 DeepSeek（支持 CORS）；密钥只放在本机或 `gh-pages` 的 `js/config.js`，不要提交到 `main`。
+- 推送到 **`main`** 会通过 Actions 更新 **`gh-pages`** 供 Pages 发布（见上文 [在线访问](#在线github-pages)）。
