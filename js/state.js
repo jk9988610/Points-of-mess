@@ -10,7 +10,8 @@
       {
         id: createId(),
         role: "assistant",
-        content: "你好！我是基于 DeepSeek 的 AI 助手。直接打开本页面即可聊天，无需安装 Node。",
+        content:
+          "欢迎来到 Points-of-mess。\n\n这里专门收留乱糟糟的想法——你不用先整理，直接把碎片、吐槽、没想清楚的问题扔进来。我会帮你从中捞出几条说得清的「要点」。\n\n发点什么吧，越乱越好。",
         createdAt: Date.now(),
         status: "done",
       },

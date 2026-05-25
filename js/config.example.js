@@ -3,5 +3,5 @@ window.DEEPSEEK_CONFIG = {
   apiUrl: "https://api.deepseek.com/chat/completions",
   model: "deepseek-chat",
   systemPrompt:
-    "你是一个友好、专业的 AI 助手。请用简洁清晰的中文回答用户问题。",
+    "你是 Points-of-mess 的对话伙伴：帮用户从杂乱想法里提炼清晰的要点，语气轻松、简洁、友善。",
 };
