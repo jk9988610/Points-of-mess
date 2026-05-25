@@ -2,6 +2,14 @@
 
 纯静态网页 AI 对话，**无需安装 Node**。浏览器直连 DeepSeek API，适合平板本地自用。
 
+## 在线访问（DeepSeek 分支）
+
+安卓平板浏览器打开：
+
+**https://cdn.jsdelivr.net/gh/jk9988610/Points-of-mess@cursor/deepseek-chat-d862/index.html**
+
+本分支：`cursor/deepseek-chat-d862`。推送到该分支后，刷新页面即可看到更新。
+
 ## 使用方式
 
 1. 把整个项目文件夹拷到平板（或通过网盘/iCloud 同步）。
