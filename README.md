@@ -2,6 +2,12 @@
 
 纯静态网页 AI 对话，**无需安装 Node**。浏览器直连 DeepSeek API，适合平板本地自用。
 
+## 在线访问
+
+**https://cdn.jsdelivr.net/gh/jk9988610/Points-of-mess@main/index.html**
+
+（GitHub Pages 需在仓库 Settings → Pages 中启用后，也可使用 https://jk9988610.github.io/Points-of-mess/ ）
+
 ## 使用方式
 
 1. 把整个项目文件夹拷到平板（或通过网盘/iCloud 同步）。
