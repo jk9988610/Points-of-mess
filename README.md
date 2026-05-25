@@ -14,10 +14,16 @@
 以前只有一个 HTML，在「文件」里点开就能用；现在拆成多个文件并加了 Node 服务，**不能**再直接点 `index.html`，但用起来仍然简单：
 
 1. 把整个项目文件夹放在 Pad 上（不要只拷一个 html）
-2. 终端执行：`sh pad-start.sh`（或 `npm run pad`）
-3. Safari **只打开一个地址**：`http://localhost:3000`（加到主屏幕书签）
+2. **终端**里执行：`sh pad-start.sh`（或 `npm run pad`）
+3. 浏览器 **只打开一个地址**：`http://127.0.0.1:3000`（加到主屏幕）
 
-根目录 **[打开我.md](打开我.md)** 是三步图解；**[docs/PAD-开发指南.md](docs/PAD-开发指南.md)** 含 iSH / Termux 安装说明。
+| 设备 | 终端 App | 浏览器 |
+|------|----------|--------|
+| **安卓平板** | [Termux](https://f-droid.org/zh_Hans/packages/com.termux/)（F-Droid 安装） | Chrome |
+| iPad | iSH / a-Shell | Safari |
+
+- **安卓平板逐步教程：[安卓平板-看这里.md](安卓平板-看这里.md)**（在哪打开终端、每条命令怎么输入）
+- 通用说明：[打开我.md](打开我.md)、[docs/安卓平板-Termux手把手.md](docs/安卓平板-Termux手把手.md)
 
 ---
 
