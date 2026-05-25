@@ -9,6 +9,18 @@
 - 停止生成、清空会话
 - 浏览器 `localStorage` 自动保存对话记录
 
+## 在 Pad 上开发？先看这里
+
+以前只有一个 HTML，在「文件」里点开就能用；现在拆成多个文件并加了 Node 服务，**不能**再直接点 `index.html`，但用起来仍然简单：
+
+1. 把整个项目文件夹放在 Pad 上（不要只拷一个 html）
+2. 终端执行：`sh pad-start.sh`（或 `npm run pad`）
+3. Safari **只打开一个地址**：`http://localhost:3000`（加到主屏幕书签）
+
+根目录 **[打开我.md](打开我.md)** 是三步图解；**[docs/PAD-开发指南.md](docs/PAD-开发指南.md)** 含 iSH / Termux 安装说明。
+
+---
+
 ## 快速开始
 
 1. 复制环境变量模板并填入 API Key：

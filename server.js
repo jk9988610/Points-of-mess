@@ -109,14 +109,18 @@ function getLanAddresses() {
 
 app.listen(PORT, HOST, () => {
   console.log(`Chat server listening on ${HOST}:${PORT}`);
-  console.log(`本机浏览器: http://localhost:${PORT}`);
+  console.log("");
+  console.log("【Pad 测试】请在 Safari 打开（不要从「文件」点 index.html）：");
+  console.log(`  → http://localhost:${PORT}`);
+  console.log(`  说明页: http://localhost:${PORT}/pad-help.html`);
   const lan = getLanAddresses();
   if (lan.length > 0) {
-    console.log("Pad / 平板（同一 Wi‑Fi）可访问:");
+    console.log("");
+    console.log("同一 Wi‑Fi 下其他设备可访问:");
     for (const ip of lan) {
       console.log(`  http://${ip}:${PORT}`);
     }
-  } else {
-    console.log("未检测到局域网 IPv4；Pad 请改用本机实际 IP 访问。");
   }
+  console.log("");
+  console.log("首次使用请看项目根目录：打开我.md");
 });
