@@ -3,6 +3,8 @@
   const entries = [];
   const plainLines = [];
 
+  /** @typedef {'ai-out'|'ai-in'|'local'|'local-warn'|'local-error'} Audience */
+
   function ts() {
     return new Date().toLocaleTimeString("zh-CN", { hour12: false });
   }
@@ -14,53 +16,33 @@
       .replace(/>/g, "&gt;");
   }
 
-  function classify(title) {
-    const t = String(title);
-    if (t.startsWith("→ ")) {
-      return "request";
+  function audienceLabel(audience) {
+    if (audience === "ai-out") {
+      return "发AI";
     }
-    if (t.startsWith("← ")) {
-      return "response";
+    if (audience === "ai-in") {
+      return "AI回";
     }
-    if (t.includes("错误")) {
-      return "error";
+    if (audience === "local-error") {
+      return "本地·错";
     }
-    if (
-      t === "提示" ||
-      t.includes("失败") ||
-      t.includes("兜底") ||
-      t.includes("解析")
-    ) {
-      return "warn";
+    if (audience === "local-warn") {
+      return "本地·警";
     }
-    if (t.includes("首轮选项")) {
-      return "preset";
-    }
-    if (t.includes("玩家选择")) {
-      return "player";
-    }
-    if (t.includes("选项已更新")) {
-      return "options";
-    }
-    if (t.includes("开始对话") || t.includes("结束对话") || t.includes("停止")) {
-      return "event";
-    }
-    if (t.includes("已加载") || t === "测试模式") {
-      return "boot";
-    }
-    return "info";
+    return "本地";
   }
 
-  function appendEntry(kind, title, body) {
+  function appendEntry(audience, title, body) {
     const time = ts();
+    const tag = audienceLabel(audience);
     const plain =
       body === undefined
-        ? `[${time}] ${title}`
-        : `[${time}] ${title}\n${body}`;
+        ? `[${time}] [${tag}] ${title}`
+        : `[${time}] [${tag}] ${title}\n${body}`;
     plainLines.push(plain);
     entries.push({
       time,
-      kind: kind || classify(title),
+      audience,
       title,
       body: body === undefined ? "" : String(body),
     });
@@ -82,9 +64,10 @@
           ? `<pre class="dbg-body">${escapeHtml(e.body)}</pre>`
           : "";
         return (
-          `<div class="dbg-entry dbg-${e.kind}">` +
+          `<div class="dbg-entry dbg-${e.audience}">` +
           `<div class="dbg-head">` +
           `<span class="dbg-time">[${escapeHtml(e.time)}]</span> ` +
+          `<span class="dbg-tag">${escapeHtml(audienceLabel(e.audience))}</span> ` +
           `<span class="dbg-title">${escapeHtml(e.title)}</span>` +
           `</div>${bodyBlock}</div>`
         );
@@ -94,20 +77,49 @@
   }
 
   window.PomDebug = {
-    log(title, detail, kind) {
+    /** 仅本地 / 界面 / 程序逻辑，不原样发往 API 的日志 */
+    logLocal(title, detail) {
       if (detail === undefined) {
-        appendEntry(kind, String(title));
+        appendEntry("local", String(title));
         return;
       }
       const body =
         typeof detail === "string" ? detail : JSON.stringify(detail, null, 2);
-      appendEntry(kind || classify(title), String(title), body);
+      appendEntry("local", String(title), body);
     },
+    logLocalWarn(title, detail) {
+      const body =
+        detail === undefined
+          ? undefined
+          : typeof detail === "string"
+            ? detail
+            : JSON.stringify(detail, null, 2);
+      appendEntry("local-warn", String(title), body);
+    },
+    logLocalError(title, detail) {
+      const body =
+        detail === undefined
+          ? undefined
+          : typeof detail === "string"
+            ? detail
+            : JSON.stringify(detail, null, 2);
+      appendEntry("local-error", String(title), body);
+    },
+    /** 兼容旧调用：默认本地 */
+    log(title, detail) {
+      this.logLocal(title, detail);
+    },
+    /** 发往 DeepSeek 的请求体 */
     logRequest(label, payload) {
-      this.log(`→ ${label}`, payload, "request");
+      appendEntry(
+        "ai-out",
+        `→ ${label}`,
+        typeof payload === "string" ? payload : JSON.stringify(payload, null, 2)
+      );
     },
+    /** DeepSeek 返回的原始内容 */
     logResponse(label, text) {
-      this.log(`← ${label}`, text, "response");
+      appendEntry("ai-in", `← ${label}`, String(text ?? ""));
     },
     clear() {
       entries.length = 0;

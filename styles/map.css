@@ -53,6 +53,38 @@ body {
   margin-right: auto;
 }
 
+.debug-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.debug-legend span {
+  white-space: nowrap;
+}
+
+.legend-ai-out {
+  color: #fde68a;
+}
+
+.legend-ai-in {
+  color: #86efac;
+}
+
+.legend-local {
+  color: #94a3b8;
+}
+
+.legend-local-warn {
+  color: #fb923c;
+}
+
+.legend-local-error {
+  color: #f87171;
+}
+
 .debug-btn {
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
@@ -95,6 +127,17 @@ body {
   color: #64748b;
 }
 
+.dbg-tag {
+  display: inline-block;
+  min-width: 3.2em;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
 .dbg-title {
   font-weight: 700;
 }
@@ -103,63 +146,87 @@ body {
   margin: 4px 0 0;
   padding: 6px 8px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.3);
   white-space: pre-wrap;
   font-size: inherit;
-  color: inherit;
 }
 
-.dbg-boot .dbg-title {
-  color: #94a3b8;
+/* 发往 API */
+.debug-log .dbg-entry.dbg-ai-out {
+  border-left: 3px solid #f59e0b;
+  padding-left: 8px;
 }
 
-.dbg-info .dbg-title {
-  color: #cbd5e1;
+.debug-log .dbg-entry.dbg-ai-out .dbg-tag {
+  background: rgba(245, 158, 11, 0.35);
+  color: #fffbeb;
 }
 
-.dbg-event .dbg-title {
-  color: #a78bfa;
-}
-
-.dbg-preset .dbg-title,
-.dbg-preset .dbg-body {
-  color: #22d3ee;
-}
-
-.dbg-player .dbg-title,
-.dbg-player .dbg-body {
-  color: #4ade80;
-}
-
-.dbg-options .dbg-title,
-.dbg-options .dbg-body {
-  color: #c084fc;
-}
-
-.dbg-request .dbg-title {
-  color: #fbbf24;
-}
-
-.dbg-request .dbg-body {
+.debug-log .dbg-entry.dbg-ai-out .dbg-title,
+.debug-log .dbg-entry.dbg-ai-out .dbg-body {
   color: #fde68a;
 }
 
-.dbg-response .dbg-title {
-  color: #86efac;
+/* API 返回 */
+.debug-log .dbg-entry.dbg-ai-in {
+  border-left: 3px solid #22c55e;
+  padding-left: 8px;
 }
 
-.dbg-response .dbg-body {
+.debug-log .dbg-entry.dbg-ai-in .dbg-tag {
+  background: rgba(34, 197, 94, 0.35);
+  color: #ecfdf5;
+}
+
+.debug-log .dbg-entry.dbg-ai-in .dbg-title,
+.debug-log .dbg-entry.dbg-ai-in .dbg-body {
   color: #bbf7d0;
 }
 
-.dbg-warn .dbg-title,
-.dbg-warn .dbg-body {
-  color: #fb923c;
+/* 本地：界面、预设、玩家点击记录等（非 API 原文） */
+.debug-log .dbg-entry.dbg-local {
+  border-left: 3px solid #64748b;
+  padding-left: 8px;
 }
 
-.dbg-error .dbg-title,
-.dbg-error .dbg-body {
-  color: #f87171;
+.debug-log .dbg-entry.dbg-local .dbg-tag {
+  background: rgba(100, 116, 139, 0.4);
+  color: #f1f5f9;
+}
+
+.debug-log .dbg-entry.dbg-local .dbg-title,
+.debug-log .dbg-entry.dbg-local .dbg-body {
+  color: #cbd5e1;
+}
+
+.debug-log .dbg-entry.dbg-local-warn {
+  border-left: 3px solid #f97316;
+  padding-left: 8px;
+}
+
+.debug-log .dbg-entry.dbg-local-warn .dbg-tag {
+  background: rgba(249, 115, 22, 0.35);
+  color: #fff7ed;
+}
+
+.debug-log .dbg-entry.dbg-local-warn .dbg-title,
+.debug-log .dbg-entry.dbg-local-warn .dbg-body {
+  color: #fdba74;
+}
+
+.debug-log .dbg-entry.dbg-local-error {
+  border-left: 3px solid #ef4444;
+  padding-left: 8px;
+}
+
+.debug-log .dbg-entry.dbg-local-error .dbg-tag {
+  background: rgba(239, 68, 68, 0.35);
+  color: #fef2f2;
+}
+
+.debug-log .dbg-entry.dbg-local-error .dbg-title,
+.debug-log .dbg-entry.dbg-local-error .dbg-body {
+  color: #fca5a5;
 }
 
 .app-header {

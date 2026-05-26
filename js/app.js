@@ -53,7 +53,11 @@
     statusBannerEl.textContent = text;
     statusBannerEl.classList.add("visible");
     statusBannerEl.classList.toggle("error", Boolean(isError));
-    window.PomDebug?.log(isError ? "错误" : "提示", text);
+    if (isError) {
+      window.PomDebug?.logLocalError("错误", text);
+    } else {
+      window.PomDebug?.logLocal("提示", text);
+    }
   }
 
   function setOptionsVisible(visible) {
@@ -151,7 +155,7 @@
     setOptionsVisible(false);
     stopButtonEl.disabled = true;
     renderMap();
-    window.PomDebug?.log("结束对话");
+    window.PomDebug?.logLocal("结束对话");
   }
 
   function ensureApiConfig() {
@@ -177,7 +181,7 @@
     state.talkingId = characterId;
     const session = getSession(state, characterId);
     setStatus("", false);
-    window.PomDebug?.log("开始对话", {
+    window.PomDebug?.logLocal("开始对话", {
       character: character.name,
       historyTurns: window.GameDialogue.HISTORY_TURNS,
       messageCount: session.messages.length,
@@ -201,7 +205,10 @@
     }
 
     state.currentOptions = presetOptions(archetype);
-    window.PomDebug?.log("首轮选项（程序预设）", state.currentOptions.map((o) => o.line));
+    window.PomDebug?.logLocal(
+      "首轮选项（程序预设，不发 API）",
+      state.currentOptions.map((o) => o.line)
+    );
 
     setOptionsVisible(true);
     stopButtonEl.disabled = true;
@@ -231,7 +238,10 @@
     const optionsSnapshot = state.currentOptions.map((o) => ({ ...o }));
     const isClose = pick.intent === "close";
 
-    window.PomDebug?.log("玩家选择", { intent: pick.intent, line: pick.line });
+    window.PomDebug?.logLocal("玩家选择（界面）", {
+      intent: pick.intent,
+      line: pick.line,
+    });
 
     session.messages.push({
       id: createId(),
@@ -289,16 +299,16 @@
 
       if (isClose) {
         if (options) {
-          window.PomDebug?.log("收束轮忽略多余 options", null);
+          window.PomDebug?.logLocal("收束轮忽略多余 options");
         }
         setTimeout(() => endTalking(), 600);
       } else {
         state.currentOptions = options;
-        window.PomDebug?.log("选项已更新", options.map((o) => o.line));
+        window.PomDebug?.logLocal("选项已更新（界面展示）", options.map((o) => o.line));
       }
     } catch (error) {
       if (error.name === "AbortError") {
-        window.PomDebug?.log("已停止生成", null);
+        window.PomDebug?.logLocal("已停止生成");
       } else {
         session.messages.pop();
         persist(state);
@@ -399,7 +409,7 @@
 
   stopButtonEl.addEventListener("click", () => {
     abortController?.abort();
-    window.PomDebug?.log("停止生成");
+    window.PomDebug?.logLocal("停止生成");
   });
 
   document.getElementById("copyDebugBtn")?.addEventListener("click", () => {
@@ -426,11 +436,11 @@
   setOptionsVisible(false);
   setBubble("");
   showConfigSetupIfNeeded();
-  window.PomDebug?.log("Points-of-mess v0.1.3 已加载（首轮程序选项 + 合并 JSON API）");
+  window.PomDebug?.logLocal("Points-of-mess v0.1.4 已加载");
   if (!window.GameState.PERSIST_SESSIONS) {
-    window.PomDebug?.log(
+    window.PomDebug?.logLocal(
       "测试模式",
-      "每次刷新清空对话历史；仅保留地图位置。首轮选项为程序预设，之后每轮一次 API 返回台词+选项。"
+      "灰=本地 · 黄=发AI · 绿=AI回。首轮选项不发 API。"
     );
   }
   requestAnimationFrame(gameLoop);
