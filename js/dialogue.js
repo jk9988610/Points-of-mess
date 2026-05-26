@@ -1,5 +1,7 @@
 (function () {
   const HISTORY_TURNS = 2;
+  /** 最近对白总字数上限（约估 token；中文可粗算 1 字 ≈ 1 token） */
+  const HISTORY_MAX_CHARS = 1400;
 
   function stripIntentTag(send) {
     return send.replace(/^\[intent:\w+\]\s*/, "");
@@ -11,14 +13,21 @@
     );
   }
 
+  function historyCharCount(messages) {
+    return messages.reduce((n, m) => n + String(m.content || "").length, 0);
+  }
+
+  /** 最近 N 轮原话；超出字数则从最早一条裁掉（不发明细全文） */
   function getHistoryForApi(sessionMessages) {
     const maxMessages = HISTORY_TURNS * 2;
-    return getDoneMessages(sessionMessages)
-      .slice(-maxMessages)
-      .map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+    let slice = getDoneMessages(sessionMessages).slice(-maxMessages);
+    while (slice.length > 2 && historyCharCount(slice) > HISTORY_MAX_CHARS) {
+      slice = slice.slice(1);
+    }
+    return slice.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
   }
 
   /** 与 getHistoryForApi 同窗口；最近对话不含「角色上一句」，避免重复送入选项 prompt */

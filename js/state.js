@@ -41,7 +41,11 @@
     },
     getSession(state, characterId) {
       if (!state.sessions[characterId]) {
-        state.sessions[characterId] = { messages: [] };
+        state.sessions[characterId] = {
+          messages: [],
+          plotSummary: "",
+          lastSummaryAtOptionTurn: 0,
+        };
       }
       return state.sessions[characterId];
     },

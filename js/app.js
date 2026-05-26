@@ -168,6 +168,8 @@
     if (state.talkingId) {
       const session = getSession(state, state.talkingId);
       session.messages = [];
+      session.plotSummary = "";
+      session.lastSummaryAtOptionTurn = 0;
       persist(state);
     }
     state.talkingId = null;
@@ -382,6 +384,12 @@
     persist(state);
 
     const apiMessages = getHistoryForApi(session.messages);
+    if (session.plotSummary) {
+      window.PomDebug?.logLocal("剧情摘要（在 system，不占 messages）", session.plotSummary);
+    }
+    window.PomDebug?.logLocal("本轮 messages 字数", String(
+      apiMessages.reduce((n, m) => n + m.content.length, 0)
+    ));
 
     state.isStreaming = true;
     state.optionsLoading = true;
@@ -585,7 +593,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。输入框：API 仅 messages 数组一条 user，无 system。需 v0.2.4+ 强刷。"
+      "灰=本地 · 黄=发AI · 绿=AI回。选项：最近2轮原话+摘要(每4轮压缩)；输入框仍仅1条user。"
     );
   }
   requestAnimationFrame(gameLoop);

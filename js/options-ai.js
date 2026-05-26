@@ -43,8 +43,12 @@ ${archetype.system}
       ? "\n【收束轮】玩家 intent=close。只输出 {\"reply\":\"...\"}，不要 options。"
       : "";
 
-    return `${base}
+    const summaryBlock = turn.plotSummary?.trim()
+      ? `\n【剧情摘要】（较早对白已压缩，与 messages 最近原话一起理解）\n${turn.plotSummary.trim()}\n`
+      : "";
 
+    return `${base}
+${summaryBlock}
 【本轮】
 角色：${turn.character.name}
 玩家本轮 intent：${turn.pick.intent}
