@@ -1,5 +1,6 @@
 # 推送到 main 时同步到 gh-pages；Pages 源须为分支 gh-pages /(root)
 # 见 docs/PAGES-SETUP.md
+# 若 push 未触发本 workflow（如部分 bot/Agent 推送），请 Actions 手动 Run，或执行 scripts/sync-gh-pages.sh
 name: Deploy to GitHub Pages
 
 on:
@@ -11,11 +12,17 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: deploy-gh-pages
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Publish to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
@@ -24,3 +31,5 @@ jobs:
           publish_branch: gh-pages
           publish_dir: .
           exclude_assets: ".github"
+          enable_jekyll: false
+          force_orphan: false
