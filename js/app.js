@@ -262,16 +262,11 @@
     const session = getSession(state, state.talkingId);
     const apiMessages = [{ role: "user", content: text }];
 
-    window.PomDebug?.logLocal("玩家自由输入（纯净发送）", text);
-    window.PomDebug?.logLocal(
-      "本地会话记录（未发给 AI）",
-      window.GameMemoryChat.formatLocalTranscript(session.messages)
+    window.PomDebug?.logLocal("输入框原文", text);
+    window.PomDebug?.logRequest(
+      "输入框→AI（仅 messages）",
+      JSON.stringify({ messages: apiMessages }, null, 2)
     );
-    window.PomDebug?.logRequest("自由提问（纯净）", {
-      system: "（无）",
-      messages: apiMessages,
-      note: "无 system、无历史；user.content 与输入框完全一致",
-    });
 
     session.messages.push({
       id: createId(),
@@ -318,7 +313,11 @@
       persist(state);
       setBubble(reply, false);
       setStatus("", false);
-      window.PomDebug?.logResponse("自由提问（纯净）", reply);
+      window.PomDebug?.logResponse("输入框←AI", reply);
+      window.PomDebug?.logLocal(
+        "本地会话（未发给 AI，仅备忘）",
+        window.GameMemoryChat.formatLocalTranscript(session.messages)
+      );
       if (memoryInputEl) {
         memoryInputEl.value = "";
       }
@@ -575,7 +574,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。选项：messages 原话 + system 菜单。自由输入：仅 1 条 user，无 system、无历史。"
+      "灰=本地 · 黄=发AI · 绿=AI回。输入框：API 仅 messages 数组一条 user，无 system。需 v0.2.4+ 强刷。"
     );
   }
   requestAnimationFrame(gameLoop);

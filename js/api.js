@@ -22,12 +22,16 @@
   async function streamChat({
     systemPrompt,
     messages,
+    messagesOnly,
     onDelta,
     signal,
     temperature,
     max_tokens,
   }) {
     const cfg = getConfig();
+    const messageList = messagesOnly
+      ? [...messages]
+      : buildMessageList(systemPrompt, messages);
 
     const response = await fetch(cfg.apiUrl, {
       method: "POST",
@@ -37,7 +41,7 @@
       },
       body: JSON.stringify({
         model: cfg.model,
-        messages: buildMessageList(systemPrompt, messages),
+        messages: messageList,
         stream: true,
         temperature: temperature ?? cfg.temperature ?? 0.6,
         max_tokens: max_tokens ?? cfg.maxTokens ?? 80,
