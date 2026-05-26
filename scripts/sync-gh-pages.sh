@@ -13,6 +13,7 @@ trap 'rm -rf "$TMP"' EXIT
 git archive "$REF" | tar -x -C "$TMP"
 rm -rf "$TMP/.github"
 touch "$TMP/.nojekyll"
+echo "sync $(date -u +%Y-%m-%dT%H:%M:%SZ) ${SHORT}" > "$TMP/DEPLOY.txt"
 
 cd "$TMP"
 git init -q

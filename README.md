@@ -34,15 +34,13 @@ cp js/config.example.js js/config.js
 线上更新（详见 [docs/PAGES-SETUP.md](docs/PAGES-SETUP.md)）：
 
 1. 代码在 **`main`** 上  
-2. **`gh-pages` 与 main 同步**（二选一）：  
-   - 本机 push `main` 后，[Actions → Deploy to GitHub Pages](https://github.com/jk9988610/Points-of-mess/actions/workflows/pages.yml) 成功；或点 **Run workflow**  
-   - **若 Actions 没自动跑**（Cloud Agent 推送常见）：执行  
-     `git push origin origin/main:gh-pages --force`  
-     或 `./scripts/sync-gh-pages.sh`  
-3. **Settings → Pages**：Source = **`gh-pages` / (root)**（不要指 deleted 的 `cursor/...` 分支）  
-4. 浏览器 **强刷**（Ctrl+Shift+R）
+2. **Settings → Pages → Source 选 `GitHub Actions`**（推荐，见新工作流 **GitHub Pages (official)**）  
+3. [Actions → GitHub Pages (official)](https://github.com/jk9988610/Points-of-mess/actions/workflows/github-pages.yml) → **Run workflow**（main）→ 等成功  
+4. 强刷站点  
 
-验收：https://jk9988610.github.io/Points-of-mess/js/version.js 含 **`0.2.6`**；标题旁 **v0.2.6**。
+若仍用 **gh-pages 分支** 发布：需 Pages build 为 **built**（强推 `main`→`gh-pages` 若 build **errored**，线上会一直是旧版 0.2.5）。
+
+验收：线上 https://jk9988610.github.io/Points-of-mess/js/version.js 为 **`0.2.9`**（与 `main` 的 `POM_VERSION` 一致）。若仍是 **0.2.5**，见 [docs/PAGES-FIX.md](docs/PAGES-FIX.md)（分支已新、CDN 未更新）。
 
 > **注意：** 线上**不会**包含本机 `js/config.js`（密钥在 `.gitignore`）。在线调 API 需在 `gh-pages` 单独放密钥（有风险），**推荐本地**测试。勿把密钥提交到 `main`。
 

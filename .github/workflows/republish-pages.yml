@@ -1,12 +1,8 @@
-# 官方 GitHub Pages 部署（不依赖 gh-pages 分支 Jekyll build）
-# 首次使用：Settings → Pages → Source 选 **GitHub Actions**（不是 gh-pages 分支）
-# 见 docs/PAGES-SETUP.md
-name: GitHub Pages (official)
+# 一键重发 Pages（workflow_dispatch）
+# 用法：Settings → Pages → Source 选 **GitHub Actions** 后，在 Actions 里 Run 本 workflow
+name: Republish Pages (official)
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -15,8 +11,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-official
-  cancel-in-progress: true
+  group: pages-republish
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -27,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare static site (no .github)
+      - name: Prepare static site
         run: |
           mkdir -p _site
           rsync -a \
@@ -36,7 +32,7 @@ jobs:
             --exclude='_site' \
             ./ _site/
           touch _site/.nojekyll
-          echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $(git rev-parse --short HEAD)" > _site/DEPLOY.txt
+          echo "republish $(date -u +%Y-%m-%dT%H:%M:%SZ) $(git rev-parse --short HEAD)" > _site/DEPLOY.txt
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -46,6 +42,6 @@ jobs:
         with:
           path: _site
 
-      - name: Deploy
+      - name: Deploy to GitHub Pages CDN
         id: deployment
         uses: actions/deploy-pages@v4
