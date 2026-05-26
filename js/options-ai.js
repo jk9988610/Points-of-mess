@@ -11,10 +11,26 @@
 {"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."},{"intent":"pivot","line":"..."},{"intent":"close","line":"..."}]}
 要求：每条 line 为中文一句，≤35 字；followup 必须引用「角色上一句」中的具体词。`;
 
-  function buildChoicesBlock(options) {
-    return options
-      .map((o) => `${o.intent} → ${o.line}`)
-      .join("\n");
+  function buildIntentHintsBlock() {
+    return OPTION_SCHEMA.map((o) => `- ${o.intent}（${o.label}）`).join("\n");
+  }
+
+  function optionsSignature(options) {
+    return (options || [])
+      .map((o) => `${o.intent}:${String(o.line || "").trim()}`)
+      .join("|");
+  }
+
+  function optionsUnchanged(prev, next) {
+    if (!prev?.length || !next?.length) {
+      return false;
+    }
+    return optionsSignature(prev) === optionsSignature(next);
+  }
+
+  function isWeakReply(text) {
+    const t = String(text || "").trim();
+    return !t || /^[.…·\s]+$/.test(t) || t.length < 2;
   }
 
   function buildCombinedSystem(archetype, turn) {
@@ -54,12 +70,12 @@ ${summaryBlock}
 玩家本轮 intent：${turn.pick.intent}
 玩家本轮原话（应与 messages 最后一条 user 一致）：${turn.pick.line}
 
-【四类可选行动 — 仅用于生成 options，勿写入 reply 正文】
-${buildChoicesBlock(turn.options)}
+【四类行动类型 — 只作结构参考，勿把旧选项文字写进 reply】
+${buildIntentHintsBlock()}
 
 【输出】
 ${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"keypoint","line":"..."},...共四条]}。'}
-reply：1～2 句，≤40 字。options 每项必须含 intent 与 line，不得用纯字符串数组。${closeBlock}`;
+reply：1～2 句，≤40 字。options 四项必须各含 intent 与 line；**四条 line 必须与玩家已点过的旧句不同**，followup 须引用本轮 reply 里的具体词。${closeBlock}`;
   }
 
   function presetOptions(archetype) {
@@ -126,10 +142,13 @@ reply：1～2 句，≤40 字。options 每项必须含 intent 与 line，不得
   }
 
   function parseCombinedResponse(raw, isClose) {
+    if (!String(raw || "").trim()) {
+      throw new Error("API 返回为空");
+    }
     const obj = extractJsonObject(raw);
     const reply = String(obj.reply || "").trim();
-    if (!reply) {
-      throw new Error("缺少 reply");
+    if (!reply || isWeakReply(reply)) {
+      throw new Error("缺少有效 reply");
     }
     if (isClose) {
       return { reply, options: null };
@@ -155,7 +174,27 @@ reply：1～2 句，≤40 字。options 每项必须含 intent 与 line，不得
       .replace(/^```[\s\S]*?```/gm, "")
       .trim();
     const first = text.split("\n").find((l) => l.trim()) || text;
-    return first.trim().slice(0, 80) || "……";
+    const candidate = first.trim().slice(0, 80);
+    if (candidate && !isWeakReply(candidate)) {
+      return candidate;
+    }
+    return "";
+  }
+
+  function lastUsableAssistantLine(session, archetype) {
+    const done = session.messages.filter(
+      (m) => m.status !== "error" && (m.role === "user" || m.role === "assistant")
+    );
+    for (let i = done.length - 1; i >= 0; i--) {
+      if (done[i].role !== "assistant") {
+        continue;
+      }
+      const line = assistantLineForOptions(done[i].content);
+      if (line && !isWeakReply(line)) {
+        return line;
+      }
+    }
+    return archetype.opening;
   }
 
   function assistantLineForOptions(content) {
@@ -187,18 +226,22 @@ reply：1～2 句，≤40 字。options 每项必须含 intent 与 line，不得
     }
   }
 
-  async function generateOptions({ character, archetype, session, signal }) {
+  async function generateOptions({ character, archetype, session, signal, avoidLines }) {
     const { lastLine, priorText } = window.GameDialogue.formatRecentDialogueForOptions(
-      session.messages,
-      character.name
+      session.messages
     );
-    const last = assistantLineForOptions(lastLine) || archetype.opening;
+    const last =
+      assistantLineForOptions(lastLine) || lastUsableAssistantLine(session, archetype);
+    const avoidBlock =
+      avoidLines?.length > 0
+        ? `\n【禁止重复】以下句子不得原样出现在 options 的 line 中：\n${avoidLines.map((l) => `- ${l}`).join("\n")}\n`
+        : "";
 
     const userContent = `角色名：${character.name}
 角色上一句台词：${last}
 ${priorText ? `最近对话：\n${priorText}` : ""}
 
-请生成四轮玩家选项 JSON。`;
+请生成四轮玩家选项 JSON。${avoidBlock}`;
 
     window.PomDebug?.logRequest("生成选项（兜底）", {
       system: OPTIONS_SYSTEM.slice(0, 60) + "…",
@@ -223,6 +266,17 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
     return optionsFromArray(list);
   }
 
+  async function callCombinedOnce({ systemPrompt, apiMessages, isClose, signal }) {
+    const raw = await completeChatJson({
+      systemPrompt,
+      messages: apiMessages,
+      temperature: 0.55,
+      max_tokens: isClose ? 120 : 420,
+      signal,
+    });
+    return { raw, parsed: parseCombinedResponse(raw, isClose) };
+  }
+
   async function requestCombinedTurn({
     character,
     archetype,
@@ -236,48 +290,129 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
       ...turn,
       plotSummary: session.plotSummary,
     });
+    const previousLines = (turn.options || []).map((o) => o.line).filter(Boolean);
+
     window.PomDebug?.logRequest(isClose ? "角色收束" : "角色回复+选项", {
       system: systemPrompt.slice(0, 80) + "…",
       messages: apiMessages,
     });
 
-    const raw = await completeChatJson({
-      systemPrompt,
-      messages: apiMessages,
-      temperature: 0.55,
-      max_tokens: isClose ? 120 : 420,
-      signal,
-    });
+    let raw = "";
+    let parsed = null;
+    try {
+      const first = await callCombinedOnce({ systemPrompt, apiMessages, isClose, signal });
+      raw = first.raw;
+      parsed = first.parsed;
+    } catch (e1) {
+      window.PomDebug?.logLocalWarn("合并请求失败，重试一次", e1.message);
+      const second = await callCombinedOnce({
+        systemPrompt,
+        apiMessages,
+        isClose,
+        signal,
+      });
+      raw = second.raw;
+      parsed = second.parsed;
+    }
 
     window.PomDebug?.logResponse(isClose ? "角色收束" : "角色回复+选项", raw);
 
+    if (isClose) {
+      return parsed;
+    }
+
+    if (optionsUnchanged(turn.options, parsed.options)) {
+      window.PomDebug?.logLocalWarn(
+        "选项与上一轮相同",
+        "改走选项专生成"
+      );
+      parsed.options = await generateOptions({
+        character,
+        archetype,
+        session: {
+          messages: [
+            ...session.messages,
+            { role: "assistant", content: parsed.reply, status: "done" },
+          ],
+        },
+        signal,
+        avoidLines: previousLines,
+      });
+    }
+
+    return parsed;
+  }
+
+  async function requestCombinedTurnWithFallback({
+    character,
+    archetype,
+    session,
+    apiMessages,
+    turn,
+    isClose,
+    signal,
+  }) {
     try {
-      return parseCombinedResponse(raw, isClose);
+      return await requestCombinedTurn({
+        character,
+        archetype,
+        session,
+        apiMessages,
+        turn,
+        isClose,
+        signal,
+      });
     } catch (e) {
       window.PomDebug?.logLocalWarn("合并 JSON 解析失败，尝试兜底", e.message);
-      const reply = replyFromRaw(raw);
+      let reply = "";
+      try {
+        reply = replyFromRaw(
+          await completeChatJson({
+            systemPrompt: buildCombinedSystem(archetype, {
+              ...turn,
+              plotSummary: session.plotSummary,
+            }).replace(
+              /同时生成角色台词（reply）与下一轮玩家选项（options）。/,
+              "只生成角色台词（reply），输出 {\"reply\":\"...\"}。"
+            ),
+            messages: apiMessages,
+            temperature: 0.55,
+            max_tokens: 120,
+            signal,
+          })
+        );
+      } catch {
+        /* use empty */
+      }
 
       if (isClose) {
+        if (isWeakReply(reply)) {
+          throw new Error("收束回复生成失败，请重试");
+        }
         return { reply, options: null };
+      }
+
+      if (isWeakReply(reply)) {
+        const last = lastUsableAssistantLine(session, archetype);
+        reply = last;
+        window.PomDebug?.logLocalWarn("回复无效，沿用上一句角色台词", reply);
       }
 
       const sessionWithReply = {
         messages: [
           ...session.messages,
-          {
-            role: "assistant",
-            content: reply,
-            status: "done",
-          },
+          { role: "assistant", content: reply, status: "done" },
         ],
       };
 
+      const avoidLines = (turn.options || []).map((o) => o.line).filter(Boolean);
       try {
         const options = await generateOptions({
           character,
           archetype,
           session: sessionWithReply,
           signal,
+          avoidLines,
         });
         return { reply, options };
       } catch (e2) {
@@ -291,6 +426,6 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
     OPTION_SCHEMA,
     presetOptions,
     generateOptions,
-    requestCombinedTurn,
+    requestCombinedTurn: requestCombinedTurnWithFallback,
   };
 })();
