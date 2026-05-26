@@ -24,7 +24,6 @@
   const statusBannerEl = document.getElementById("statusBanner");
   const stopButtonEl = document.getElementById("stopGeneration");
   const hintEl = document.getElementById("mapHint");
-  const configSetupEl = document.getElementById("configSetup");
 
   const CHAR_BUBBLE_GAP = 36;
 
@@ -189,7 +188,12 @@
   function ensureApiConfig() {
     const status = window.PomConfig?.getConfigStatus?.();
     if (status && !status.ok) {
-      setStatus(status.message, true);
+      if (status.reason === "login") {
+        window.PomAuth?.showGate?.();
+        setStatus("", false);
+      } else {
+        setStatus(status.message, true);
+      }
       return false;
     }
     return true;
@@ -573,21 +577,26 @@
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("scroll", positionBubble, true);
 
-  function showConfigSetupIfNeeded() {
+  function refreshAuthStatus() {
     const status = window.PomConfig?.getConfigStatus?.();
-    if (status && !status.ok) {
-      configSetupEl.hidden = false;
+    if (status && !status.ok && status.reason === "login") {
+      window.PomAuth?.showGate?.();
+      setStatus("", false);
+    } else if (status && !status.ok) {
       setStatus(status.message, true);
     } else {
-      configSetupEl.hidden = true;
+      setStatus("", false);
     }
   }
+
+  document.addEventListener("pom-auth-login", refreshAuthStatus);
+  document.addEventListener("pom-auth-logout", refreshAuthStatus);
 
   resizeCanvas();
   setOptionsVisible(false);
   setMemoryInputVisible(false);
   setBubble("");
-  showConfigSetupIfNeeded();
+  refreshAuthStatus();
   const ver = window.POM_VERSION || "?";
   window.PomDebug?.logLocal(`Points-of-mess v${ver} 已加载（调试分色=内联样式）`);
   if (!window.GameState.PERSIST_SESSIONS) {

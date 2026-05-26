@@ -17,17 +17,12 @@ v0 地图对话在 **`main`**。任选一种方式打开页面：
 | **直接打开文件** | 资源管理器中双击项目里的 `index.html` |
 | **本地静态服务** | 在项目根目录执行 `python3 -m http.server 8080`，浏览器打开 `http://localhost:8080/` |
 
-**首次必须配置 API 密钥**（否则点击底部选项时会提示未配置）：
+**首次须登录**（否则无法调 AI）：
 
-```bash
-cp js/config.example.js js/config.js
-```
+- **账号**：`jk9988610`
+- **密钥**：你的 DeepSeek API Key（可勾选「在本机记住」，由浏览器保存，**不会**出现在 Git 仓库里）
 
-编辑 `js/config.js`，将 `apiKey` 换成你的 DeepSeek 密钥（不要用占位符 `你的_DeepSeek_API_密钥`）。保存后**刷新页面**。该文件已在 `.gitignore` 中，**不会提交到 Git**。
-
-若打开页面顶部出现黄色配置说明，按其中三步操作即可。
-
-**安卓平板**：见 [docs/常用说明.md](docs/常用说明.md) 第 3 节。简要：拷项目 → 建 `js/config.js` → Chrome 打开 `index.html`；或只开 Pages 看界面（线上默认无密钥）。
+**安卓平板**：见 [docs/常用说明.md](docs/常用说明.md) 第 3 节。打开 Pages 或本地 `index.html` 后登录即可。
 
 ### 2. 在线（GitHub Pages）
 
@@ -44,7 +39,7 @@ cp js/config.example.js js/config.js
 
 验收：线上 https://jk9988610.github.io/Points-of-mess/js/version.js 为 **`0.2.9`**（与 `main` 的 `POM_VERSION` 一致）。若仍是 **0.2.5**，见 [docs/PAGES-FIX.md](docs/PAGES-FIX.md)（分支已新、CDN 未更新）。
 
-> **注意：** 线上**不会**包含本机 `js/config.js`（密钥在 `.gitignore`）。在线调 API 需在 `gh-pages` 单独放密钥（有风险），**推荐本地**测试。勿把密钥提交到 `main`。
+> **注意：** 仓库与 Pages **不含** API 密钥；登录后密钥仅存本机浏览器。若旧版曾把密钥提交到 GitHub，请在 DeepSeek 控制台**立即作废并换新**。
 
 **仅预览页面布局（无密钥、无法对话）** 可用 main 分支静态 HTML 预览：
 
@@ -58,8 +53,8 @@ cp js/config.example.js js/config.js
 
 ## 快速开始（开发）
 
-1. `cp js/config.example.js js/config.js` 并填写 `apiKey`  
-2. 打开 `index.html` 或 `python3 -m http.server 8080`  
+1. 打开 `index.html` 或 `python3 -m http.server 8080`  
+2. 登录（账号 `jk9988610`，密钥填 DeepSeek API Key）  
 3. 在功能分支开发 → **合并 PR 到 `main`** → push 后 Actions 更新 Pages（见 [docs/PAGES-SETUP.md](docs/PAGES-SETUP.md)）  
 
 ## 当前功能
@@ -74,6 +69,7 @@ cp js/config.example.js js/config.js
 ```
 index.html
 styles/map.css
+js/auth.js
 js/config.js
 js/presets.js
 js/dialogue.js
@@ -87,5 +83,5 @@ docs/DESIGN-v0.md
 
 ## 说明
 
-- 请求由浏览器直连 DeepSeek（支持 CORS）；密钥只放在本机或 `gh-pages` 的 `js/config.js`，不要提交到 `main`。
+- 请求由浏览器直连 DeepSeek（支持 CORS）；API 密钥仅在登录后存于本机浏览器，不进 Git。
 - 推送到 **`main`** 会通过 Actions 更新 **`gh-pages`** 供 Pages 发布（见上文 [在线访问](#在线github-pages)）。

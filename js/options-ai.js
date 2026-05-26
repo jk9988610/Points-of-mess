@@ -255,7 +255,7 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
       return parseCombinedResponse(raw, isClose);
     } catch (e) {
       window.PomDebug?.logLocalWarn("合并 JSON 解析失败，尝试兜底", e.message);
-      const reply = plainTextReply(raw);
+      const reply = replyFromRaw(raw);
 
       if (isClose) {
         return { reply, options: null };

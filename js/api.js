@@ -5,10 +5,11 @@
       throw new Error(status.message);
     }
     const cfg = window.DEEPSEEK_CONFIG;
-    if (!cfg?.apiKey || String(cfg.apiKey).includes("你的_")) {
-      throw new Error(window.PomConfig?.getSetupMessage?.() || "请配置 js/config.js 中的 apiKey。");
+    const apiKey = window.PomAuth?.getApiKey?.() || cfg?.apiKey;
+    if (!apiKey) {
+      throw new Error(window.PomConfig?.getSetupMessage?.() || "请先登录并填写密钥。");
     }
-    return cfg;
+    return { ...cfg, apiKey };
   }
 
   function buildMessageList(systemPrompt, messages) {

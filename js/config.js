@@ -1,6 +1,5 @@
-// 自用：在此填写 DeepSeek API 密钥（与 main 分支一致，v0 使用 temperature / maxTokens）
+// 公开配置：不含 API 密钥。登录后在浏览器内写入 apiKey（见 js/auth.js）
 window.DEEPSEEK_CONFIG = {
-  apiKey: "sk-bb62e87518fc42ed9fde5898e365fd26",
   apiUrl: "https://api.deepseek.com/chat/completions",
   model: "deepseek-chat",
   temperature: 0.6,

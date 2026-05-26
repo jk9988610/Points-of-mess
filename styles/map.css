@@ -233,6 +233,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 12px 16px;
   padding-top: max(12px, env(safe-area-inset-top));
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -265,6 +266,109 @@ body {
 .stop-button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.stop-button--ghost {
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--muted);
+}
+
+body.login-locked .map-stage,
+body.login-locked .debug-panel,
+body.login-locked .options-bar,
+body.login-locked .memory-input-bar {
+  pointer-events: none;
+  user-select: none;
+}
+
+.login-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top));
+  background: rgba(15, 23, 42, 0.94);
+}
+
+.login-gate[hidden] {
+  display: none;
+}
+
+.login-card {
+  width: min(400px, 100%);
+  margin: 0;
+  padding: 20px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  background: rgba(30, 41, 59, 0.95);
+}
+
+.login-title {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+}
+
+.login-hint {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.login-hint code {
+  color: #c7d2fe;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 0.88rem;
+}
+
+.login-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.8);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.login-error {
+  margin: 0 0 10px;
+  color: var(--error);
+  font-size: 0.85rem;
+}
+
+.login-error[hidden] {
+  display: none;
+}
+
+.login-submit {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .map-stage {

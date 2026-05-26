@@ -6,12 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Points-of-mess</title>
-  <link rel="stylesheet" href="styles/map.css?v=0.2.9">
+  <link rel="stylesheet" href="styles/map.css?v=0.3.0">
 </head>
 <body>
   <div class="app-shell">
     <header class="app-header">
-      <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion">v0.2.9</span></h1>
+      <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion">v0.3.0</span></h1>
+      <button class="stop-button stop-button--ghost" type="button" id="logoutBtn">退出</button>
       <button class="stop-button" type="button" id="stopGeneration" disabled>停止</button>
     </header>
 
@@ -37,13 +38,41 @@
       <p class="map-hint" id="mapHint">点击空地移动 · 靠近角色后点击交谈</p>
     </div>
 
-    <div class="config-setup" id="configSetup" hidden>
-      <p><strong>需要配置 API 密钥</strong></p>
-      <ol>
-        <li>复制 <code>js/config.example.js</code> 为 <code>js/config.js</code></li>
-        <li>在 <code>js/config.js</code> 里填入 DeepSeek <code>apiKey</code></li>
-        <li>保存后刷新本页</li>
-      </ol>
+    <div class="login-gate" id="loginGate">
+      <form class="login-card" id="loginForm" autocomplete="on">
+        <h2 class="login-title">登录</h2>
+        <p class="login-hint">
+          账号固定为 <code>jk9988610</code>；「密钥」填你的 DeepSeek API Key（登录不校验具体值，但调 AI 需有效密钥）。由浏览器记住，仓库里不再放密钥。
+        </p>
+        <label class="login-field">
+          <span>账号</span>
+          <input
+            type="text"
+            id="loginAccount"
+            name="username"
+            autocomplete="username"
+            autocapitalize="off"
+            spellcheck="false"
+            required
+          />
+        </label>
+        <label class="login-field">
+          <span>密钥</span>
+          <input
+            type="password"
+            id="loginSecret"
+            name="password"
+            autocomplete="current-password"
+            required
+          />
+        </label>
+        <label class="login-remember">
+          <input type="checkbox" id="loginRemember" checked />
+          在本机记住（localStorage）
+        </label>
+        <p class="login-error" id="loginError" hidden></p>
+        <button type="submit" class="login-submit">进入</button>
+      </form>
     </div>
 
     <div class="status-banner" id="statusBanner" role="status"></div>
@@ -80,18 +109,19 @@
     </nav>
   </div>
 
-  <script src="js/version.js?v=0.2.9"></script>
-  <script src="js/config.js?v=0.2.9" onerror="window.__POM_CONFIG_MISSING__=true"></script>
-  <script src="js/config-check.js?v=0.2.9"></script>
-  <script src="js/debug.js?v=0.2.9"></script>
-  <script src="js/presets.js?v=0.2.9"></script>
-  <script src="js/dialogue.js?v=0.2.9"></script>
-  <script src="js/memory-chat.js?v=0.2.9"></script>
-  <script src="js/summary.js?v=0.2.9"></script>
-  <script src="js/state.js?v=0.2.9"></script>
-  <script src="js/map.js?v=0.2.9"></script>
-  <script src="js/api.js?v=0.2.9"></script>
-  <script src="js/options-ai.js?v=0.2.9"></script>
-  <script src="js/app.js?v=0.2.9"></script>
+  <script src="js/version.js?v=0.3.0"></script>
+  <script src="js/config.js?v=0.3.0"></script>
+  <script src="js/auth.js?v=0.3.0"></script>
+  <script src="js/config-check.js?v=0.3.0"></script>
+  <script src="js/debug.js?v=0.3.0"></script>
+  <script src="js/presets.js?v=0.3.0"></script>
+  <script src="js/dialogue.js?v=0.3.0"></script>
+  <script src="js/memory-chat.js?v=0.3.0"></script>
+  <script src="js/summary.js?v=0.3.0"></script>
+  <script src="js/state.js?v=0.3.0"></script>
+  <script src="js/map.js?v=0.3.0"></script>
+  <script src="js/api.js?v=0.3.0"></script>
+  <script src="js/options-ai.js?v=0.3.0"></script>
+  <script src="js/app.js?v=0.3.0"></script>
 </body>
 </html>
