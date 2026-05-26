@@ -158,7 +158,13 @@
     }
 
     const data = await response.json();
-    return data.choices?.[0]?.message?.content ?? "";
+    const choice = data.choices?.[0];
+    const content = String(choice?.message?.content ?? "").trim();
+    if (!content) {
+      const reason = choice?.finish_reason || "unknown";
+      throw new Error(`API 返回为空 (finish_reason=${reason})`);
+    }
+    return content;
   }
 
   window.ChatApi = { streamChat, completeChat };
