@@ -12,6 +12,24 @@
     return { ...cfg, apiKey };
   }
 
+  function isAuthErrorMessage(message, status) {
+    const text = String(message || "").toLowerCase();
+    return (
+      status === 401 ||
+      text.includes("authentication") ||
+      text.includes("api key") ||
+      text.includes("invalid") ||
+      text.includes("unauthorized")
+    );
+  }
+
+  function raiseApiError(status, message) {
+    if (isAuthErrorMessage(message, status)) {
+      window.PomAuth?.onApiKeyRejected?.(message);
+    }
+    throw new Error(message);
+  }
+
   function buildMessageList(systemPrompt, messages) {
     const sys = String(systemPrompt ?? "").trim();
     if (sys) {
@@ -58,7 +76,7 @@
       } catch {
         /* non-json */
       }
-      throw new Error(message);
+      raiseApiError(response.status, message);
     }
 
     const reader = response.body.getReader();
@@ -136,7 +154,7 @@
       } catch {
         /* non-json */
       }
-      throw new Error(message);
+      raiseApiError(response.status, message);
     }
 
     const data = await response.json();

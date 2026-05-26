@@ -6,12 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Points-of-mess</title>
-  <link rel="stylesheet" href="styles/map.css?v=0.3.1">
+  <link rel="stylesheet" href="styles/map.css?v=0.3.2">
 </head>
 <body>
   <div class="app-shell">
     <header class="app-header">
-      <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion">v0.3.1</span></h1>
+      <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion">v0.3.2</span></h1>
       <button class="stop-button stop-button--ghost" type="button" id="logoutBtn">退出</button>
       <button class="stop-button" type="button" id="stopGeneration" disabled>停止</button>
     </header>
@@ -42,10 +42,12 @@
       <form class="login-card" id="loginForm" autocomplete="on">
         <h2 class="login-title">登录</h2>
         <p class="login-hint">
-          账号固定为 <code>jk9988610</code>；「密钥」填你的 DeepSeek API Key（登录不校验具体值，但调 AI 需有效密钥）。由浏览器记住，仓库里不再放密钥。
+          <strong>账号</strong> <code>jk9988610</code> 仅为进门（假门禁）。<strong>下方必须填</strong>
+          <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">DeepSeek API 密钥</a>
+          （<code>sk-</code> 开头整段复制），不能填随便的口令；浏览器可记住。
         </p>
         <label class="login-field">
-          <span>账号</span>
+          <span>账号（假门禁）</span>
           <input
             type="text"
             id="loginAccount"
@@ -57,12 +59,15 @@
           />
         </label>
         <label class="login-field">
-          <span>密钥</span>
+          <span>DeepSeek API 密钥</span>
           <input
             type="password"
             id="loginSecret"
             name="password"
             autocomplete="current-password"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="sk-…"
             required
           />
         </label>
@@ -109,19 +114,19 @@
     </nav>
   </div>
 
-  <script src="js/version.js?v=0.3.1"></script>
-  <script src="js/config.js?v=0.3.1"></script>
-  <script src="js/auth.js?v=0.3.1"></script>
-  <script src="js/config-check.js?v=0.3.1"></script>
-  <script src="js/debug.js?v=0.3.1"></script>
-  <script src="js/presets.js?v=0.3.1"></script>
-  <script src="js/dialogue.js?v=0.3.1"></script>
-  <script src="js/memory-chat.js?v=0.3.1"></script>
-  <script src="js/summary.js?v=0.3.1"></script>
-  <script src="js/state.js?v=0.3.1"></script>
-  <script src="js/map.js?v=0.3.1"></script>
-  <script src="js/api.js?v=0.3.1"></script>
-  <script src="js/options-ai.js?v=0.3.1"></script>
-  <script src="js/app.js?v=0.3.1"></script>
+  <script src="js/version.js?v=0.3.2"></script>
+  <script src="js/config.js?v=0.3.2"></script>
+  <script src="js/auth.js?v=0.3.2"></script>
+  <script src="js/config-check.js?v=0.3.2"></script>
+  <script src="js/debug.js?v=0.3.2"></script>
+  <script src="js/presets.js?v=0.3.2"></script>
+  <script src="js/dialogue.js?v=0.3.2"></script>
+  <script src="js/memory-chat.js?v=0.3.2"></script>
+  <script src="js/summary.js?v=0.3.2"></script>
+  <script src="js/state.js?v=0.3.2"></script>
+  <script src="js/map.js?v=0.3.2"></script>
+  <script src="js/api.js?v=0.3.2"></script>
+  <script src="js/options-ai.js?v=0.3.2"></script>
+  <script src="js/app.js?v=0.3.2"></script>
 </body>
 </html>
