@@ -21,7 +21,11 @@
     return { x: 0.28, y: 0.62 };
   }
 
+  /** 刷新后清空对话，便于重复测试；仅保留玩家在地图上的位置 */
+  const PERSIST_SESSIONS = false;
+
   window.GameState = {
+    PERSIST_SESSIONS,
     createId,
     createInitialState() {
       const saved = loadFromStorage();
@@ -32,7 +36,7 @@
         bubbleText: "",
         isStreaming: false,
         error: null,
-        sessions: saved?.sessions || {},
+        sessions: {},
       };
     },
     getSession(state, characterId) {
@@ -43,14 +47,14 @@
     },
     persist(state) {
       try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({
-            player: state.player,
-            sessions: state.sessions,
-            savedAt: Date.now(),
-          })
-        );
+        const payload = {
+          player: state.player,
+          savedAt: Date.now(),
+        };
+        if (PERSIST_SESSIONS) {
+          payload.sessions = state.sessions;
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
       } catch {
         /* quota / private mode */
       }

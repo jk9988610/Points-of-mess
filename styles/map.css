@@ -237,9 +237,7 @@ body {
 
 .option-btn {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
+  align-items: center;
   width: 100%;
   height: auto;
   min-height: 3rem;
@@ -253,11 +251,13 @@ body {
   transition: background 120ms ease, border-color 120ms ease;
 }
 
-.option-kind {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--accent-hot);
+.option-btn--close {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.option-btn--close .option-line {
+  color: rgba(254, 226, 226, 0.92);
 }
 
 .option-line {

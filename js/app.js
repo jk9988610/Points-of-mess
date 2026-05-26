@@ -60,19 +60,33 @@
     optionsBar.classList.toggle("hidden", !visible);
   }
 
+  const INTENT_ARIA = {
+    keypoint: "要点",
+    followup: "追问",
+    pivot: "换题",
+    close: "结束对话",
+  };
+
   function renderOptionButtons(options, loading) {
     const disabled = loading || state.isStreaming;
     for (const btn of optionsBar.querySelectorAll(".option-btn")) {
       const id = Number(btn.dataset.optionId);
       const opt = options?.find((o) => o.id === id);
-      const kindEl = btn.querySelector(".option-kind");
       const lineEl = btn.querySelector(".option-line");
-      if (kindEl) {
-        kindEl.textContent = opt?.label || kindEl.textContent;
-      }
+      const lineText = loading ? "生成中…" : opt?.line || "—";
       if (lineEl) {
-        lineEl.textContent = loading ? "生成中…" : opt?.line || "—";
+        lineEl.textContent = lineText;
       }
+      if (opt?.intent) {
+        const kind = INTENT_ARIA[opt.intent] || "";
+        btn.setAttribute(
+          "aria-label",
+          kind && lineText !== "生成中…" && lineText !== "—"
+            ? `${kind}：${lineText}`
+            : lineText
+        );
+      }
+      btn.classList.toggle("option-btn--close", opt?.intent === "close");
       btn.disabled = disabled || !opt?.line || loading;
     }
   }
@@ -202,7 +216,11 @@
     state.talkingId = characterId;
     const session = getSession(state, characterId);
     setStatus("", false);
-    window.PomDebug?.log("开始对话", character.name);
+    window.PomDebug?.log("开始对话", {
+      character: character.name,
+      historyTurns: window.GameDialogue.HISTORY_TURNS,
+      messageCount: session.messages.length,
+    });
 
     if (session.messages.length === 0) {
       session.messages.push({
@@ -446,5 +464,11 @@
   setBubble("");
   showConfigSetupIfNeeded();
   window.PomDebug?.log("Points-of-mess v0 已加载");
+  if (!window.GameState.PERSIST_SESSIONS) {
+    window.PomDebug?.log(
+      "测试模式",
+      "每次刷新清空对话历史；仅保留地图位置。intent 仅出现在调试日志与 API。"
+    );
+  }
   requestAnimationFrame(gameLoop);
 })();

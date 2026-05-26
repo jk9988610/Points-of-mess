@@ -19,13 +19,6 @@
 - keypoint：要关键信息或立场；followup：必须引用「角色上一句」中的具体词；pivot：换到另一个具体议题；close：结束对话
 - 只输出 JSON，不要 markdown 或其它说明`;
 
-  function lastAssistantLine(messages) {
-    const last = [...messages]
-      .reverse()
-      .find((m) => m.role === "assistant" && m.status === "done");
-    return last?.content?.trim() || "";
-  }
-
   function fallbackOptions(archetype) {
     return OPTION_SCHEMA.map((meta) => {
       const preset = archetype.options.find((o) => o.intent === meta.intent);
@@ -63,15 +56,13 @@
   }
 
   async function generateOptions({ character, archetype, session, signal }) {
-    const lastLine = lastAssistantLine(session.messages) || archetype.opening;
-    const recent = session.messages
-      .slice(-4)
-      .map((m) => `${m.role}: ${m.content}`)
-      .join("\n");
+    const { lastLine: lastFromHistory, priorText } =
+      window.GameDialogue.formatRecentDialogueForOptions(session.messages);
+    const lastLine = lastFromHistory || archetype.opening;
 
     const userContent = `角色名：${character.name}
 角色上一句台词：${lastLine}
-${recent ? `最近对话：\n${recent}` : ""}
+${priorText ? `最近对话：\n${priorText}` : ""}
 
 请生成四轮玩家选项 JSON。`;
 
