@@ -1,6 +1,4 @@
 (function () {
-  const HISTORY_TURNS = 2;
-
   function stripIntentTag(send) {
     return send.replace(/^\[intent:\w+\]\s*/, "");
   }
@@ -13,66 +11,93 @@
 
   function buildChoicesBlock(options) {
     return options
-      .map((o) => `${o.id} ${o.label} → 「${o.line}」`)
+      .map((o) => `${o.intent} → ${o.line}`)
       .join("\n");
   }
 
-  function buildGameUserMessage(character, options, pick, formatOpts) {
+  /** 完整对白写入 [dialogue]；当前轮玩家句已在 [player_pick]，故默认排除最后一条 user */
+  function buildDialogueHistoryBlock(sessionMessages, characterName, { excludeCurrentPick } = {}) {
+    let done = getDoneMessages(sessionMessages);
+    if (
+      excludeCurrentPick &&
+      done.length > 0 &&
+      done[done.length - 1].role === "user"
+    ) {
+      done = done.slice(0, -1);
+    }
+    if (done.length === 0) {
+      return "";
+    }
+    return done
+      .map((m) => {
+        if (m.role === "assistant") {
+          return `${characterName}: ${m.content}`;
+        }
+        const tag = m.intent ? `[${m.intent}] ` : "";
+        return `玩家${tag}: ${m.content}`;
+      })
+      .join("\n");
+  }
+
+  function buildGameUserMessage(character, sessionMessages, options, pick, formatOpts) {
     const jsonMode = formatOpts?.jsonMode;
-    const replyRule = jsonMode
-      ? "只输出一个 JSON 对象（含 reply；非收束轮含 options）。禁止纯文本、禁止 markdown。"
+    const dialogue = buildDialogueHistoryBlock(sessionMessages, character.name, {
+      excludeCurrentPick: true,
+    });
+    const outputRule = jsonMode
+      ? '只输出一个 JSON 对象：含 reply；非收束轮含 options（四条 intent 分别为 keypoint、followup、pivot、close）。禁止 markdown、禁止代码块。options 的 line 为玩家口语一句，不要外加「」引号；followup 须引用本条 reply 中的具体词。'
       : "只输出角色台词。短。禁止寒暄。收束轮禁止新问题。";
-    return `[game]
-character: ${character.name}
 
-[choices]
-${buildChoicesBlock(options)}
+    const parts = [
+      "[game]",
+      `character: ${character.name}`,
+      "",
+    ];
 
-[player_pick]
-id: ${pick.id}
-intent: ${pick.intent}
-line: 「${pick.line}」
+    if (dialogue) {
+      parts.push("[dialogue]", dialogue, "");
+    }
 
-[reply_rule]
-${replyRule}`;
+    parts.push(
+      "[choices]",
+      buildChoicesBlock(options),
+      "",
+      "[player_pick]",
+      `intent: ${pick.intent}`,
+      `line: ${pick.line}`,
+      "",
+      "[output]",
+      outputRule
+    );
+
+    return parts.join("\n");
   }
 
-  function getHistoryForApi(sessionMessages) {
-    const maxMessages = HISTORY_TURNS * 2;
-    return getDoneMessages(sessionMessages)
-      .slice(-maxMessages)
-      .map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-  }
-
-  /** 与 getHistoryForApi 同窗口；最近对话不含「角色上一句」，避免重复送入选项 prompt */
-  function formatRecentDialogueForOptions(sessionMessages) {
-    const history = getHistoryForApi(sessionMessages);
-    if (history.length === 0) {
+  function formatRecentDialogueForOptions(sessionMessages, characterName) {
+    const done = getDoneMessages(sessionMessages);
+    if (done.length === 0) {
       return { lastLine: "", priorText: "" };
     }
-    const last = history[history.length - 1];
-    if (last.role === "assistant") {
-      const prior = history.slice(0, -1);
-      return {
-        lastLine: last.content.trim(),
-        priorText: prior.map((m) => `${m.role}: ${m.content}`).join("\n"),
-      };
-    }
-    const lastAssistant = [...history].reverse().find((m) => m.role === "assistant");
-    return {
-      lastLine: lastAssistant?.content?.trim() || "",
-      priorText: history.map((m) => `${m.role}: ${m.content}`).join("\n"),
-    };
+    const lastAssistant = [...done].reverse().find((m) => m.role === "assistant");
+    const lastLine = lastAssistant?.content?.trim() || "";
+    const name = characterName || "角色";
+    const priorText = done
+      .map((m) => {
+        if (m.role === "assistant") {
+          return `${name}: ${m.content}`;
+        }
+        const tag = m.intent ? `[${m.intent}] ` : "";
+        return `玩家${tag}: ${m.content}`;
+      })
+      .join("\n");
+    return { lastLine, priorText };
   }
 
   window.GameDialogue = {
-    HISTORY_TURNS,
     stripIntentTag,
     buildGameUserMessage,
-    getHistoryForApi,
+    buildDialogueHistoryBlock,
     formatRecentDialogueForOptions,
+    getDoneMessages,
   };
 })();

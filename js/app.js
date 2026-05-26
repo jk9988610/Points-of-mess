@@ -1,7 +1,7 @@
 (function () {
   const { characters, getArchetype, getCharacter } = window.GamePresets;
   const { createId, createInitialState, getSession, persist } = window.GameState;
-  const { buildGameUserMessage, getHistoryForApi } = window.GameDialogue;
+  const { buildGameUserMessage } = window.GameDialogue;
   const { presetOptions, requestCombinedTurn } = window.GameOptionsAi;
   const {
     draw,
@@ -183,7 +183,6 @@
     setStatus("", false);
     window.PomDebug?.logLocal("开始对话", {
       character: character.name,
-      historyTurns: window.GameDialogue.HISTORY_TURNS,
       messageCount: session.messages.length,
     });
 
@@ -253,14 +252,14 @@
     });
     persist(state);
 
-    const history = getHistoryForApi(session.messages);
-    const apiUserContent = buildGameUserMessage(character, optionsSnapshot, pick, {
-      jsonMode: true,
-    });
-    const apiMessages = [
-      ...history.slice(0, -1),
-      { role: "user", content: apiUserContent },
-    ];
+    const apiUserContent = buildGameUserMessage(
+      character,
+      session.messages,
+      optionsSnapshot,
+      pick,
+      { jsonMode: true }
+    );
+    const apiMessages = [{ role: "user", content: apiUserContent }];
 
     state.isStreaming = true;
     state.optionsLoading = true;
