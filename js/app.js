@@ -429,6 +429,17 @@
         state.currentOptions = options;
         window.PomDebug?.logLocal("选项已更新（界面展示）", options.map((o) => o.line));
       }
+
+      if (!isClose) {
+        try {
+          await window.GameSummary?.maybeRefreshPlotSummary(session, abortController?.signal);
+          persist(state);
+        } catch (e) {
+          if (e.name !== "AbortError") {
+            window.PomDebug?.logLocalWarn("剧情摘要失败", e.message);
+          }
+        }
+      }
     } catch (error) {
       if (error.name === "AbortError") {
         window.PomDebug?.logLocal("已停止生成");

@@ -182,7 +182,10 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
     isClose,
     signal,
   }) {
-    const systemPrompt = buildCombinedSystem(archetype, turn);
+    const systemPrompt = buildCombinedSystem(archetype, {
+      ...turn,
+      plotSummary: session.plotSummary,
+    });
     window.PomDebug?.logRequest(isClose ? "角色收束" : "角色回复+选项", {
       system: systemPrompt.slice(0, 80) + "…",
       messages: apiMessages,

@@ -44,6 +44,7 @@
 
   window.GameDialogue = {
     HISTORY_TURNS,
+    HISTORY_MAX_CHARS,
     stripIntentTag,
     getHistoryForApi,
     formatRecentDialogueForOptions,
