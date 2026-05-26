@@ -26,8 +26,8 @@
           id: 2,
           intent: "followup",
           label: "追问",
-          line: "你上一句里的「迟早」——指哪一天？",
-          send: "[intent:followup] 你上一句里的「迟早」——指哪一天？",
+          line: "你口中的「阻拦」——我拦过你吗？",
+          send: "[intent:followup] 你口中的「阻拦」——我拦过你吗？",
         },
         {
           id: 3,

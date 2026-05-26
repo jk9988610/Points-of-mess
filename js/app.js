@@ -2,8 +2,7 @@
   const { characters, getArchetype, getCharacter } = window.GamePresets;
   const { createId, createInitialState, getSession, persist } = window.GameState;
   const { buildGameUserMessage, getHistoryForApi } = window.GameDialogue;
-  const { streamChat } = window.ChatApi;
-  const { generateOptions, fallbackOptions } = window.GameOptionsAi;
+  const { presetOptions, requestCombinedTurn } = window.GameOptionsAi;
   const {
     draw,
     tickMove,
@@ -31,7 +30,6 @@
   state.optionsLoading = false;
 
   let abortController = null;
-  let optionsAbortController = null;
   let lastFrame = performance.now();
   let highlightId = null;
 
@@ -129,17 +127,20 @@
       highlightId,
     });
     hintEl.textContent = state.talkingId
-      ? state.optionsLoading
-        ? "正在生成选项…"
-        : "点选下方 AI 生成的句子"
+      ? state.isStreaming
+        ? "等待角色回复…"
+        : "点选下方句子"
       : near
         ? `点击「${near.name}」交谈`
         : "点击空地移动 · 靠近角色后点击交谈";
   }
 
   function endTalking() {
-    optionsAbortController?.abort();
-    optionsAbortController = null;
+    if (state.talkingId) {
+      const session = getSession(state, state.talkingId);
+      session.messages = [];
+      persist(state);
+    }
     state.talkingId = null;
     state.currentOptions = null;
     state.optionsLoading = false;
@@ -157,49 +158,6 @@
       return false;
     }
     return true;
-  }
-
-  async function refreshAiOptions() {
-    if (!state.talkingId) {
-      return;
-    }
-    if (!ensureApiConfig()) {
-      const archetype = getArchetype(getCharacter(state.talkingId).archetypeId);
-      state.currentOptions = fallbackOptions(archetype);
-      renderOptionButtons(state.currentOptions, false);
-      return;
-    }
-
-    const character = getCharacter(state.talkingId);
-    const archetype = getArchetype(character.archetypeId);
-    const session = getSession(state, state.talkingId);
-
-    state.optionsLoading = true;
-    renderOptionButtons(state.currentOptions, true);
-    renderMap();
-
-    optionsAbortController?.abort();
-    optionsAbortController = new AbortController();
-
-    try {
-      state.currentOptions = await generateOptions({
-        character,
-        archetype,
-        session,
-        signal: optionsAbortController.signal,
-      });
-      window.PomDebug?.log("选项已更新", state.currentOptions.map((o) => o.line));
-    } catch (e) {
-      if (e.name !== "AbortError") {
-        setStatus(e.message || "选项生成失败", true);
-        state.currentOptions = fallbackOptions(archetype);
-      }
-    } finally {
-      state.optionsLoading = false;
-      optionsAbortController = null;
-      renderOptionButtons(state.currentOptions, false);
-      renderMap();
-    }
   }
 
   function startTalking(characterId) {
@@ -239,11 +197,15 @@
       setBubble(last?.content || archetype.opening, false);
     }
 
+    state.currentOptions = presetOptions(archetype);
+    window.PomDebug?.log("首轮选项（程序预设）", state.currentOptions.map((o) => o.line));
+
     setOptionsVisible(true);
     stopButtonEl.disabled = true;
+    state.optionsLoading = false;
+    renderOptionButtons(state.currentOptions, false);
     renderMap();
     positionBubble();
-    refreshAiOptions();
   }
 
   async function pickOption(optionId) {
@@ -264,6 +226,7 @@
     const archetype = getArchetype(character.archetypeId);
     const session = getSession(state, state.talkingId);
     const optionsSnapshot = state.currentOptions.map((o) => ({ ...o }));
+    const isClose = pick.intent === "close";
 
     window.PomDebug?.log("玩家选择", { intent: pick.intent, line: pick.line });
 
@@ -284,62 +247,46 @@
       { role: "user", content: apiUserContent },
     ];
 
-    window.PomDebug?.logRequest("角色回复", {
-      system: archetype.system.slice(0, 60) + "…",
-      messages: apiMessages,
-    });
-
     state.isStreaming = true;
-    renderOptionButtons(state.currentOptions, false);
+    state.optionsLoading = true;
+    renderOptionButtons(state.currentOptions, true);
     stopButtonEl.disabled = false;
-    setBubble("", true);
+    setBubble("…", true);
     setStatus("", false);
+    renderMap();
 
-    let assistantContent = "";
     abortController = new AbortController();
 
     try {
-      await streamChat({
-        systemPrompt: archetype.system,
-        messages: apiMessages,
-        max_tokens: pick.intent === "close" ? 50 : undefined,
+      const { reply, options } = await requestCombinedTurn({
+        archetype,
+        apiMessages,
+        isClose,
         signal: abortController.signal,
-        onDelta(chunk) {
-          assistantContent += chunk;
-          setBubble(assistantContent, true);
-        },
       });
-
-      window.PomDebug?.logResponse("角色回复", assistantContent);
 
       session.messages.push({
         id: createId(),
         role: "assistant",
-        content: assistantContent,
+        content: reply,
         createdAt: Date.now(),
         status: "done",
       });
       persist(state);
-      setBubble(assistantContent, false);
+      setBubble(reply, false);
 
-      if (pick.intent === "close") {
+      if (isClose) {
+        if (options) {
+          window.PomDebug?.log("收束轮忽略多余 options", null);
+        }
         setTimeout(() => endTalking(), 600);
       } else {
-        refreshAiOptions();
+        state.currentOptions = options;
+        window.PomDebug?.log("选项已更新", options.map((o) => o.line));
       }
     } catch (error) {
       if (error.name === "AbortError") {
-        if (assistantContent) {
-          session.messages.push({
-            id: createId(),
-            role: "assistant",
-            content: assistantContent,
-            createdAt: Date.now(),
-            status: "done",
-          });
-          persist(state);
-          setBubble(assistantContent, false);
-        }
+        window.PomDebug?.log("已停止生成", null);
       } else {
         session.messages.pop();
         persist(state);
@@ -351,9 +298,12 @@
       }
     } finally {
       state.isStreaming = false;
+      state.optionsLoading = false;
       abortController = null;
       stopButtonEl.disabled = true;
-      renderOptionButtons(state.currentOptions, state.optionsLoading);
+      if (state.talkingId && pick.intent !== "close") {
+        renderOptionButtons(state.currentOptions, false);
+      }
       renderMap();
       positionBubble();
     }
@@ -467,7 +417,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.log(
       "测试模式",
-      "每次刷新清空对话历史；仅保留地图位置。intent 仅出现在调试日志与 API。"
+      "每次刷新清空对话历史；仅保留地图位置。首轮选项为程序预设，之后每轮一次 API 返回台词+选项。"
     );
   }
   requestAnimationFrame(gameLoop);

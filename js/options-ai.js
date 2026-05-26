@@ -6,40 +6,48 @@
     { id: 4, intent: "close", label: "收束" },
   ];
 
-  const OPTIONS_SYSTEM = `你是文字冒险游戏的选项撰稿人。根据对话上下文，为玩家生成 4 条可点击的短句。
-必须严格只输出 JSON 数组，恰好 4 个元素，顺序与 intent 固定：
-[
-  {"intent":"keypoint","line":"..."},
-  {"intent":"followup","line":"..."},
-  {"intent":"pivot","line":"..."},
-  {"intent":"close","line":"..."}
-]
-要求：
-- 每条 line 为中文一句，不超过 35 字，带具体锚点，不要寒暄
-- keypoint：要关键信息或立场；followup：必须引用「角色上一句」中的具体词；pivot：换到另一个具体议题；close：结束对话
-- 只输出 JSON，不要 markdown 或其它说明`;
+  function buildCombinedSystem(archetype) {
+    return `${archetype.system}
 
-  function fallbackOptions(archetype) {
+【输出格式】只输出一个 JSON 对象，不要 markdown 或其它说明。
+玩家本轮未选收束时：
+{"reply":"角色台词","options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."},{"intent":"pivot","line":"..."},{"intent":"close","line":"..."}]}
+玩家本轮选收束时：
+{"reply":"角色落款"}（不要 options 字段）
+
+reply：1～2 句，≤40 字。options 每条 line ≤35 字、带具体锚点；followup 必须引用你本条 reply 中的具体词。`;
+  }
+
+  function presetOptions(archetype) {
     return OPTION_SCHEMA.map((meta) => {
       const preset = archetype.options.find((o) => o.intent === meta.intent);
+      const line = preset?.line || meta.label;
       return {
         ...meta,
-        line: preset?.line || meta.label,
-        send: preset?.send || `[intent:${meta.intent}] ${preset?.line || meta.label}`,
+        line,
+        send: preset?.send || `[intent:${meta.intent}] ${line}`,
       };
     });
   }
 
-  function parseOptionsJson(raw, archetype) {
+  function fallbackOptions(archetype) {
+    return presetOptions(archetype);
+  }
+
+  function extractJsonObject(raw) {
     const text = String(raw || "").trim();
-    const start = text.indexOf("[");
-    const end = text.lastIndexOf("]");
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
     if (start === -1 || end === -1) {
-      throw new Error("未找到 JSON 数组");
+      throw new Error("未找到 JSON 对象");
     }
-    const parsed = JSON.parse(text.slice(start, end + 1));
-    if (!Array.isArray(parsed) || parsed.length < 4) {
-      throw new Error("JSON 元素不足 4 条");
+    return JSON.parse(text.slice(start, end + 1));
+  }
+
+  function optionsFromArray(items, archetype) {
+    const parsed = Array.isArray(items) ? items : [];
+    if (parsed.length < 4) {
+      throw new Error("options 不足 4 条");
     }
     return OPTION_SCHEMA.map((meta, i) => {
       const item = parsed.find((p) => p.intent === meta.intent) || parsed[i];
@@ -55,43 +63,59 @@
     });
   }
 
-  async function generateOptions({ character, archetype, session, signal }) {
-    const { lastLine: lastFromHistory, priorText } =
-      window.GameDialogue.formatRecentDialogueForOptions(session.messages);
-    const lastLine = lastFromHistory || archetype.opening;
+  function parseCombinedResponse(raw, archetype, isClose) {
+    const obj = extractJsonObject(raw);
+    const reply = String(obj.reply || "").trim();
+    if (!reply) {
+      throw new Error("缺少 reply");
+    }
+    if (isClose) {
+      return { reply, options: null };
+    }
+    return {
+      reply,
+      options: optionsFromArray(obj.options, archetype),
+    };
+  }
 
-    const userContent = `角色名：${character.name}
-角色上一句台词：${lastLine}
-${priorText ? `最近对话：\n${priorText}` : ""}
-
-请生成四轮玩家选项 JSON。`;
-
-    window.PomDebug?.logRequest("生成选项", {
-      system: OPTIONS_SYSTEM.slice(0, 80) + "…",
-      user: userContent,
+  async function requestCombinedTurn({
+    archetype,
+    apiMessages,
+    isClose,
+    signal,
+  }) {
+    const systemPrompt = buildCombinedSystem(archetype);
+    window.PomDebug?.logRequest(isClose ? "角色收束" : "角色回复+选项", {
+      system: systemPrompt.slice(0, 80) + "…",
+      messages: apiMessages,
     });
 
     const raw = await window.ChatApi.completeChat({
-      systemPrompt: OPTIONS_SYSTEM,
-      messages: [{ role: "user", content: userContent }],
-      temperature: 0.65,
-      max_tokens: 280,
+      systemPrompt,
+      messages: apiMessages,
+      temperature: 0.6,
+      max_tokens: isClose ? 80 : 380,
       signal,
     });
 
-    window.PomDebug?.logResponse("生成选项", raw);
+    window.PomDebug?.logResponse(isClose ? "角色收束" : "角色回复+选项", raw);
 
     try {
-      return parseOptionsJson(raw, archetype);
+      return parseCombinedResponse(raw, archetype, isClose);
     } catch (e) {
-      window.PomDebug?.log("选项 JSON 解析失败，使用预设兜底", e.message);
-      return fallbackOptions(archetype);
+      window.PomDebug?.log("合并 JSON 解析失败", e.message);
+      if (isClose) {
+        return { reply: raw.trim().slice(0, 80) || "……", options: null };
+      }
+      const reply = raw.trim().split("\n")[0].slice(0, 40) || "……";
+      return { reply, options: fallbackOptions(archetype) };
     }
   }
 
   window.GameOptionsAi = {
     OPTION_SCHEMA,
-    generateOptions,
+    presetOptions,
     fallbackOptions,
+    requestCombinedTurn,
   };
 })();
