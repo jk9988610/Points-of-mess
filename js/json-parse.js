@@ -36,7 +36,7 @@
       : "";
 
     const options = [];
-    const intentRe = /"intent"\s*:\s*"(keypoint|followup|pivot|close)"\s*,\s*"line"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+    const intentRe = /"intent"\s*:\s*"(keypoint|followup|close)"\s*,\s*"line"\s*:\s*"((?:\\.|[^"\\])*)"/g;
     let m;
     while ((m = intentRe.exec(text)) !== null) {
       options.push({

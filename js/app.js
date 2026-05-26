@@ -88,7 +88,6 @@
   const INTENT_ARIA = {
     keypoint: "要点",
     followup: "追问",
-    pivot: "换题",
     close: "结束对话",
   };
 
@@ -612,7 +611,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②①②AI③④程序选项；换题/收束不检测重复。"
+      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②要点/追问(AI)+③收束(固定)。"
     );
   }
   requestAnimationFrame(gameLoop);
