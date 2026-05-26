@@ -5,7 +5,7 @@
 
 ---
 
-## 0. 现状快照（v0.5.0）
+## 0. 现状快照（v0.5.1）
 
 | 已有 | 说明 |
 |------|------|
@@ -49,11 +49,14 @@
 
 ```mermaid
 flowchart LR
-  A[Phase A 宽摘要] --> B[Phase B 选项 prompt 软分工]
+  A[Phase A 宽摘要] --> Aplus[Phase A+ 档案标记]
+  Aplus --> B[Phase B 选项 prompt]
   B --> C[Phase C storyFlags]
   C --> D[Phase D 道德节拍 有剧本再做]
   F[Phase F 结局收束 轻量] -.-> C
 ```
+
+> Phase A+ 细则与 Todo 清单：[PLAN-summary-a-plus.md](./PLAN-summary-a-plus.md)
 
 **冻结**：原 Phase E（行动/换场景）——不排期。
 
@@ -87,6 +90,13 @@ flowchart LR
 **注入**：`requestReplyOnly` 已读完整 `plotSummary`；**选项 API 待 Phase B** 注入摘要摘录（未解问题）。
 
 **验收**：连续 12+ 轮后，调试里的「剧情摘要」仍含至少 3 个核心专名；锋利不重复追问摘要里已写明的事实。
+
+---
+
+### Phase A+ — 剧情档案 + 行内状态（v0.5.2，**待实现**）
+
+> 讨论拍板：合并【已确认事实】/【未解问题】为【剧情档案】+ `[已确认]`/`[待核实]` 行标记；取消【本轮新增】独立段；保留【关系与态度】。  
+> **完整 Todo** → [PLAN-summary-a-plus.md](./PLAN-summary-a-plus.md)
 
 ---
 
@@ -207,8 +217,8 @@ flowchart LR
 
 ## 5. 协作顺序
 
-**下一刀**：**Phase B**（§B.3～B.5：3 轮对话 + 摘要未解问题 + 深挖/推进 prompt）。  
-Phase F 骨架可紧随其后（仅 `state.js` 字段，无 UI）。
+**下一刀**：**Phase A+**（[PLAN-summary-a-plus.md](./PLAN-summary-a-plus.md) §4 Todo：摘要 prompt + `[待核实]` 摘录兼容）。  
+其后 Phase C / Phase F 骨架。
 
 ---
 
@@ -218,7 +228,8 @@ Phase F 骨架可紧随其后（仅 `state.js` 字段，无 UI）。
 |------|------|
 | PLAN-api-reliability.md | API / 稳定性 |
 | PLAN-map-desktop.md | 地图读文档 |
-| **PLAN-narrative-next.md（本文）** | 叙事与玩法 |
+| **PLAN-narrative-next.md（本文）** | 叙事总路线 |
+| **PLAN-summary-a-plus.md** | Phase A+ 摘要（档案标记 + Todo） |
 
 ---
 
@@ -332,4 +343,4 @@ Phase F 骨架可紧随其后（仅 `state.js` 字段，无 UI）。
 
 ---
 
-*状态：Phase A 已落地 v0.5.0；Phase B 已落地 v0.5.1（§B.3～B.5）。*
+*状态：Phase A v0.5.0 ✅ · Phase B v0.5.1 ✅ · Phase A+ v0.5.2 计划已定（见 PLAN-summary-a-plus.md）。*
