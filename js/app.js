@@ -147,12 +147,14 @@
 
   function renderMap() {
     const near = characters.find((c) => isNearPlayer(state.player, c));
+    const nearDoc = window.GameDesktop?.findNearDoc?.(state.player);
     highlightId = near?.id || null;
     draw(ctx, canvas, {
       player: state.player,
       characters,
       talkingId: state.talkingId,
       highlightId,
+      highlightDocId: nearDoc?.id || null,
     });
     hintEl.textContent = state.talkingId
       ? state.isStreaming
@@ -160,7 +162,9 @@
         : "点选下方句子"
       : near
         ? `点击「${near.name}」交谈`
-        : "点击空地移动 · 靠近角色后点击交谈";
+        : nearDoc
+          ? `点击「${nearDoc.title}」打开文档`
+          : "点击空地移动 · 靠近📄或锋利";
   }
 
   function endTalking() {
@@ -485,6 +489,12 @@
     }
 
     const world = canvasToWorld(canvas, clientX, clientY);
+    const docHit = window.GameDesktop?.hitDesktopDoc?.(world, state.player);
+    if (docHit && !state.talkingId) {
+      window.GameDesktop.openDoc(docHit);
+      return;
+    }
+
     const hit = hitCharacter(characters, world);
 
     if (hit && isNearPlayer(state.player, hit)) {

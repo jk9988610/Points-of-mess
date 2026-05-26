@@ -659,3 +659,97 @@ body.login-locked .memory-input-bar {
     opacity: 0;
   }
 }
+
+.doc-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.doc-viewer.hidden {
+  display: none;
+}
+
+.doc-viewer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.doc-viewer-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: min(80vh, 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(129, 140, 248, 0.4);
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.doc-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.doc-viewer-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.doc-viewer-close {
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.doc-viewer-body {
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #e2e8f0;
+}
+
+.doc-viewer-body h1 {
+  font-size: 1.1rem;
+  margin: 0 0 10px;
+}
+
+.doc-viewer-body h2 {
+  font-size: 1rem;
+  margin: 14px 0 8px;
+  color: #c7d2fe;
+}
+
+.doc-viewer-body h3 {
+  font-size: 0.92rem;
+  margin: 10px 0 6px;
+}
+
+.doc-viewer-body pre {
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.doc-viewer-body p {
+  margin: 0 0 8px;
+}

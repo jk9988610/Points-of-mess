@@ -31,7 +31,7 @@
         y: (clientY - rect.top) / rect.height,
       };
     },
-    draw(ctx, canvas, { player, characters, talkingId, highlightId }) {
+    draw(ctx, canvas, { player, characters, talkingId, highlightId, highlightDocId }) {
       const w = canvas.clientWidth || canvas.width;
       const h = canvas.clientHeight || canvas.height;
       ctx.save();
@@ -54,6 +54,12 @@
         ctx.fillStyle = "rgba(255,255,255,0.12)";
         ctx.fill();
       }
+
+      window.GameDesktop?.drawDesktopDocs?.(ctx, canvas, {
+        player,
+        highlightDocId,
+        talkingId,
+      });
 
       for (const ch of characters) {
         const cx = ch.x * w;

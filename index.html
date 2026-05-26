@@ -20,12 +20,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Points-of-mess</title>
-  <link rel="stylesheet" href="styles/map.css?v=0.3.7">
+  <link rel="stylesheet" href="styles/map.css?v=0.4.0">
 </head>
 <body>
   <div class="app-shell">
     <header class="app-header">
-      <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion">v0.3.6</span></h1>
+      <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion">v0.4.0</span></h1>
       <a class="stop-button stop-button--ghost" href="refresh.html" title="Chrome 缓存旧版时点此">更新</a>
       <button class="stop-button stop-button--ghost" type="button" id="logoutBtn">退出</button>
       <button class="stop-button" type="button" id="stopGeneration" disabled>停止</button>
@@ -50,7 +50,18 @@
       <div class="speech-bubble" id="speechBubble" role="status" aria-live="polite">
         <p class="speech-bubble-text" id="speechBubbleText"></p>
       </div>
-      <p class="map-hint" id="mapHint">点击空地移动 · 靠近角色后点击交谈</p>
+      <p class="map-hint" id="mapHint">点击空地移动 · 靠近📄读文档或锋利交谈</p>
+    </div>
+
+    <div class="doc-viewer hidden" id="docViewer" role="dialog" aria-modal="true" aria-labelledby="docViewerTitle">
+      <div class="doc-viewer-backdrop" id="docViewerBackdrop"></div>
+      <div class="doc-viewer-panel">
+        <header class="doc-viewer-header">
+          <h2 class="doc-viewer-title" id="docViewerTitle">文档</h2>
+          <button type="button" class="doc-viewer-close" id="docViewerClose" aria-label="关闭">×</button>
+        </header>
+        <article class="doc-viewer-body" id="docViewerBody"></article>
+      </div>
     </div>
 
     <div class="login-gate" id="loginGate">
@@ -129,20 +140,22 @@
     </nav>
   </div>
 
-  <script src="js/version.js?v=0.3.7"></script>
-  <script src="js/config.js?v=0.3.7"></script>
-  <script src="js/auth.js?v=0.3.7"></script>
-  <script src="js/config-check.js?v=0.3.7"></script>
-  <script src="js/debug.js?v=0.3.7"></script>
-  <script src="js/presets.js?v=0.3.7"></script>
-  <script src="js/dialogue.js?v=0.3.7"></script>
-  <script src="js/memory-chat.js?v=0.3.7"></script>
-  <script src="js/summary.js?v=0.3.7"></script>
-  <script src="js/state.js?v=0.3.7"></script>
-  <script src="js/map.js?v=0.3.7"></script>
-  <script src="js/api.js?v=0.3.7"></script>
-  <script src="js/tokens.js?v=0.3.7"></script>
-  <script src="js/options-ai.js?v=0.3.7"></script>
-  <script src="js/app.js?v=0.3.7"></script>
+  <script src="js/version.js?v=0.4.0"></script>
+  <script src="js/config.js?v=0.4.0"></script>
+  <script src="js/auth.js?v=0.4.0"></script>
+  <script src="js/config-check.js?v=0.4.0"></script>
+  <script src="js/debug.js?v=0.4.0"></script>
+  <script src="js/presets.js?v=0.4.0"></script>
+  <script src="js/dialogue.js?v=0.4.0"></script>
+  <script src="js/memory-chat.js?v=0.4.0"></script>
+  <script src="js/summary.js?v=0.4.0"></script>
+  <script src="js/state.js?v=0.4.0"></script>
+  <script src="js/map.js?v=0.4.0"></script>
+  <script src="js/json-parse.js?v=0.4.0"></script>
+  <script src="js/desktop.js?v=0.4.0"></script>
+  <script src="js/api.js?v=0.4.0"></script>
+  <script src="js/tokens.js?v=0.4.0"></script>
+  <script src="js/options-ai.js?v=0.4.0"></script>
+  <script src="js/app.js?v=0.4.0"></script>
 </body>
 </html>

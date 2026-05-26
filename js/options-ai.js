@@ -91,14 +91,7 @@ reply：1～2 句，≤40 字。options 四项必须各含 intent 与 line；**�
   }
 
   function extractJsonObject(raw) {
-    let text = String(raw || "").trim();
-    text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start === -1 || end <= start) {
-      throw new Error("未找到 JSON 对象");
-    }
-    return JSON.parse(text.slice(start, end + 1));
+    return window.PomJson.parseJsonObject(raw);
   }
 
   function lineFromOptionItem(item) {
@@ -292,7 +285,14 @@ reply：1～2 句，≤40 字。options 四项必须各含 intent 与 line；**�
     throw new Error("无法解析角色回复");
   }
 
-  async function generateOptions({ character, archetype, session, signal, avoidLines }) {
+  async function generateOptions({
+    character,
+    archetype,
+    session,
+    signal,
+    avoidLines,
+    temperature = 0.5,
+  }) {
     const { lastLine, priorText } = window.GameDialogue.formatRecentDialogueForOptions(
       session.messages
     );
@@ -318,14 +318,14 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
       {
         systemPrompt: OPTIONS_SYSTEM,
         messages: [{ role: "user", content: userContent }],
-        temperature: 0.5,
+        temperature,
         max_tokens: tokenLimit("OPTIONS", 1024),
         signal,
       },
       { preferPlain: true }
     );
 
-    window.PomDebug?.logResponse("生成选项（兜底）", raw);
+    window.PomDebug?.logResponse("生成选项", raw);
 
     const obj = extractJsonObject(raw);
     const list = obj.options || obj;
@@ -351,6 +351,58 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
     return { raw, parsed: parseCombinedResponse(raw, isClose) };
   }
 
+  async function requestSplitTurn({
+    character,
+    archetype,
+    session,
+    apiMessages,
+    turn,
+    signal,
+  }) {
+    const systemPrompt = buildCombinedSystem(archetype, {
+      ...turn,
+      plotSummary: session.plotSummary,
+    });
+    const previousLines = (turn.options || []).map((o) => o.line).filter(Boolean);
+
+    window.PomDebug?.logLocal("API 路径", "拆分优先：先 reply（纯文本）→ 再 options（JSON）");
+    window.PomDebug?.logRequest("角色回复（拆分）", {
+      messages: apiMessages,
+    });
+
+    const reply = await requestReplyOnly({ systemPrompt, apiMessages, signal });
+    window.PomDebug?.logResponse("角色回复（拆分）", reply);
+
+    const sessionWithReply = {
+      messages: [
+        ...session.messages,
+        { role: "assistant", content: reply, status: "done" },
+      ],
+    };
+
+    let options = await generateOptions({
+      character,
+      archetype,
+      session: sessionWithReply,
+      signal,
+      avoidLines: previousLines,
+    });
+
+    if (optionsUnchanged(turn.options, options)) {
+      window.PomDebug?.logLocalWarn("选项与上一轮相同", "提高温度重生成");
+      options = await generateOptions({
+        character,
+        archetype,
+        session: sessionWithReply,
+        signal,
+        avoidLines: previousLines,
+        temperature: 0.62,
+      });
+    }
+
+    return { reply, options };
+  }
+
   async function requestCombinedTurn({
     character,
     archetype,
@@ -366,7 +418,24 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
     });
     const previousLines = (turn.options || []).map((o) => o.line).filter(Boolean);
 
-    window.PomDebug?.logRequest(isClose ? "角色收束" : "角色回复+选项", {
+    if (window.PomTokens?.USE_SPLIT_FIRST) {
+      if (isClose) {
+        window.PomDebug?.logLocal("API 路径", "收束：仅 reply");
+        const reply = await requestReplyOnly({ systemPrompt, apiMessages, signal });
+        window.PomDebug?.logResponse("角色收束（拆分）", reply);
+        return { reply, options: null };
+      }
+      return requestSplitTurn({
+        character,
+        archetype,
+        session,
+        apiMessages,
+        turn,
+        signal,
+      });
+    }
+
+    window.PomDebug?.logRequest(isClose ? "角色收束" : "角色回复+选项（合并）", {
       system: systemPrompt.slice(0, 80) + "…",
       messages: apiMessages,
     });
@@ -379,36 +448,14 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
       parsed = first.parsed;
     } catch (e1) {
       window.PomDebug?.logLocalWarn("合并请求失败，重试一次", e1.message);
-      try {
-        const second = await callCombinedOnce({
-          systemPrompt,
-          apiMessages,
-          isClose,
-          signal,
-        });
-        raw = second.raw;
-        parsed = second.parsed;
-      } catch (e2) {
-        if (isClose) {
-          throw e2;
-        }
-        window.PomDebug?.logLocalWarn("合并仍失败，拆成「先回复、再选项」", e2.message);
-        const reply = await requestReplyOnly({ systemPrompt, apiMessages, signal });
-        const options = await generateOptions({
-          character,
-          archetype,
-          session: {
-            messages: [
-              ...session.messages,
-              { role: "assistant", content: reply, status: "done" },
-            ],
-          },
-          signal,
-          avoidLines: previousLines,
-        });
-        raw = JSON.stringify({ reply, options: options.map((o) => ({ intent: o.intent, line: o.line })) });
-        parsed = { reply, options };
-      }
+      const second = await callCombinedOnce({
+        systemPrompt,
+        apiMessages,
+        isClose,
+        signal,
+      });
+      raw = second.raw;
+      parsed = second.parsed;
     }
 
     window.PomDebug?.logResponse(isClose ? "角色收束" : "角色回复+选项", raw);
@@ -418,10 +465,6 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
     }
 
     if (optionsUnchanged(turn.options, parsed.options)) {
-      window.PomDebug?.logLocalWarn(
-        "选项与上一轮相同",
-        "改走选项专生成"
-      );
       parsed.options = await generateOptions({
         character,
         archetype,
