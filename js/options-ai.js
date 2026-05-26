@@ -11,23 +11,51 @@
 {"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."},{"intent":"pivot","line":"..."},{"intent":"close","line":"..."}]}
 要求：每条 line 为中文一句，≤35 字；followup 必须引用「角色上一句」中的具体词。`;
 
-  function buildCombinedSystem(archetype) {
-    return `你是文字冒险游戏的对话引擎：同时生成角色台词（reply）与下一轮玩家选项（options）。
-messages 中已有最近对白；最后一条 user 含本轮 [choices] 与 [player_pick]。
+  function buildChoicesBlock(options) {
+    return options
+      .map((o) => `${o.intent} → ${o.line}`)
+      .join("\n");
+  }
+
+  function buildCombinedSystem(archetype, turn) {
+    const base = `你是文字冒险游戏的对话引擎：同时生成角色台词（reply）与下一轮玩家选项（options）。
+
+【messages 规则】
+messages 里只能是角色与玩家的对白原话（玩家句即其点击的台词），不要期待 [game]、[choices] 等标记出现在 messages 中。
+根据 messages 全文理解剧情；最后一条 user 是玩家本轮原话。
 
 【角色风格】（写入 reply 时遵守）
 ${archetype.system}
 
-【重要】本请求不要只输出角色台词。必须只输出一个合法 JSON 对象，无其它文字、无 markdown 代码块。
+【重要】必须只输出一个合法 JSON 对象，无其它文字、无 markdown 代码块。`;
+
+    if (!turn) {
+      return `${base}
 
 非收束轮示例：
-{"reply":"嘴硬。等刀架脖子上再说。","options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."},{"intent":"pivot","line":"..."},{"intent":"close","line":"..."}]}
+{"reply":"嘴硬。等刀架脖子上再说。","options":[{"intent":"keypoint","line":"..."},...]}
 
 收束轮示例：
-{"reply":"慢走不送。"}
+{"reply":"慢走不送。"}`;
+    }
 
-reply：1～2 句，≤40 字。options 四条；followup 的 line 必须引用本条 reply 里的具体词。
-options 的 line：中文一句 ≤35 字，不要外包「」；followup 引用 reply 用词时不要叠双层引号。`;
+    const closeBlock = turn.isClose
+      ? "\n【收束轮】玩家 intent=close。只输出 {\"reply\":\"...\"}，不要 options。"
+      : "";
+
+    return `${base}
+
+【本轮】
+角色：${turn.character.name}
+玩家本轮 intent：${turn.pick.intent}
+玩家本轮原话（应与 messages 最后一条 user 一致）：${turn.pick.line}
+
+【四类可选行动 — 仅用于生成 options，勿写入 reply 正文】
+${buildChoicesBlock(turn.options)}
+
+【输出】
+${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[四条 keypoint/followup/pivot/close]}。'}
+reply：1～2 句，≤40 字。options 的 line ≤35 字，不要外包「」；followup 须引用本条 reply 中的具体词。${closeBlock}`;
   }
 
   function presetOptions(archetype) {
@@ -150,10 +178,11 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
     archetype,
     session,
     apiMessages,
+    turn,
     isClose,
     signal,
   }) {
-    const systemPrompt = buildCombinedSystem(archetype);
+    const systemPrompt = buildCombinedSystem(archetype, turn);
     window.PomDebug?.logRequest(isClose ? "角色收束" : "角色回复+选项", {
       system: systemPrompt.slice(0, 80) + "…",
       messages: apiMessages,

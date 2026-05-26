@@ -1,7 +1,7 @@
 (function () {
   const { characters, getArchetype, getCharacter } = window.GamePresets;
   const { createId, createInitialState, getSession, persist } = window.GameState;
-  const { buildGameUserMessage, getHistoryForApi } = window.GameDialogue;
+  const { getHistoryForApi } = window.GameDialogue;
   const { presetOptions, requestCombinedTurn } = window.GameOptionsAi;
   const {
     draw,
@@ -385,14 +385,7 @@
     });
     persist(state);
 
-    const history = getHistoryForApi(session.messages);
-    const apiUserContent = buildGameUserMessage(character, optionsSnapshot, pick, {
-      jsonMode: true,
-    });
-    const apiMessages = [
-      ...history.slice(0, -1),
-      { role: "user", content: apiUserContent },
-    ];
+    const apiMessages = getHistoryForApi(session.messages);
 
     state.isStreaming = true;
     state.optionsLoading = true;
@@ -415,6 +408,7 @@
         archetype,
         session,
         apiMessages,
+        turn: { character, options: optionsSnapshot, pick, isClose },
         isClose,
         signal: abortController.signal,
       });
@@ -584,7 +578,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。底部选项发 AI 含 2 轮历史；黄条「自由提问」仅 1 条 user，用于记忆测试。"
+      "灰=本地 · 黄=发AI · 绿=AI回。底部选项：messages 仅对白原话（2 轮）；菜单在 system。自由提问仍仅 1 条 user。"
     );
   }
   requestAnimationFrame(gameLoop);
