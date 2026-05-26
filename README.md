@@ -29,9 +29,10 @@ cp js/config.example.js js/config.js
 
 ### 2. 在线（GitHub Pages）
 
-推送到 **`main`** 后，Actions 会发布站点。首次请在仓库 **Settings → Pages → Source** 选 **GitHub Actions**（详见 [docs/PAGES-SETUP.md](docs/PAGES-SETUP.md)）。
+推送到 **`main`** 后，Actions 会把站点推到 **`gh-pages` 分支**。  
+请在 **Settings → Pages** 把 **Source** 设为 **Deploy from a branch → `gh-pages` → / (root)**（详见 [docs/PAGES-SETUP.md](docs/PAGES-SETUP.md)）。
 
-> **不必**填写 “Add a verified domain”——那是绑定你自己的域名时才需要；默认 `*.github.io` 地址不用加。
+> **不必**填写 “Add a verified domain”。若 Source 仍指向已删除的 `cursor/map-sharp-touch-a1c8`，线上会一直是旧代码。
 
 **正式地址：**
 

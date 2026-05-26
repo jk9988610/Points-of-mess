@@ -1,48 +1,58 @@
 # GitHub Pages 配置说明
 
-## 不需要「Add a verified domain」
+## 当前问题（已诊断）
 
-仓库若使用默认地址：
+仓库 Pages **发布源指错了分支**：
 
-**https://jk9988610.github.io/Points-of-mess/**
+| 项目 | 当前错误配置 | 应改为 |
+|------|----------------|--------|
+| Source branch | `cursor/map-sharp-touch-a1c8`（**已删除**） | **`gh-pages`** |
+| 结果 | 线上长期是旧 JS；新 workflow 也可能失败 | 与 Actions 推送到 `gh-pages` 一致 |
 
-**不必**添加自定义域名，也**不必**填写 Verified domain。  
-「Add a verified domain」仅在你使用自己的域名（如 `game.example.com`）时才需要。
-
----
-
-## 正确开启 Pages（必做一次）
-
-1. 打开仓库 **Settings** → **Pages**
-2. **Build and deployment** → **Source** 选 **GitHub Actions**（不要选错成仅更新 `gh-pages` 分支却不发布）
-3. 保存后，到 **Actions** 运行 **Deploy to GitHub Pages**（或推送 `main` 触发）
-4. 等几分钟，访问：https://jk9988610.github.io/Points-of-mess/
+默认地址仍是：**https://jk9988610.github.io/Points-of-mess/**  
+**不需要**「Add a verified domain」（仅自定义域名才要）。
 
 ---
 
-## 如何确认线上已是新版本
+## 请你手动改一次（约 1 分钟）
 
-打开调试日志，第一行应为：
+1. 打开：https://github.com/jk9988610/Points-of-mess/settings/pages  
+2. **Build and deployment**  
+3. **Source** 选 **Deploy from a branch**（不要选 GitHub Actions，除非你已单独配好）  
+4. **Branch** 选 **`gh-pages`**，文件夹 **`/ (root)`**  
+5. 点 **Save**  
+6. 等 1～3 分钟，访问：https://jk9988610.github.io/Points-of-mess/  
+7. **强制刷新**：Ctrl+Shift+R（或清缓存）
+
+---
+
+## Actions 在做什么
+
+推送 **`main`** 后，workflow **Deploy to GitHub Pages** 会用 `peaceiris/actions-gh-pages` 把站点文件推到 **`gh-pages` 分支**。  
+Pages 必须从 **`gh-pages`** 读，线上才会更新。
+
+若 Actions 失败，到 **Actions** 页看红色任务日志。
+
+---
+
+## 如何确认已是 v0.1
+
+调试区第一行应为：
 
 ```text
 Points-of-mess v0.1 已加载（首轮程序选项 + 合并 API）
 ```
 
-开聊后应出现 **「首轮选项（程序预设）」**，且**没有** `→ 生成选项`。
+开聊后出现 **「首轮选项（程序预设）」**，且**没有** `→ 生成选项`。
 
-或在浏览器打开（强制绕过缓存）：
+或打开：
 
-`https://jk9988610.github.io/Points-of-mess/js/app.js`
+https://jk9988610.github.io/Points-of-mess/js/app.js?v=0.1.1
 
-搜索 `presetOptions` — 有则为新版；仅有 `generateOptions` 则为旧缓存或 Pages 未更新。
+搜索 **`presetOptions`**（有 = 新版；只有 `generateOptions` = 旧版）。
 
 ---
 
-## 线上 API 密钥
+## 线上 API
 
-`js/config.js` 默认不会从 `main` 部署到公开站。若要在 Pages 上对话：
-
-- 仅在 **GitHub Actions 部署产物** 或 **私密方式** 配置密钥；或
-- **推荐**：本地打开 `index.html` + 本机 `js/config.js` 测试。
-
-切勿把真实 API 密钥提交到公开 `main`。
+公开 Pages **默认没有**你的 `js/config.js` 密钥。要在线对话需在 `gh-pages` 单独放密钥（有风险），**推荐本地**打开 `index.html` + 本机 `config.js` 测试。
