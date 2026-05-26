@@ -33,11 +33,13 @@
   let lastFrame = performance.now();
   let highlightId = null;
 
-  function setBubble(text, streaming) {
+  function setBubble(text, streaming, options) {
+    const thinking = Boolean(options?.thinking);
     state.bubbleText = text;
-    bubbleTextEl.textContent = text || (streaming ? "…" : "");
+    bubbleTextEl.textContent = text || (streaming && !thinking ? "…" : "");
     bubbleEl.classList.toggle("visible", Boolean(state.talkingId));
-    bubbleEl.classList.toggle("streaming", Boolean(streaming));
+    bubbleEl.classList.toggle("streaming", Boolean(streaming) && !thinking);
+    bubbleEl.classList.toggle("thinking", thinking);
     positionBubble();
   }
 
@@ -67,6 +69,7 @@
 
   function renderOptionButtons(options, loading) {
     const disabled = loading || state.isStreaming;
+    optionsBar.classList.toggle("is-loading", loading);
     for (const btn of optionsBar.querySelectorAll(".option-btn")) {
       const id = Number(btn.dataset.optionId);
       const opt = options?.find((o) => o.id === id);
@@ -251,8 +254,12 @@
     state.optionsLoading = true;
     renderOptionButtons(state.currentOptions, true);
     stopButtonEl.disabled = false;
-    setBubble("…", true);
-    setStatus("", false);
+    const thinkingBubble =
+      [...session.messages]
+        .reverse()
+        .find((m) => m.role === "assistant" && m.status === "done")?.content || "";
+    setBubble(thinkingBubble, true, { thinking: true });
+    setStatus("锋利在想…", false);
     renderMap();
 
     abortController = new AbortController();
@@ -273,7 +280,8 @@
         status: "done",
       });
       persist(state);
-      setBubble(reply, false);
+      setBubble(reply, false, { thinking: false });
+      setStatus("", false);
 
       if (isClose) {
         if (options) {
@@ -294,7 +302,8 @@
         const prev = [...session.messages]
           .reverse()
           .find((m) => m.role === "assistant" && m.status === "done");
-        setBubble(prev?.content || "", false);
+        setBubble(prev?.content || "", false, { thinking: false });
+        setStatus("", false);
       }
     } finally {
       state.isStreaming = false;
@@ -413,7 +422,7 @@
   setOptionsVisible(false);
   setBubble("");
   showConfigSetupIfNeeded();
-  window.PomDebug?.log("Points-of-mess v0 已加载");
+  window.PomDebug?.log("Points-of-mess v0.1 已加载（首轮程序选项 + 合并 API）");
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.log(
       "测试模式",

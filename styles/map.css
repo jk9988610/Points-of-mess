@@ -170,6 +170,40 @@ body {
   margin-left: 2px;
 }
 
+.speech-bubble.thinking {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.speech-bubble.thinking .speech-bubble-text {
+  opacity: 0.92;
+}
+
+.speech-bubble.thinking::after {
+  content: "思考中…";
+  font-size: 0.78rem;
+  color: var(--muted);
+  animation: pulse-muted 1.2s ease-in-out infinite;
+}
+
+.options-bar.is-loading .option-btn:not(:disabled) {
+  opacity: 0.85;
+}
+
+.options-bar.is-loading .option-line {
+  color: var(--muted);
+}
+
+@keyframes pulse-muted {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .config-setup {
   margin: 0 12px 8px;
   padding: 12px 14px;
