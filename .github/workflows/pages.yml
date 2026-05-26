@@ -1,5 +1,5 @@
-# 推送到 main 时，自动发布到 gh-pages（浏览器会正确渲染 HTML）
-name: Deploy to gh-pages
+# 推送到 main 时发布到 GitHub Pages（需在仓库 Settings → Pages 选 Source: GitHub Actions）
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -8,18 +8,37 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Publish to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Prepare site bundle
+        run: |
+          mkdir -p _site
+          rsync -a \
+            --exclude .git \
+            --exclude .github \
+            --exclude _site \
+            ./ _site/
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: .
-          exclude_assets: ".github"
+          path: _site
+
+      - uses: actions/deploy-pages@v4
+        id: deployment

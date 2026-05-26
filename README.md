@@ -29,7 +29,9 @@ cp js/config.example.js js/config.js
 
 ### 2. 在线（GitHub Pages）
 
-仓库已配置：推送到 **`main`** 后，Actions 会发布到 **`gh-pages`**。
+推送到 **`main`** 后，Actions 会发布站点。首次请在仓库 **Settings → Pages → Source** 选 **GitHub Actions**（详见 [docs/PAGES-SETUP.md](docs/PAGES-SETUP.md)）。
+
+> **不必**填写 “Add a verified domain”——那是绑定你自己的域名时才需要；默认 `*.github.io` 地址不用加。
 
 **正式地址：**
 
