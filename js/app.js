@@ -86,8 +86,8 @@
   }
 
   const INTENT_ARIA = {
-    keypoint: "要点",
-    followup: "追问",
+    keypoint: "深挖",
+    followup: "推进",
     close: "结束对话",
   };
 
@@ -611,7 +611,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②要点/追问(AI)+③收束(固定)。"
+      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②深挖/推进(AI)+③收束(固定)。"
     );
   }
   requestAnimationFrame(gameLoop);

@@ -1,15 +1,47 @@
 (function () {
   const OPTION_SCHEMA = [
-    { id: 1, intent: "keypoint", label: "要点" },
-    { id: 2, intent: "followup", label: "追问" },
+    { id: 1, intent: "keypoint", label: "深挖" },
+    { id: 2, intent: "followup", label: "推进" },
     { id: 3, intent: "close", label: "收束" },
   ];
 
-  const OPTIONS_SYSTEM_DUO = `你是文字冒险游戏的选项撰稿人。根据对话上下文，只为玩家生成 2 条短句（要点、追问）。
+  function extractUnresolved(plotSummary) {
+    const text = String(plotSummary || "").trim();
+    if (!text) {
+      return "";
+    }
+    const match = text.match(/【未解问题】([\s\S]*?)(?=【|$)/);
+    if (match) {
+      return match[1].trim().slice(0, 400);
+    }
+    return text.slice(0, 400);
+  }
+
+  function plotSummaryForOptions(plotSummary) {
+    const excerpt = extractUnresolved(plotSummary);
+    if (!excerpt) {
+      return "";
+    }
+    return `当前剧情摘要（未解问题，供推进型选项参考）：\n${excerpt}`;
+  }
+
+  function buildOptionsSystemDuo(characterName) {
+    const name = String(characterName || "锋利").trim() || "锋利";
+    return `你是文字冒险游戏的选项撰稿人。玩家是与「${name}」对峙的调查者。
+
+【阶段】纯对话，无行动场景。选项必须是玩家说的话（问句或祈使），禁止陈述句断言（如「真相是…」「你就是内鬼」）。
+
+【分工】
+- keypoint（深挖）：针对「${name}」上一句中某一具体点追问——要信息、澄清矛盾、挑战逻辑。
+- followup（推进）：不纠缠当前细节；引向更核心问题、换质问角度、或态度+催促（如「别绕圈子，直接说名字」）。
+
+【禁止】两条都是深挖或都是推进；两条 line 完全相同。
+【软提示】尽量避免与上一轮两条选项高度雷同（不做程序相似度检测）。
+
 必须严格只输出 JSON 对象（不要 markdown）：
 {"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."}]}
-要求：每条 line 为中文一句，≤35 字；followup 必须引用「角色上一句」中的具体词。
-不要生成 close（收束由程序固定）。`;
+每条 line 为中文一句，≤35 字。不要生成 close（收束由程序固定）。`;
+  }
 
   function buildIntentHintsBlock() {
     return OPTION_SCHEMA.map((o) => `- ${o.intent}（${o.label}）`).join("\n");
@@ -335,6 +367,49 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     throw new Error("无法解析角色回复");
   }
 
+  async function requestOptionsJson({
+    systemPrompt,
+    userContent,
+    temperature,
+    signal,
+    logTag,
+  }) {
+    window.PomDebug?.logRequest(`→ ${logTag}`, {
+      system: systemPrompt.slice(0, 80) + "…",
+      user: userContent,
+    });
+
+    const raw = await completeChatJson(
+      {
+        systemPrompt,
+        messages: [{ role: "user", content: userContent }],
+        temperature,
+        max_tokens: tokenLimit("OPTIONS", 1280),
+        signal,
+      },
+      { preferPlain: true }
+    );
+
+    window.PomDebug?.logResponse(`← ${logTag}`, raw);
+    return raw;
+  }
+
+  function buildOptionsUserContent({ character, last, priorText, plotSummary }) {
+    const summaryBlock = plotSummaryForOptions(plotSummary);
+    const parts = [
+      `角色名：${character.name}`,
+      `角色上一句台词：${last}`,
+    ];
+    if (priorText) {
+      parts.push(`最近对话：（不含上一句；最多 ${window.GameDialogue.OPTIONS_HISTORY_TURNS} 轮）\n${priorText}`);
+    }
+    if (summaryBlock) {
+      parts.push(summaryBlock);
+    }
+    parts.push("请按 system 要求只输出 JSON。");
+    return parts.join("\n\n");
+  }
+
   async function generateOptions({
     character,
     archetype,
@@ -342,42 +417,65 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     signal,
     temperature = 0.5,
     logTag = "拆分·②选项",
+    plotSummary = "",
   }) {
     const { lastLine, priorText } = window.GameDialogue.formatRecentDialogueForOptions(
-      session.messages
+      session.messages,
+      {
+        maxTurns: window.GameDialogue.OPTIONS_HISTORY_TURNS,
+        characterName: character.name,
+      }
     );
     const last =
       assistantLineForOptions(lastLine) || lastUsableAssistantLine(session, archetype);
 
-    const userContent = `角色名：${character.name}
-角色上一句台词：${last}
-${priorText ? `最近对话：\n${priorText}` : ""}
-
-请生成 keypoint 与 followup 两条 JSON。`;
-
-    window.PomDebug?.logRequest(`→ ${logTag}`, {
-      system: OPTIONS_SYSTEM_DUO.slice(0, 60) + "…",
-      user: userContent,
+    const systemPrompt = buildOptionsSystemDuo(character.name);
+    const userContent = buildOptionsUserContent({
+      character,
+      last,
+      priorText,
+      plotSummary,
     });
 
-    const raw = await completeChatJson(
-      {
-        systemPrompt: OPTIONS_SYSTEM_DUO,
-        messages: [{ role: "user", content: userContent }],
+    let raw = await requestOptionsJson({
+      systemPrompt,
+      userContent,
+      temperature,
+      signal,
+      logTag,
+    });
+
+    let duo;
+    try {
+      duo = parseDuoOptionsFromRaw(raw);
+    } catch (e) {
+      window.PomDebug?.logLocalWarn("选项 JSON 解析失败，重试一次", e.message);
+      raw = await requestOptionsJson({
+        systemPrompt,
+        userContent,
         temperature,
-        max_tokens: tokenLimit("OPTIONS", 640),
         signal,
-      },
-      { preferPlain: true }
-    );
+        logTag: `${logTag}（重试）`,
+      });
+      duo = parseDuoOptionsFromRaw(raw);
+    }
 
-    window.PomDebug?.logResponse(`← ${logTag}`, raw);
+    if (duo.keypoint === duo.followup) {
+      window.PomDebug?.logLocalWarn("选项重复", "keypoint 与 followup 相同，重试一次");
+      raw = await requestOptionsJson({
+        systemPrompt,
+        userContent,
+        temperature,
+        signal,
+        logTag: `${logTag}（去重）`,
+      });
+      duo = parseDuoOptionsFromRaw(raw);
+    }
 
-    const duo = parseDuoOptionsFromRaw(raw);
     const merged = buildHybridOptions(archetype, duo);
     window.PomDebug?.logLocal(
       "选项组装",
-      `①② AI · ③收束固定「${fixedCloseLine(archetype)}」`
+      `①深挖/②推进 AI · ③收束固定「${fixedCloseLine(archetype)}」`
     );
     return merged;
   }
@@ -410,7 +508,7 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
       ...turn,
       plotSummary: session.plotSummary,
     });
-    window.PomDebug?.logLocal("API 路径", "拆分优先 · ①reply → ②要点/追问(AI)+③收束(固定)");
+    window.PomDebug?.logLocal("API 路径", "拆分优先 · ①reply → ②深挖/推进(AI)+③收束(固定)");
 
     window.PomDebug?.logRequest("→ 拆分·①reply", {
       messages: apiMessages,
@@ -437,6 +535,7 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
       archetype,
       session: sessionWithReply,
       signal,
+      plotSummary: session.plotSummary,
       logTag: "拆分·②选项",
     });
 
@@ -573,6 +672,7 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
           archetype,
           session: sessionWithReply,
           signal,
+          plotSummary: session.plotSummary,
           logTag: "备用·②选项",
         });
         return { reply, options };

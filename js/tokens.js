@@ -8,8 +8,8 @@
     /** 合并：reply + 4 options */
     COMBINED: 2048,
     COMBINED_CLOSE: 768,
-    /** 仅生成四轮选项 */
-    OPTIONS: 1024,
+    /** 仅生成深挖/推进选项（Phase B prompt 较长） */
+    OPTIONS: 1280,
     /** 仅生成角色一句 */
     REPLY_ONLY: 768,
     /** 剧情摘要（宽摘要，见 PLAN-narrative Phase A） */
