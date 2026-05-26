@@ -41,7 +41,7 @@
       systemPrompt: SUMMARY_SYSTEM,
       messages: [{ role: "user", content: userContent }],
       temperature: 0.3,
-      max_tokens: 120,
+      max_tokens: window.PomTokens?.SUMMARY ?? 512,
       signal,
     });
 

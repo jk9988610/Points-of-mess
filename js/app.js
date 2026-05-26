@@ -300,7 +300,7 @@
         messages: apiMessages,
         messagesOnly: true,
         temperature: 0.5,
-        max_tokens: 160,
+        max_tokens: window.PomTokens?.FREEFORM ?? 512,
         signal: abortController.signal,
         onDelta(chunk) {
           reply += chunk;

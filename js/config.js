@@ -3,5 +3,5 @@ window.DEEPSEEK_CONFIG = {
   apiUrl: "https://api.deepseek.com/chat/completions",
   model: "deepseek-chat",
   temperature: 0.6,
-  maxTokens: 80,
+  maxTokens: 512,
 };
