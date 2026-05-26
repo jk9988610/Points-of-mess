@@ -1,91 +1,71 @@
 # GitHub Pages 配置说明
 
-## 为什么 `gh-pages` 已是新版，网址仍是 0.2.5？
+## 你看到的是 0.2.5，但分支已是 0.2.6+？
 
-GitHub Pages 会再跑一层 **pages build**。只有 build **built** 的提交才会出现在 `https://jk9988610.github.io/...`。
+请用这两个地址对比：
 
-| 地址 | 常见结果 |
-|------|----------|
-| `raw.githubusercontent.com/.../gh-pages/js/version.js` | 分支上的**最新文件**（应对 0.2.6+） |
-| `jk9988610.github.io/.../js/version.js` | 上一次 **build 成功** 的缓存（可能仍是 0.2.5） |
-
-若最近多次 build 为 **errored**，线上会一直卡在旧版（例如 `deploy: f11f988` 那次）。
-
-**处理**：保证 `gh-pages` 含根目录 `.nojekyll`（已加入），再同步分支并等 build 变绿；或到仓库 **Deployments / Pages** 看失败原因。
-
----
-
-## 发布原理（必读）
-
-本仓库线上地址：**https://jk9988610.github.io/Points-of-mess/**
-
-| 环节 | 说明 |
+| 地址 | 含义 |
 |------|------|
-| **源码** | `main` 分支 |
-| **发布分支** | `gh-pages`（由 Actions 或脚本写入） |
-| **Pages 设置** | Settings → Pages → **Deploy from a branch** → 分支 **`gh-pages`** → **`/ (root)`** |
+| https://raw.githubusercontent.com/jk9988610/Points-of-mess/gh-pages/js/version.js | **gh-pages 分支文件**（应对新版） |
+| https://jk9988610.github.io/Points-of-mess/js/version.js | **线上 CDN**（只更新于 Pages **build 成功** 之后） |
 
-**不要**把 Pages 源设成已删除的 `cursor/...` 分支，也不要指望 htmlpreview 代表线上版本。
+若分支已是 `0.2.6` / `0.2.7`，而 `github.io` 仍是 `0.2.5`，说明：
 
----
-
-## 让线上更新（任选一种）
-
-### 方式 1：GitHub Actions（推荐，在你本机 push 到 main 后）
-
-1. 代码已 **merge 并 push 到 `main`**
-2. 打开 [Actions → Deploy to GitHub Pages](https://github.com/jk9988610/Points-of-mess/actions/workflows/pages.yml)
-3. 应出现绿色成功的 **push** 记录；若没有，点 **Run workflow** → 分支 **main** → **Run workflow**
-4. 等约 1 分钟，强刷站点（Ctrl+Shift+R）
-
-### 方式 2：手动同步脚本（Actions 没跑时用这个）
-
-部分环境（如 Cloud Agent）的 `git push` **不会触发** Actions，需要手动同步：
-
-```bash
-git fetch origin main
-git push origin origin/main:gh-pages --force
-```
-
-或：
-
-```bash
-chmod +x scripts/sync-gh-pages.sh
-./scripts/sync-gh-pages.sh
-```
-
-### 方式 3：Settings 检查（只需做一次）
-
-1. https://github.com/jk9988610/Points-of-mess/settings/pages  
-2. **Build and deployment → Source**：**Deploy from a branch**  
-3. **Branch**：**`gh-pages`**，文件夹 **`/ (root)`**  
-4. **Save**
+- 最近把 `main` 强推到 `gh-pages` 后，Pages **build 失败**（`Page build failed`），或一直 **building**；
+- 线上会继续用**上一次 build 成功**的旧提交（多为 `deploy: f11f988` 时代，即 0.2.5）。
 
 ---
 
-## 如何确认已是 v0.2.6
+## 推荐：改用 GitHub Actions 发布（请改 Settings 一次）
 
-1. 打开（可加随机参数防缓存）：  
-   https://jk9988610.github.io/Points-of-mess/js/version.js?v=0.2.6  
-   应看到：`POM_VERSION = "0.2.6"`
-2. 站点标题旁：**v0.2.6**
-3. 调试首行：`Points-of-mess v0.2.6 已加载…`
+仓库已增加工作流：**GitHub Pages (official)**（`.github/workflows/github-pages.yml`）。
+
+### 你必须做的一次设置
+
+1. 打开 https://github.com/jk9988610/Points-of-mess/settings/pages  
+2. **Build and deployment → Source** 选 **GitHub Actions**（不要选 Deploy from a branch → gh-pages）  
+3. 保存  
+
+### 触发部署
+
+1. 打开 [Actions → GitHub Pages (official)](https://github.com/jk9988610/Points-of-mess/actions/workflows/github-pages.yml)  
+2. **Run workflow** → 分支 **main** → Run  
+3. 等绿色成功后，强刷 https://jk9988610.github.io/Points-of-mess/js/version.js  
+
+验收：`POM_VERSION = "0.2.7"`（或当前 `main` 版本号）。
+
+> 改 Source 后，旧「gh-pages 分支 + Jekyll build」不再决定线上内容；以 Actions 部署为准。
 
 ---
 
-## Actions 在做什么
+## 备选：继续用 gh-pages 分支
 
-`.github/workflows/pages.yml` 用 `peaceiris/actions-gh-pages` 把仓库根目录（除 `.github`）推到 **`gh-pages`**。
+若坚持 **Deploy from a branch → gh-pages**：
 
-若 **push main 后 Actions 列表没有新任务**，常见原因：
+1. 根目录需有 **`.nojekyll`**（已加入，避免 Jekyll 把站点 build 挂掉）  
+2. 同步分支：
+   ```bash
+   ./scripts/sync-gh-pages.sh
+   ```
+3. 到仓库 **Actions** 或 **Environments → github-pages** 看 **Pages build** 是否 **built**（errored 则线上不会变）  
+4. 也可用旧工作流 **Deploy to GitHub Pages**（peaceiris）在本机 push `main` 后运行  
 
-- 使用 `GITHUB_TOKEN` 在其它 workflow 里推 main（不会连锁触发）
-- 使用部分自动化账号推送
+---
 
-**处理**：用上面 **方式 2** 脚本，或 Actions 页 **Run workflow**。
+## 代码在 main 上即可
+
+- 功能合并进 **`main`** 即可；不必再依赖未合并的 PR。  
+- Cloud Agent 的 push **常常不会触发** Actions，需你在 Actions 页 **Run workflow**，或本机 push。
+
+---
+
+## 验收版本（当前 main）
+
+- https://jk9988610.github.io/Points-of-mess/js/version.js?v=0.2.7  
+- 标题旁 **v0.2.7**
 
 ---
 
 ## 线上 API
 
-公开 Pages **没有** `js/config.js`（在 `.gitignore`）。在线调 API 需在 `gh-pages` 单独放密钥（有风险），**推荐本地** `index.html` + 本机 `config.js`。
+`js/config.js` 不在仓库中。在线调 API 请本地用 `config.js`，或自行承担在部署分支放密钥的风险。
