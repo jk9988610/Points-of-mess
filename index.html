@@ -22,6 +22,16 @@
       <p class="map-hint" id="mapHint">点击空地移动 · 靠近角色后点击交谈</p>
     </div>
 
+    <div class="config-setup" id="configSetup" hidden>
+      <p><strong>需要配置 API 密钥</strong></p>
+      <ol>
+        <li>复制 <code>js/config.example.js</code> 为 <code>js/config.js</code></li>
+        <li>在 <code>js/config.js</code> 里填入 DeepSeek <code>apiKey</code></li>
+        <li>保存后刷新本页</li>
+      </ol>
+      <p class="config-setup-note">用 GitHub Pages 打开时仓库里没有该文件，请改用本地打开 <code>index.html</code>。</p>
+    </div>
+
     <div class="status-banner" id="statusBanner" role="status"></div>
 
     <nav class="options-bar hidden" id="optionsBar" aria-label="对话选项">
@@ -32,7 +42,8 @@
     </nav>
   </div>
 
-  <script src="js/config.js"></script>
+  <script src="js/config.js" onerror="window.__POM_CONFIG_MISSING__=true"></script>
+  <script src="js/config-check.js"></script>
   <script src="js/presets.js"></script>
   <script src="js/dialogue.js"></script>
   <script src="js/state.js"></script>

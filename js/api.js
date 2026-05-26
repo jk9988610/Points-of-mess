@@ -1,8 +1,12 @@
 (function () {
   function getConfig() {
+    const status = window.PomConfig?.getConfigStatus?.();
+    if (status && !status.ok) {
+      throw new Error(status.message);
+    }
     const cfg = window.DEEPSEEK_CONFIG;
-    if (!cfg?.apiKey || cfg.apiKey.includes("你的_")) {
-      throw new Error("请先在 js/config.js 中填写 DeepSeek API 密钥。");
+    if (!cfg?.apiKey || String(cfg.apiKey).includes("你的_")) {
+      throw new Error(window.PomConfig?.getSetupMessage?.() || "请配置 js/config.js 中的 apiKey。");
     }
     return cfg;
   }

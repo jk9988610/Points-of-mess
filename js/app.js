@@ -21,6 +21,7 @@
   const statusBannerEl = document.getElementById("statusBanner");
   const stopButtonEl = document.getElementById("stopGeneration");
   const hintEl = document.getElementById("mapHint");
+  const configSetupEl = document.getElementById("configSetup");
 
   const CHAR_BUBBLE_GAP = 36;
 
@@ -147,8 +148,20 @@
     positionBubble();
   }
 
+  function ensureApiConfig() {
+    const status = window.PomConfig?.getConfigStatus?.();
+    if (status && !status.ok) {
+      setStatus(status.message, true);
+      return false;
+    }
+    return true;
+  }
+
   async function pickOption(optionId) {
     if (!state.talkingId || state.isStreaming) {
+      return;
+    }
+    if (!ensureApiConfig()) {
       return;
     }
 
@@ -230,9 +243,14 @@
           setBubble(assistantContent, false);
         }
       } else {
+        session.messages.pop();
+        persist(state);
         const msg = error.message || "生成失败，请稍后重试。";
         setStatus(msg, true);
-        setBubble(assistantContent || "…", false);
+        const prev = [...session.messages]
+          .reverse()
+          .find((m) => m.role === "assistant" && m.status === "done");
+        setBubble(prev?.content || "", false);
       }
     } finally {
       state.isStreaming = false;
@@ -328,8 +346,21 @@
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("scroll", positionBubble, true);
 
+  function showConfigSetupIfNeeded() {
+    const status = window.PomConfig?.getConfigStatus?.();
+    if (status && !status.ok) {
+      if (configSetupEl) {
+        configSetupEl.hidden = false;
+      }
+      setStatus(status.message, true);
+    } else if (configSetupEl) {
+      configSetupEl.hidden = true;
+    }
+  }
+
   resizeCanvas();
   setOptionsVisible(false);
   setBubble("");
+  showConfigSetupIfNeeded();
   requestAnimationFrame(gameLoop);
 })();

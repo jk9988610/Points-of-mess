@@ -15,13 +15,15 @@ v0 地图对话在 **`main`**（或功能分支合并后）。任选一种方式
 | **直接打开文件** | 资源管理器中双击项目里的 `index.html` |
 | **本地静态服务** | 在项目根目录执行 `python3 -m http.server 8080`，浏览器打开 `http://localhost:8080/` |
 
-**首次必须配置 API 密钥**（否则选项发送会报错）：
+**首次必须配置 API 密钥**（否则点击底部选项时会提示未配置）：
 
 ```bash
 cp js/config.example.js js/config.js
 ```
 
-编辑 `js/config.js`，将 `apiKey` 换成你的 DeepSeek 密钥。该文件已在 `.gitignore` 中，**不会提交到 Git**。
+编辑 `js/config.js`，将 `apiKey` 换成你的 DeepSeek 密钥（不要用占位符 `你的_DeepSeek_API_密钥`）。保存后**刷新页面**。该文件已在 `.gitignore` 中，**不会提交到 Git**。
+
+若打开页面顶部出现黄色配置说明，按其中三步操作即可。
 
 **平板**：把整个项目文件夹拷到平板，按上面步骤建好 `js/config.js` 后，用文件管理器或 Safari/Chrome 打开 `index.html` 即可（与电脑相同）。
 

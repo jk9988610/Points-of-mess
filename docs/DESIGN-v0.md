@@ -13,7 +13,7 @@
 ### 本地（完整功能）
 
 1. 复制配置：`cp js/config.example.js js/config.js`  
-2. 在 `js/config.js` 中填写 DeepSeek `apiKey`（此文件不提交 Git）  
+2. 在 `js/config.js` 中填写 DeepSeek `apiKey`（勿保留 `你的_DeepSeek_API_密钥` 占位符），保存后**刷新页面**  
 3. 打开方式任选：  
    - 双击 / 用浏览器打开项目根目录的 **`index.html`**  
    - 或根目录执行 `python3 -m http.server 8080`，访问 **`http://localhost:8080/`**  

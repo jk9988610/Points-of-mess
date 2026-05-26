@@ -123,6 +123,36 @@ body {
   margin-left: 2px;
 }
 
+.config-setup {
+  margin: 0 12px 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fde68a;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.config-setup p {
+  margin: 0 0 8px;
+}
+
+.config-setup ol {
+  margin: 0 0 8px;
+  padding-left: 1.2rem;
+}
+
+.config-setup code {
+  font-size: 0.85em;
+  color: #fef3c7;
+}
+
+.config-setup-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .status-banner {
   display: none;
   margin: 0 12px 6px;
