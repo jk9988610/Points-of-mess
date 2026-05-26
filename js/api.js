@@ -11,6 +11,14 @@
     return cfg;
   }
 
+  function buildMessageList(systemPrompt, messages) {
+    const sys = String(systemPrompt ?? "").trim();
+    if (sys) {
+      return [{ role: "system", content: sys }, ...messages];
+    }
+    return [...messages];
+  }
+
   async function streamChat({
     systemPrompt,
     messages,
@@ -29,7 +37,7 @@
       },
       body: JSON.stringify({
         model: cfg.model,
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        messages: buildMessageList(systemPrompt, messages),
         stream: true,
         temperature: temperature ?? cfg.temperature ?? 0.6,
         max_tokens: max_tokens ?? cfg.maxTokens ?? 80,
