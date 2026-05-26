@@ -18,6 +18,9 @@
   const bubbleEl = document.getElementById("speechBubble");
   const bubbleTextEl = document.getElementById("speechBubbleText");
   const optionsBar = document.getElementById("optionsBar");
+  const memoryInputBar = document.getElementById("memoryInputBar");
+  const memoryInputEl = document.getElementById("memoryInput");
+  const memoryInputSendEl = document.getElementById("memoryInputSend");
   const statusBannerEl = document.getElementById("statusBanner");
   const stopButtonEl = document.getElementById("stopGeneration");
   const hintEl = document.getElementById("mapHint");
@@ -62,6 +65,25 @@
 
   function setOptionsVisible(visible) {
     optionsBar.classList.toggle("hidden", !visible);
+  }
+
+  function setMemoryInputVisible(visible) {
+    memoryInputBar?.classList.toggle("hidden", !visible);
+    if (memoryInputEl) {
+      memoryInputEl.disabled = !visible;
+    }
+    if (memoryInputSendEl) {
+      memoryInputSendEl.disabled = !visible || state.isStreaming;
+    }
+  }
+
+  function setMemoryInputBusy(busy) {
+    if (memoryInputEl) {
+      memoryInputEl.disabled = busy || !state.talkingId;
+    }
+    if (memoryInputSendEl) {
+      memoryInputSendEl.disabled = busy || !state.talkingId;
+    }
   }
 
   const INTENT_ARIA = {
@@ -153,6 +175,10 @@
     state.optionsLoading = false;
     setBubble("");
     setOptionsVisible(false);
+    setMemoryInputVisible(false);
+    if (memoryInputEl) {
+      memoryInputEl.value = "";
+    }
     stopButtonEl.disabled = true;
     renderMap();
     window.PomDebug?.logLocal("结束对话");
@@ -211,11 +237,117 @@
     );
 
     setOptionsVisible(true);
+    setMemoryInputVisible(true);
     stopButtonEl.disabled = true;
     state.optionsLoading = false;
     renderOptionButtons(state.currentOptions, false);
     renderMap();
     positionBubble();
+  }
+
+  async function sendFreeformMemoryQuestion() {
+    if (!state.talkingId || state.isStreaming || state.optionsLoading) {
+      return;
+    }
+    if (!ensureApiConfig()) {
+      return;
+    }
+
+    const text = memoryInputEl?.value?.trim();
+    if (!text) {
+      setStatus("请先输入要问的话", false);
+      return;
+    }
+
+    const character = getCharacter(state.talkingId);
+    const archetype = getArchetype(character.archetypeId);
+    const session = getSession(state, state.talkingId);
+    const systemPrompt = window.GameMemoryChat.buildFreeformSystem(archetype);
+    const apiMessages = [{ role: "user", content: text }];
+
+    window.PomDebug?.logLocal("玩家自由输入（记忆测试）", text);
+    window.PomDebug?.logLocal(
+      "本地会话记录（未发给 AI）",
+      window.GameMemoryChat.formatLocalTranscript(session.messages)
+    );
+    window.PomDebug?.logRequest("自由提问（不发历史）", {
+      system: `${systemPrompt.slice(0, 72)}…`,
+      messages: apiMessages,
+      note: "messages 仅 1 条 user，不含此前轮次",
+    });
+
+    session.messages.push({
+      id: createId(),
+      role: "user",
+      content: text,
+      intent: "freeform",
+      createdAt: Date.now(),
+      status: "done",
+    });
+    persist(state);
+
+    state.isStreaming = true;
+    setMemoryInputBusy(true);
+    renderOptionButtons(state.currentOptions, true);
+    stopButtonEl.disabled = false;
+    setBubble("", true);
+    setStatus("等待回复…", false);
+    renderMap();
+
+    abortController = new AbortController();
+    let reply = "";
+
+    try {
+      await window.ChatApi.streamChat({
+        systemPrompt,
+        messages: apiMessages,
+        temperature: 0.5,
+        max_tokens: 160,
+        signal: abortController.signal,
+        onDelta(chunk) {
+          reply += chunk;
+          setBubble(reply, true);
+        },
+      });
+
+      reply = reply.trim() || "……";
+      session.messages.push({
+        id: createId(),
+        role: "assistant",
+        content: reply,
+        createdAt: Date.now(),
+        status: "done",
+      });
+      persist(state);
+      setBubble(reply, false);
+      setStatus("", false);
+      window.PomDebug?.logResponse("自由提问（不发历史）", reply);
+      if (memoryInputEl) {
+        memoryInputEl.value = "";
+      }
+    } catch (error) {
+      if (error.name === "AbortError") {
+        window.PomDebug?.logLocal("已停止生成");
+      } else {
+        session.messages.pop();
+        persist(state);
+        setStatus(error.message || "发送失败", true);
+        const prev = [...session.messages]
+          .reverse()
+          .find((m) => m.role === "assistant" && m.status === "done");
+        setBubble(prev?.content || "", false);
+      }
+    } finally {
+      state.isStreaming = false;
+      setMemoryInputBusy(false);
+      abortController = null;
+      stopButtonEl.disabled = true;
+      if (state.talkingId) {
+        renderOptionButtons(state.currentOptions, false);
+      }
+      renderMap();
+      positionBubble();
+    }
   }
 
   async function pickOption(optionId) {
@@ -264,6 +396,7 @@
 
     state.isStreaming = true;
     state.optionsLoading = true;
+    setMemoryInputBusy(true);
     renderOptionButtons(state.currentOptions, true);
     stopButtonEl.disabled = false;
     const thinkingBubble =
@@ -322,6 +455,7 @@
     } finally {
       state.isStreaming = false;
       state.optionsLoading = false;
+      setMemoryInputBusy(false);
       abortController = null;
       stopButtonEl.disabled = true;
       if (state.talkingId && pick.intent !== "close") {
@@ -418,6 +552,15 @@
   document.getElementById("clearDebugBtn")?.addEventListener("click", () => {
     window.PomDebug?.clear();
   });
+  memoryInputSendEl?.addEventListener("click", () => {
+    sendFreeformMemoryQuestion();
+  });
+  memoryInputEl?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendFreeformMemoryQuestion();
+    }
+  });
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("scroll", positionBubble, true);
 
@@ -433,6 +576,7 @@
 
   resizeCanvas();
   setOptionsVisible(false);
+  setMemoryInputVisible(false);
   setBubble("");
   showConfigSetupIfNeeded();
   const ver = window.POM_VERSION || "?";
@@ -440,7 +584,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。首轮选项不发 API。发AI 含最近 2 轮 messages 历史。"
+      "灰=本地 · 黄=发AI · 绿=AI回。底部选项发 AI 含 2 轮历史；黄条「自由提问」仅 1 条 user，用于记忆测试。"
     );
   }
   requestAnimationFrame(gameLoop);

@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Points-of-mess</title>
-  <link rel="stylesheet" href="styles/map.css?v=0.1.9">
+  <link rel="stylesheet" href="styles/map.css?v=0.2.0">
 </head>
 <body>
   <div class="app-shell">
     <header class="app-header">
-      <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion">v0.1.9</span></h1>
+      <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion">v0.2.0</span></h1>
       <button class="stop-button" type="button" id="stopGeneration" disabled>停止</button>
     </header>
 
@@ -47,6 +47,22 @@
 
     <div class="status-banner" id="statusBanner" role="status"></div>
 
+    <section class="memory-input-bar hidden" id="memoryInputBar" aria-label="记忆测试自由输入">
+      <p class="memory-input-hint">记忆测试：仅发送下面这一句，<strong>不</strong>附带 messages 历史（可与调试区本地记录对照）</p>
+      <div class="memory-input-row">
+        <input
+          type="text"
+          id="memoryInput"
+          class="memory-input-field"
+          autocomplete="off"
+          enterkeyhint="send"
+          placeholder="例如：你第二轮回复的原话是什么？"
+          maxlength="200"
+        />
+        <button type="button" class="memory-input-send" id="memoryInputSend">发送</button>
+      </div>
+    </section>
+
     <nav class="options-bar hidden" id="optionsBar" aria-label="对话选项">
       <button type="button" class="option-btn" data-option-id="1" data-intent="keypoint">
         <span class="option-line">生成中…</span>
@@ -63,16 +79,17 @@
     </nav>
   </div>
 
-  <script src="js/version.js?v=0.1.9"></script>
-  <script src="js/config.js?v=0.1.9" onerror="window.__POM_CONFIG_MISSING__=true"></script>
-  <script src="js/config-check.js?v=0.1.9"></script>
-  <script src="js/debug.js?v=0.1.9"></script>
-  <script src="js/presets.js?v=0.1.9"></script>
-  <script src="js/dialogue.js?v=0.1.9"></script>
-  <script src="js/state.js?v=0.1.9"></script>
-  <script src="js/map.js?v=0.1.9"></script>
-  <script src="js/api.js?v=0.1.9"></script>
-  <script src="js/options-ai.js?v=0.1.9"></script>
-  <script src="js/app.js?v=0.1.9"></script>
+  <script src="js/version.js?v=0.2.0"></script>
+  <script src="js/config.js?v=0.2.0" onerror="window.__POM_CONFIG_MISSING__=true"></script>
+  <script src="js/config-check.js?v=0.2.0"></script>
+  <script src="js/debug.js?v=0.2.0"></script>
+  <script src="js/presets.js?v=0.2.0"></script>
+  <script src="js/dialogue.js?v=0.2.0"></script>
+  <script src="js/memory-chat.js?v=0.2.0"></script>
+  <script src="js/state.js?v=0.2.0"></script>
+  <script src="js/map.js?v=0.2.0"></script>
+  <script src="js/api.js?v=0.2.0"></script>
+  <script src="js/options-ai.js?v=0.2.0"></script>
+  <script src="js/app.js?v=0.2.0"></script>
 </body>
 </html>
