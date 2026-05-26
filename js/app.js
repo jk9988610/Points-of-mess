@@ -241,7 +241,7 @@
 
     state.currentOptions = presetOptions(archetype);
     window.PomDebug?.logLocal(
-      "首轮选项（程序预设，不发 API）",
+      "首轮选项（预设·深挖/推进，不发 API）",
       state.currentOptions.map((o) => o.line)
     );
 

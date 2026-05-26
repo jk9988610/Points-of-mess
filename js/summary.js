@@ -17,10 +17,16 @@
 【规则】
 1. 在已有摘要基础上递进更新；禁止整体变短；禁止删除已有 [已确认] 行中的专名（人名、地点、物证）。
 2. [待核实] 必须具体、可回答；禁止「是否会…」类元问题。
-3. 新增对话中已明确回答的 [待核实]：从待办中删除，或将要点写入 [已确认]；部分回答则改写为更细的 [待核实]。
-4. 新事实用 [已确认] 追加；不要单独写「本轮新增」段。
-5. 全文不超过 ${SUMMARY_MAX_CHARS} 字；优先合并 [待核实] 条数，不删 [已确认] 专名。
-6. 只输出摘要正文，不要 markdown 代码块或其它说明。
+3. 新事实用 [已确认] 追加；不要单独写「本轮新增」段。
+4. 全文不超过 ${SUMMARY_MAX_CHARS} 字；优先合并 [待核实] 条数，不删 [已确认] 专名。
+5. 只输出摘要正文，不要 markdown 代码块或其它说明。
+
+【待核实核对 — 必须执行】
+压缩前逐条阅读【已有摘要】中每一个 [待核实]：
+- 若【新增对话】或已有 [已确认] /【关系与态度】中已给出明确答案（含同义表述，如「曾经的搭档」可回答「与父亲关系」类待办）→ 必须删除该 [待核实]，并把要点写入 [已确认] 或【关系与态度】。
+- 若仅部分回答 → 删除原条，改写为更细的一条 [待核实]。
+- 禁止保留与 [已确认] 矛盾的 [待核实]。
+错误示例：对话已确认「锋利与父亲曾是搭档」，仍保留 [待核实]「锋利与父亲是什么关系」。
 
 【示例】
 【剧情档案】
@@ -28,6 +34,10 @@
 - [待核实] 蓝色账本完整下落
 【关系与态度】
 - 锋利对玩家施压，回避直接点名`;
+
+  const SUMMARY_USER_CHECKLIST = `【压缩前请自检】对照【新增对话】与【已有摘要】：哪些 [待核实] 应删除或改写？（心中核对即可，最终输出仍只含两段摘要正文。）
+
+`;
 
   function countOptionTurns(sessionMessages) {
     return sessionMessages.filter(
@@ -70,12 +80,13 @@
     const block = toSummarize
       .map((m) => `${m.role === "assistant" ? "锋利" : "玩家"}: ${m.content}`)
       .join("\n");
-    const userContent = session.plotSummary
+    const body = session.plotSummary
       ? `【已有摘要】\n${session.plotSummary}\n\n【新增对话】\n${block}`
       : `【新增对话】\n${block}`;
+    const userContent = SUMMARY_USER_CHECKLIST + body;
 
     window.PomDebug?.logLocal(
-      "压缩剧情摘要（A+）",
+      "压缩剧情摘要（A++）",
       `第 ${optionTurns} 轮选项后，压缩 ${toSummarize.length} 条对白（上限 ${SUMMARY_MAX_CHARS} 字）`
     );
 
@@ -101,7 +112,7 @@
     session.plotSummary = text;
     session.lastSummaryAtOptionTurn = optionTurns;
     window.PomDebug?.logLocal(
-      "剧情摘要已更新（A+）",
+      "剧情摘要已更新（A++）",
       `${session.plotSummary.length} 字\n${session.plotSummary}`
     );
     return true;
