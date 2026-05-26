@@ -297,6 +297,7 @@
     try {
       await window.ChatApi.streamChat({
         messages: apiMessages,
+        messagesOnly: true,
         temperature: 0.5,
         max_tokens: 160,
         signal: abortController.signal,
