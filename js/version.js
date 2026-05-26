@@ -1,5 +1,5 @@
 (function () {
-  window.POM_VERSION = "0.3.2";
+  window.POM_VERSION = "0.3.3";
 
   function applyVersionUi() {
     const label = `v${window.POM_VERSION}`;
