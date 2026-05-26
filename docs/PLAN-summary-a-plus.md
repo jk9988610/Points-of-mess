@@ -91,24 +91,24 @@
 
 ### 4.2 `js/summary.js`
 
-- [ ] **S1** 重写 `SUMMARY_SYSTEM`：两段标题 + §2.2 六条规则 + 输出示例 1 条  
-- [ ] **S2** user 拼装保持：`【已有摘要】` + `【新增对话】`（字段名可保留，内容已是新格式）  
-- [ ] **S3** 调试日志：`压缩剧情摘要` → 可附「格式 A+」；`剧情摘要已更新` 仍打印全文  
-- [ ] **S4** 超长截断逻辑不变（`SUMMARY_MAX_CHARS`）  
+- [x] **S1** 重写 `SUMMARY_SYSTEM`：两段标题 + §2.2 六条规则 + 输出示例 1 条  
+- [x] **S2** user 拼装保持：`【已有摘要】` + `【新增对话】`（字段名可保留，内容已是新格式）  
+- [x] **S3** 调试日志：`压缩剧情摘要` → 可附「格式 A+」；`剧情摘要已更新` 仍打印全文  
+- [x] **S4** 超长截断逻辑不变（`SUMMARY_MAX_CHARS`）  
 
 ### 4.3 `js/options-ai.js`（摘录兼容）
 
-- [ ] **O1** 新增 `extractPendingVerification(plotSummary)`：  
+- [x] **O1** 新增 `extractPendingVerification(plotSummary)`：  
   - 优先：匹配 `- [待核实]` 行（可多行拼接，总长约 ≤400 字）  
   - 回退：旧正则 `【未解问题】…`  
   - 再回退：`plotSummary.slice(0, 400)`  
-- [ ] **O2** `plotSummaryForOptions` 改用新函数；user 文案：`当前剧情摘要（待核实事项，供推进型选项参考）`  
-- [ ] **O3** 单测或 `node -e` 手测：给一段旧格式 + 一段新格式摘要，确认摘录正确  
+- [x] **O2** `plotSummaryForOptions` 改用新函数；user 文案：`当前剧情摘要（待核实事项，供推进型选项参考）`  
+- [x] **O3** 单测或 `node -e` 手测：给一段旧格式 + 一段新格式摘要，确认摘录正确（`scripts/verify-summary-extract.js`）  
 
 ### 4.4 版本与部署（与 [常用说明.md](./常用说明.md) 一致）
 
-- [ ] **R1** `js/version.js` → `0.5.2`  
-- [ ] **R2** `index.html` / `refresh.html` 全部 `?v=` 与版本一致  
+- [x] **R1** `js/version.js` → `0.5.2`  
+- [x] **R2** `index.html` / `refresh.html` 全部 `?v=` 与版本一致  
 - [ ] **R3** merge `main` + push；`./scripts/sync-gh-pages.sh`；Actions 绿  
 - [ ] **R4** 用 `refresh.html` 确认标题栏 `v0.5.2`  
 
@@ -206,7 +206,7 @@ flowchart LR
 | 项 | 状态 |
 |----|------|
 | 讨论拍板 | ✅ |
-| 实现 | ⬜ 待做（按 §4 Todo） |
+| 实现 | ✅ v0.5.2（§4.2～4.3、R1～R2）；§4.5 实机验收待你勾选 |
 | 目标版本 | `v0.5.2` |
 
 ---

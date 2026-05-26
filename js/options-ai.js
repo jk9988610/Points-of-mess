@@ -5,24 +5,45 @@
     { id: 3, intent: "close", label: "收束" },
   ];
 
-  function extractUnresolved(plotSummary) {
+  /** Phase A+：优先 [待核实] 行；兼容旧【未解问题】段 */
+  function extractPendingVerification(plotSummary) {
     const text = String(plotSummary || "").trim();
     if (!text) {
       return "";
     }
-    const match = text.match(/【未解问题】([\s\S]*?)(?=【|$)/);
-    if (match) {
-      return match[1].trim().slice(0, 400);
+
+    const pendingLines = [];
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+      if (/^[-*•]\s*\[待核实\]/.test(trimmed) || /^\[待核实\]/.test(trimmed)) {
+        pendingLines.push(trimmed.replace(/^[-*•]\s*/, ""));
+      }
     }
+    if (pendingLines.length > 0) {
+      return pendingLines.join("\n").slice(0, 400);
+    }
+
+    const legacy = text.match(/【未解问题】([\s\S]*?)(?=【|$)/);
+    if (legacy) {
+      return legacy[1].trim().slice(0, 400);
+    }
+
+    if (text.includes("【剧情档案】") && !/\[待核实\]/.test(text)) {
+      window.PomDebug?.logLocalWarn("摘要摘录", "剧情档案中无 [待核实] 行");
+    }
+
     return text.slice(0, 400);
   }
 
   function plotSummaryForOptions(plotSummary) {
-    const excerpt = extractUnresolved(plotSummary);
+    const excerpt = extractPendingVerification(plotSummary);
     if (!excerpt) {
       return "";
     }
-    return `当前剧情摘要（未解问题，供推进型选项参考）：\n${excerpt}`;
+    return `当前剧情摘要（待核实事项，供推进型选项参考）：\n${excerpt}`;
   }
 
   function buildOptionsSystemDuo(characterName) {

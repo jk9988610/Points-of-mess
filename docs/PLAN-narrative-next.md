@@ -5,7 +5,7 @@
 
 ---
 
-## 0. 现状快照（v0.5.1）
+## 0. 现状快照（v0.5.2）
 
 | 已有 | 说明 |
 |------|------|
@@ -16,6 +16,7 @@
 | 地图桌面 | **PLAN·叙事** → 本文 |
 | 选项重复检测 | **已移除**（相似选项允许） |
 | Phase B 选项 | **3 轮上下文 + 未解问题摘录 + 深挖/推进分工**（v0.5.1） |
+| Phase A+ 摘要 | **【剧情档案】+ `[已确认]`/`[待核实]` + 推进选项读待核实**（v0.5.2） |
 
 ---
 
@@ -93,7 +94,7 @@ flowchart LR
 
 ---
 
-### Phase A+ — 剧情档案 + 行内状态（v0.5.2，**待实现**）
+### Phase A+ — 剧情档案 + 行内状态（v0.5.2，**已实现**）
 
 > 讨论拍板：合并【已确认事实】/【未解问题】为【剧情档案】+ `[已确认]`/`[待核实]` 行标记；取消【本轮新增】独立段；保留【关系与态度】。  
 > **完整 Todo** → [PLAN-summary-a-plus.md](./PLAN-summary-a-plus.md)
@@ -217,8 +218,8 @@ flowchart LR
 
 ## 5. 协作顺序
 
-**下一刀**：**Phase A+**（[PLAN-summary-a-plus.md](./PLAN-summary-a-plus.md) §4 Todo：摘要 prompt + `[待核实]` 摘录兼容）。  
-其后 Phase C / Phase F 骨架。
+**下一刀**：**Phase C**（`storyFlags`）或 **Phase F 骨架**（`storyState` 字段）。  
+Phase A+ 见 [PLAN-summary-a-plus.md](./PLAN-summary-a-plus.md) §4.5 实机验收。
 
 ---
 
@@ -343,4 +344,4 @@ flowchart LR
 
 ---
 
-*状态：Phase A v0.5.0 ✅ · Phase B v0.5.1 ✅ · Phase A+ v0.5.2 计划已定（见 PLAN-summary-a-plus.md）。*
+*状态：Phase A v0.5.0 ✅ · Phase B v0.5.1 ✅ · Phase A+ v0.5.2 ✅（见 PLAN-summary-a-plus.md）。*
