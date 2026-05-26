@@ -15,50 +15,17 @@
       .join("\n");
   }
 
-  /** 完整对白写入 [dialogue]；当前轮玩家句已在 [player_pick]，故默认排除最后一条 user */
-  function buildDialogueHistoryBlock(sessionMessages, characterName, { excludeCurrentPick } = {}) {
-    let done = getDoneMessages(sessionMessages);
-    if (
-      excludeCurrentPick &&
-      done.length > 0 &&
-      done[done.length - 1].role === "user"
-    ) {
-      done = done.slice(0, -1);
-    }
-    if (done.length === 0) {
-      return "";
-    }
-    return done
-      .map((m) => {
-        if (m.role === "assistant") {
-          return `${characterName}: ${m.content}`;
-        }
-        const tag = m.intent ? `[${m.intent}] ` : "";
-        return `玩家${tag}: ${m.content}`;
-      })
-      .join("\n");
-  }
-
-  function buildGameUserMessage(character, sessionMessages, options, pick, formatOpts) {
+  /** 仅本轮：不含历史对白（由调用端/平台自动附带会话上下文） */
+  function buildGameUserMessage(character, options, pick, formatOpts) {
     const jsonMode = formatOpts?.jsonMode;
-    const dialogue = buildDialogueHistoryBlock(sessionMessages, character.name, {
-      excludeCurrentPick: true,
-    });
     const outputRule = jsonMode
       ? '只输出一个 JSON 对象：含 reply；非收束轮含 options（四条 intent 分别为 keypoint、followup、pivot、close）。禁止 markdown、禁止代码块。options 的 line 为玩家口语一句，不要外加「」引号；followup 须引用本条 reply 中的具体词。'
       : "只输出角色台词。短。禁止寒暄。收束轮禁止新问题。";
 
-    const parts = [
+    return [
       "[game]",
       `character: ${character.name}`,
       "",
-    ];
-
-    if (dialogue) {
-      parts.push("[dialogue]", dialogue, "");
-    }
-
-    parts.push(
       "[choices]",
       buildChoicesBlock(options),
       "",
@@ -67,12 +34,11 @@
       `line: ${pick.line}`,
       "",
       "[output]",
-      outputRule
-    );
-
-    return parts.join("\n");
+      outputRule,
+    ].join("\n");
   }
 
+  /** 选项兜底 API 用；主流程合并请求不发送历史 */
   function formatRecentDialogueForOptions(sessionMessages, characterName) {
     const done = getDoneMessages(sessionMessages);
     if (done.length === 0) {
@@ -96,7 +62,6 @@
   window.GameDialogue = {
     stripIntentTag,
     buildGameUserMessage,
-    buildDialogueHistoryBlock,
     formatRecentDialogueForOptions,
     getDoneMessages,
   };

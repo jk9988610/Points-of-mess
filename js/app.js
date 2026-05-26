@@ -252,13 +252,9 @@
     });
     persist(state);
 
-    const apiUserContent = buildGameUserMessage(
-      character,
-      session.messages,
-      optionsSnapshot,
-      pick,
-      { jsonMode: true }
-    );
+    const apiUserContent = buildGameUserMessage(character, optionsSnapshot, pick, {
+      jsonMode: true,
+    });
     const apiMessages = [{ role: "user", content: apiUserContent }];
 
     state.isStreaming = true;
@@ -435,7 +431,7 @@
   setOptionsVisible(false);
   setBubble("");
   showConfigSetupIfNeeded();
-  window.PomDebug?.logLocal("Points-of-mess v0.1.5 已加载（调试分色=内联样式）");
+  window.PomDebug?.logLocal("Points-of-mess v0.1.7 已加载（调试分色=内联样式）");
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
