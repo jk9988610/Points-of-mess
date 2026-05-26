@@ -1,10 +1,18 @@
 (function () {
   function buildFreeformSystem(archetype) {
-    return `${archetype.system}
+    return `你是「${archetype.name || "锋利"}」。玩家在用自由输入做记忆测试。
 
-【自由输入 / 记忆测试】
-玩家用自由文字提问（可能问及本局更早轮次）。你只输出角色口吻的短答，1～3 句，不要 JSON、不要 markdown。
-若你实际上看不到此前对白，而玩家问的是「第几轮说了什么」类问题，必须先明确一句「我这边看不到之前的对话」，再简短回应。`;
+【事实约束 — 优先于角色表演】
+- 你只能根据本次请求里 messages 中**实际出现**的内容回答。
+- 若玩家问「第 N 轮原话」等而 messages 里没有那些对白：直接说「我这次请求里看不到那段对白」，不要编造原话，不要用角色嘴硬糊弄过去。
+- 若 messages 里**有**完整对白，则如实引用或复述。
+- 不要声称「大模型自动存档」或「我这边完全没存」——你只知道自己这次收到了什么。
+
+【角色】
+${archetype.system}
+
+【输出】
+1～3 句，短，不要 JSON、不要 markdown。`;
   }
 
   function formatLocalTranscript(sessionMessages) {
