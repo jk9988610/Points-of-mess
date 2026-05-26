@@ -31,14 +31,18 @@ cp js/config.example.js js/config.js
 
 **正式地址：** https://jk9988610.github.io/Points-of-mess/
 
-线上更新需同时满足（详见 [docs/PAGES-SETUP.md](docs/PAGES-SETUP.md)）：
+线上更新（详见 [docs/PAGES-SETUP.md](docs/PAGES-SETUP.md)）：
 
-1. 新代码已 **合并并 push 到 `main`**（仅推功能分支不会更新 Pages）  
-2. **Actions → Deploy to GitHub Pages** 运行成功（把站点推到 **`gh-pages` 分支**）  
-3. **Settings → Pages** 的 Source 为 **`gh-pages` / (root)**（不要指向已删除的 `cursor/...` 分支）  
-4. 浏览器 **强制刷新**（Ctrl+Shift+R），避免缓存旧 `app.js`  
+1. 代码在 **`main`** 上  
+2. **`gh-pages` 与 main 同步**（二选一）：  
+   - 本机 push `main` 后，[Actions → Deploy to GitHub Pages](https://github.com/jk9988610/Points-of-mess/actions/workflows/pages.yml) 成功；或点 **Run workflow**  
+   - **若 Actions 没自动跑**（Cloud Agent 推送常见）：执行  
+     `git push origin origin/main:gh-pages --force`  
+     或 `./scripts/sync-gh-pages.sh`  
+3. **Settings → Pages**：Source = **`gh-pages` / (root)**（不要指 deleted 的 `cursor/...` 分支）  
+4. 浏览器 **强刷**（Ctrl+Shift+R）
 
-验收：标题旁应显示 **`v0.1.9`**；第 2 轮对话起「发AI」应含多条 `messages` 历史。
+验收：https://jk9988610.github.io/Points-of-mess/js/version.js 含 **`0.2.6`**；标题旁 **v0.2.6**。
 
 > **注意：** 线上**不会**包含本机 `js/config.js`（密钥在 `.gitignore`）。在线调 API 需在 `gh-pages` 单独放密钥（有风险），**推荐本地**测试。勿把密钥提交到 `main`。
 
