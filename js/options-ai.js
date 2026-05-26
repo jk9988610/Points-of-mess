@@ -62,17 +62,6 @@
     return { yes: false };
   }
 
-  function pickFromPool(pool, avoidLines) {
-    const lines = (pool || []).filter(Boolean);
-    if (lines.length === 0) {
-      return "";
-    }
-    const avoid = new Set((avoidLines || []).map((l) => String(l).trim()).filter(Boolean));
-    const fresh = lines.filter((l) => !avoid.has(l.trim()));
-    const pick = fresh.length > 0 ? fresh : lines;
-    return pick[Math.floor(Math.random() * pick.length)].trim();
-  }
-
   function fixedCloseLine(archetype) {
     const preset = archetype.options?.find((o) => o.intent === "close")?.line;
     return String(archetype.closeLine || preset || "行。我就当成你没参与。").trim();

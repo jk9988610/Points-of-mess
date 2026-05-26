@@ -17,6 +17,14 @@
       color: "#8b5cf6",
     },
     {
+      id: "plan-narrative",
+      title: "PLAN·叙事",
+      path: "docs/PLAN-narrative-next.md",
+      x: 0.14,
+      y: 0.68,
+      color: "#ec4899",
+    },
+    {
       id: "guide",
       title: "常用说明",
       path: "docs/常用说明.md",
