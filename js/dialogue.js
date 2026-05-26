@@ -17,7 +17,11 @@
       .join("\n");
   }
 
-  function buildGameUserMessage(character, options, pick) {
+  function buildGameUserMessage(character, options, pick, formatOpts) {
+    const jsonMode = formatOpts?.jsonMode;
+    const replyRule = jsonMode
+      ? "只输出一个 JSON 对象（含 reply；非收束轮含 options）。禁止纯文本、禁止 markdown。"
+      : "只输出角色台词。短。禁止寒暄。收束轮禁止新问题。";
     return `[game]
 character: ${character.name}
 
@@ -30,7 +34,7 @@ intent: ${pick.intent}
 line: 「${pick.line}」
 
 [reply_rule]
-只输出角色台词。短。禁止寒暄。收束轮禁止新问题。`;
+${replyRule}`;
   }
 
   function getHistoryForApi(sessionMessages) {

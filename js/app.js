@@ -244,7 +244,9 @@
     persist(state);
 
     const history = getHistoryForApi(session.messages);
-    const apiUserContent = buildGameUserMessage(character, optionsSnapshot, pick);
+    const apiUserContent = buildGameUserMessage(character, optionsSnapshot, pick, {
+      jsonMode: true,
+    });
     const apiMessages = [
       ...history.slice(0, -1),
       { role: "user", content: apiUserContent },
@@ -266,7 +268,9 @@
 
     try {
       const { reply, options } = await requestCombinedTurn({
+        character,
         archetype,
+        session,
         apiMessages,
         isClose,
         signal: abortController.signal,
@@ -422,7 +426,7 @@
   setOptionsVisible(false);
   setBubble("");
   showConfigSetupIfNeeded();
-  window.PomDebug?.log("Points-of-mess v0.1 已加载（首轮程序选项 + 合并 API）");
+  window.PomDebug?.log("Points-of-mess v0.1.2 已加载（首轮程序选项 + 合并 JSON API）");
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.log(
       "测试模式",

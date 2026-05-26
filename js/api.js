@@ -90,6 +90,7 @@
     signal,
     temperature,
     max_tokens,
+    response_format,
   }) {
     const cfg = getConfig();
 
@@ -100,6 +101,9 @@
       temperature: temperature ?? cfg.temperature ?? 0.6,
       max_tokens: max_tokens ?? cfg.maxTokens ?? 80,
     };
+    if (response_format) {
+      body.response_format = response_format;
+    }
 
     const response = await fetch(cfg.apiUrl, {
       method: "POST",
