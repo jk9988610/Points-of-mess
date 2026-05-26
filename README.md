@@ -29,16 +29,18 @@ cp js/config.example.js js/config.js
 
 ### 2. 在线（GitHub Pages）
 
-推送到 **`main`** 后，Actions 会把站点推到 **`gh-pages` 分支**。  
-请在 **Settings → Pages** 把 **Source** 设为 **Deploy from a branch → `gh-pages` → / (root)**（详见 [docs/PAGES-SETUP.md](docs/PAGES-SETUP.md)）。
+**正式地址：** https://jk9988610.github.io/Points-of-mess/
 
-> **不必**填写 “Add a verified domain”。若 Source 仍指向已删除的 `cursor/map-sharp-touch-a1c8`，线上会一直是旧代码。
+线上更新需同时满足（详见 [docs/PAGES-SETUP.md](docs/PAGES-SETUP.md)）：
 
-**正式地址：**
+1. 新代码已 **合并并 push 到 `main`**（仅推功能分支不会更新 Pages）  
+2. **Actions → Deploy to GitHub Pages** 运行成功（把站点推到 **`gh-pages` 分支**）  
+3. **Settings → Pages** 的 Source 为 **`gh-pages` / (root)**（不要指向已删除的 `cursor/...` 分支）  
+4. 浏览器 **强制刷新**（Ctrl+Shift+R），避免缓存旧 `app.js`  
 
-**https://jk9988610.github.io/Points-of-mess/**
+验收：标题旁应显示 **`v0.1.8`**，调试首行含 `v0.1.8 已加载`，并有 **「测记忆」** 按钮。
 
-> **注意：** 线上站点**不会**包含你本机的 `js/config.js`（密钥文件被忽略）。若要在 Pages 上也能调用 AI，需在 **`gh-pages` 分支**单独放置一份 `js/config.js`（勿合并回 `main`），或仅本地使用。公开仓库切勿把密钥提交到 `main`。
+> **注意：** 线上**不会**包含本机 `js/config.js`（密钥在 `.gitignore`）。在线调 API 需在 `gh-pages` 单独放密钥（有风险），**推荐本地**测试。勿把密钥提交到 `main`。
 
 **仅预览页面布局（无密钥、无法对话）** 可用 main 分支静态 HTML 预览：
 
@@ -54,7 +56,7 @@ cp js/config.example.js js/config.js
 
 1. `cp js/config.example.js js/config.js` 并填写 `apiKey`  
 2. 打开 `index.html` 或 `python3 -m http.server 8080`  
-3. 在 **`main`** 上开发；推送到 **`main`** 后由 Actions 更新 Pages  
+3. 在功能分支开发 → **合并 PR 到 `main`** → push 后 Actions 更新 Pages（见 [docs/PAGES-SETUP.md](docs/PAGES-SETUP.md)）  
 
 ## 当前功能
 
