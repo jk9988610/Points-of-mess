@@ -218,6 +218,13 @@ flowchart LR
 | **A++** | `SUMMARY_SYSTEM` 增加「待核实核对」专节 + 反例；user 前置自检句 |
 | **B+** | `presets.js` 首轮两条：深挖扣 opening「阻拦/谁派」；推进引向账本/内鬼；不发 API |
 
+## 11. v0.5.4
+
+| 项 | 内容 |
+|----|------|
+| **防幻觉** | 摘要 prompt 禁止照抄示例专名（移除 prompt 内「林晨」示例）；仅依据已有摘要+新增对话 |
+| **版本单源** | `js/boot.js` 按 `POM_VERSION` 加载脚本；`bump-version.sh` |
+
 ---
 
-*最后更新：2026-05 · Phase A+ / v0.5.3 补丁*
+*最后更新：2026-05 · Phase A+ / v0.5.4*
