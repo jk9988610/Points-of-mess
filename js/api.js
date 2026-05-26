@@ -104,7 +104,7 @@
 
     const body = {
       model: cfg.model,
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
+      messages: buildMessageList(systemPrompt, messages),
       stream: false,
       temperature: temperature ?? cfg.temperature ?? 0.6,
       max_tokens: max_tokens ?? cfg.maxTokens ?? 80,

@@ -259,21 +259,18 @@
       return;
     }
 
-    const character = getCharacter(state.talkingId);
-    const archetype = getArchetype(character.archetypeId);
     const session = getSession(state, state.talkingId);
-    const systemPrompt = window.GameMemoryChat.buildFreeformSystem(archetype);
     const apiMessages = [{ role: "user", content: text }];
 
-    window.PomDebug?.logLocal("玩家自由输入（记忆测试）", text);
+    window.PomDebug?.logLocal("玩家自由输入（纯净发送）", text);
     window.PomDebug?.logLocal(
       "本地会话记录（未发给 AI）",
       window.GameMemoryChat.formatLocalTranscript(session.messages)
     );
-    window.PomDebug?.logRequest("自由提问（不发历史）", {
-      system: `${systemPrompt.slice(0, 72)}…`,
+    window.PomDebug?.logRequest("自由提问（纯净）", {
+      system: "（无）",
       messages: apiMessages,
-      note: "messages 仅 1 条 user，不含此前轮次",
+      note: "无 system、无历史；user.content 与输入框完全一致",
     });
 
     session.messages.push({
@@ -299,7 +296,6 @@
 
     try {
       await window.ChatApi.streamChat({
-        systemPrompt,
         messages: apiMessages,
         temperature: 0.5,
         max_tokens: 160,
@@ -321,7 +317,7 @@
       persist(state);
       setBubble(reply, false);
       setStatus("", false);
-      window.PomDebug?.logResponse("自由提问（不发历史）", reply);
+      window.PomDebug?.logResponse("自由提问（纯净）", reply);
       if (memoryInputEl) {
         memoryInputEl.value = "";
       }
@@ -578,7 +574,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。底部选项：messages 仅对白原话（2 轮）；菜单在 system。自由提问仍仅 1 条 user。"
+      "灰=本地 · 黄=发AI · 绿=AI回。选项：messages 原话 + system 菜单。自由输入：仅 1 条 user，无 system、无历史。"
     );
   }
   requestAnimationFrame(gameLoop);
