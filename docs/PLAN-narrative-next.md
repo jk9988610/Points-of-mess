@@ -83,16 +83,95 @@ flowchart LR
 3. **硬规则**：不得删除【已确认事实】里已出现的专名（林晨、化工厂、蓝色账本、定时装置等）；若冲突以「已确认」为准并加「待核实」。
 4. **用尽篇幅**：在不超过 1200 字的前提下尽量写全；无新信息时【本轮新增】可写「无」。
 
-**注入**：`requestReplyOnly` / 选项 prompt 已读 `plotSummary`；摘要变宽后无需改 HISTORY 轮数即可显著减失忆。
+**注入**：`requestReplyOnly` 已读完整 `plotSummary`；**选项 API 待 Phase B** 注入摘要摘录（未解问题）。
 
 **验收**：连续 12+ 轮后，调试里的「剧情摘要」仍含至少 3 个核心专名；锋利不重复追问摘要里已写明的事实。
 
 ---
 
-### Phase B — 选项 prompt（v0.5～0.6，与 A 可同版）
+### Phase B — 选项上下文 + 分工 prompt（v0.5.1 / v0.6，**待实现**）
 
-- 软分工：`keypoint` 偏求证、`followup` 偏质问（见旧版 Phase B 文案）。
-- **不做**：相似度检测、禁止重复上一轮、因重复触发的重生成；可保留「禁止两条 line 完全相同」的 JSON 合法性校验（若 AI 返回两个一字不差，程序可任取其一或让 AI 重试一次 JSON，**不是因为像上一轮**）。
+> 讨论稿（2026-05）：采纳「动态 user 上下文 + 深挖/推进分工」；与 Phase A 宽摘要衔接。
+
+#### B.1 总体评价（对 AI 建议的取舍）
+
+| 建议 | 结论 |
+|------|------|
+| user 里结构化：角色名 / 上一句 / 最近对话 | **采纳**；与现结构一致，补全缺失字段即可 |
+| 最近 **3 轮**（非 reply 的 2 轮） | **采纳**，用独立常量 `OPTIONS_HISTORY_TURNS = 3`，**不**抬高 `HISTORY_TURNS`（reply 仍 2 轮省 token） |
+| user 里可选「剧情摘要」 | **采纳**；选项 API **目前未传** `plotSummary`，这是 B 的必改项 |
+| 摘要太长只给【未解问题】 | **采纳**（程序抽取该段，约 ≤400 字；无结构时截前 400 字） |
+| keypoint=深挖细节 / followup=推进话题 | **采纳**，替代旧版「followup 必须扣上一句词」（与推进型冲突） |
+| 禁止陈述句、禁止双深挖/双推进 | **写进 system**，不做硬过滤（除非 JSON 解析失败重试） |
+| 70% 相似度 | **仅 prompt 软提示**「尽量避免」；**不做**程序检测（与 §8.2 拍板一致） |
+| 纯对话阶段、无行动 | **采纳**；与「场景移动冻结」一致 |
+
+#### B.2 与现状差异
+
+| 项 | v0.5.0 现状 | Phase B 目标 |
+|----|-------------|--------------|
+| `generateOptions` user | 角色名 + 上一句 + 最近 2 轮（`role: 原文`） | + 3 轮 + `玩家/锋利:` 格式 + 摘要摘录 |
+| `OPTIONS_SYSTEM_DUO` | 短；followup 必须引用上一句 | 长分工 prompt（见 B.4） |
+| `plotSummary` | 只进 reply system | **也进选项 user**（摘录） |
+| UI 按钮文案 | 要点 / 追问 | 建议改为 **深挖 / 推进**（`intent` 仍为 `keypoint`/`followup`） |
+
+#### B.3 user 消息模板（程序拼装）
+
+```
+角色名：{character.name}
+角色上一句台词：{lastAssistantLine}
+
+最近对话：（不含上一句；最多 3 轮，格式为 玩家/锋利 交替）
+{formattedPrior}
+
+{可选，有 plotSummary 时}
+当前剧情摘要（未解问题，供推进型选项参考）：
+{extractUnresolved(plotSummary)}
+
+请按 system 要求只输出 JSON。
+```
+
+- `formatRecentDialogueForOptions` 增加参数 `maxTurns`，默认 `OPTIONS_HISTORY_TURNS`。
+- `extractUnresolved`：正则取 `【未解问题】…` 至下一 `【`；失败则 `plotSummary.slice(0, 400)`。
+
+#### B.4 system prompt（定稿方向，实现时可微调）
+
+核心语义（与讨论稿一致，**角色名用变量** `{name}`，勿写死「锋利」除非 preset 只有锋利）：
+
+- **角色**：玩家是与 `{name}` 对峙的调查者。
+- **阶段**：纯对话，无行动场景；选项必须是玩家**说的话**（问句或祈使），禁止陈述句断言（「真相是…」）。
+- **keypoint（深挖）**：针对 `{name}` **上一句**中某一具体点追问——要信息、澄清矛盾、挑战逻辑。
+- **followup（推进）**：**不**纠缠当前细节；引向更核心问题、换质问角度、或态度+催促（「别绕圈子，直接说名字」）。
+- **禁止**：两条都是深挖或都是推进；两条 line 完全相同（JSON 层可重试一次）。
+- **软提示**：尽量避免与上一轮两条选项高度雷同（**不**做 70% 代码检测）。
+- **输出**：仅 JSON，`line` ≤35 字；不生成 `close`。
+
+示例（写入 prompt 或文档，不硬编码进逻辑）：
+
+| 锋利上一句 | keypoint（深挖） | followup（推进） |
+|------------|------------------|------------------|
+| 监控拍到林晨凌晨三点离开 | 林晨凌晨三点离开，他去了哪里？ | 别绕圈子，账本在哪？ |
+
+> 注：讨论稿中 followup 例「好兄弟是指林晨吗」偏**澄清**，更像 keypoint；定稿示例以「换核心问题/催促」为 followup 更稳。
+
+#### B.5 实现清单（开发时）
+
+1. `js/dialogue.js`：`OPTIONS_HISTORY_TURNS = 3`；`formatRecentDialogueForOptions(msgs, { maxTurns })`；prior 用 `玩家:` / `锋利:`。
+2. `js/options-ai.js`：`plotSummaryForOptions()`；`generateOptions({ plotSummary })`；替换 `OPTIONS_SYSTEM_DUO`；`requestSplitTurn` 传入 `session.plotSummary`。
+3. `OPTION_SCHEMA` 标签：`深挖` / `推进`（可选 v0.5.1）。
+4. `PomTokens.OPTIONS`：若 prompt 变长，可 **1024 → 1280**（观察后再调）。
+5. **不做**：相似度重生成、avoid 上一轮列表。
+
+#### B.6 验收
+
+- 连续 5 轮：① 明显扣上一句细节，② 明显换角度或核心问题（不必扣词）。
+- 调试 user 块可见「未解问题」摘录（有摘要后）。
+- 无「选项需重生成」日志；陈述句选项偶发可接受，连续出现再收紧 prompt。
+
+#### B.7 暂不纳入 B
+
+- preset 级 `phase: "dialogue"|"investigate"`（等 Phase E 场景再做）。
+- 从摘要【已确认事实】再抽一截给选项（未解问题通常够用；若不够再加）。
 
 ---
 
@@ -127,7 +206,7 @@ flowchart LR
 
 ## 5. 协作顺序
 
-**下一刀**：**Phase B**（选项 prompt 求证/质问软分工）。  
+**下一刀**：**Phase B**（§B.3～B.5：3 轮对话 + 摘要未解问题 + 深挖/推进 prompt）。  
 Phase F 骨架可紧随其后（仅 `state.js` 字段，无 UI）。
 
 ---
@@ -252,4 +331,4 @@ Phase F 骨架可紧随其后（仅 `state.js` 字段，无 UI）。
 
 ---
 
-*状态：Phase A 已落地 v0.5.0；Phase B 待开发。*
+*状态：Phase A 已落地 v0.5.0；Phase B 设计已定稿 §B（待实现 v0.5.1）。*
