@@ -1,7 +1,7 @@
 (function () {
   const { characters, getArchetype, getCharacter } = window.GamePresets;
   const { createId, createInitialState, getSession, persist } = window.GameState;
-  const { buildGameUserMessage } = window.GameDialogue;
+  const { buildGameUserMessage, getHistoryForApi } = window.GameDialogue;
   const { presetOptions, requestCombinedTurn } = window.GameOptionsAi;
   const {
     draw,
@@ -142,23 +142,10 @@
         : "点击空地移动 · 靠近角色后点击交谈";
   }
 
-  function ensureMemoryProbe(session) {
-    if (!session.memoryProbe) {
-      session.memoryProbe = window.GameMemoryProbe.createCodeword();
-      session.memoryProbeInjected = false;
-      window.PomDebug?.logLocal(
-        "记忆探测",
-        `本局暗号：${session.memoryProbe}\n仅第 1 次「发AI」携带 [memory_probe]；之后点「测记忆」看宿主是否自动带全文。`
-      );
-    }
-  }
-
   function endTalking() {
     if (state.talkingId) {
       const session = getSession(state, state.talkingId);
       session.messages = [];
-      delete session.memoryProbe;
-      delete session.memoryProbeInjected;
       persist(state);
     }
     state.talkingId = null;
@@ -193,10 +180,10 @@
 
     state.talkingId = characterId;
     const session = getSession(state, characterId);
-    ensureMemoryProbe(session);
     setStatus("", false);
     window.PomDebug?.logLocal("开始对话", {
       character: character.name,
+      historyTurns: window.GameDialogue.HISTORY_TURNS,
       messageCount: session.messages.length,
     });
 
@@ -231,7 +218,7 @@
     positionBubble();
   }
 
-  async function sendDialogueTurn(pick, { isMemoryTest = false, logLabel } = {}) {
+  async function pickOption(optionId) {
     if (!state.talkingId || state.isStreaming || state.optionsLoading) {
       return;
     }
@@ -239,20 +226,21 @@
       return;
     }
 
+    const pick = state.currentOptions?.find((o) => o.id === optionId);
+    if (!pick?.line) {
+      setStatus("选项尚未就绪", true);
+      return;
+    }
+
     const character = getCharacter(state.talkingId);
     const archetype = getArchetype(character.archetypeId);
     const session = getSession(state, state.talkingId);
-    ensureMemoryProbe(session);
     const optionsSnapshot = state.currentOptions.map((o) => ({ ...o }));
-    const isClose = !isMemoryTest && pick.intent === "close";
-    const includeProbe = Boolean(
-      session.memoryProbe && !session.memoryProbeInjected && !isMemoryTest
-    );
+    const isClose = pick.intent === "close";
 
-    window.PomDebug?.logLocal(logLabel || "玩家选择（界面）", {
+    window.PomDebug?.logLocal("玩家选择（界面）", {
       intent: pick.intent,
       line: pick.line,
-      memoryProbeInPayload: includeProbe ? session.memoryProbe : null,
     });
 
     session.messages.push({
@@ -265,12 +253,14 @@
     });
     persist(state);
 
+    const history = getHistoryForApi(session.messages);
     const apiUserContent = buildGameUserMessage(character, optionsSnapshot, pick, {
       jsonMode: true,
-      memoryProbe: includeProbe ? session.memoryProbe : null,
-      memoryTest: isMemoryTest,
     });
-    const apiMessages = [{ role: "user", content: apiUserContent }];
+    const apiMessages = [
+      ...history.slice(0, -1),
+      { role: "user", content: apiUserContent },
+    ];
 
     state.isStreaming = true;
     state.optionsLoading = true;
@@ -281,7 +271,7 @@
         .reverse()
         .find((m) => m.role === "assistant" && m.status === "done")?.content || "";
     setBubble(thinkingBubble, true, { thinking: true });
-    setStatus(isMemoryTest ? "记忆测试中…" : "锋利在想…", false);
+    setStatus("锋利在想…", false);
     renderMap();
 
     abortController = new AbortController();
@@ -296,11 +286,6 @@
         signal: abortController.signal,
       });
 
-      if (includeProbe) {
-        session.memoryProbeInjected = true;
-        window.PomDebug?.logLocal("记忆探测", "首包已发送 [memory_probe]，后续包不再附带");
-      }
-
       session.messages.push({
         id: createId(),
         role: "assistant",
@@ -312,22 +297,7 @@
       setBubble(reply, false, { thinking: false });
       setStatus("", false);
 
-      if (isMemoryTest) {
-        const hit = window.GameMemoryProbe.replyContainsCodeword(
-          reply,
-          session.memoryProbe
-        );
-        window.PomDebug?.logLocal(
-          hit ? "记忆探测·命中" : "记忆探测·未命中",
-          hit
-            ? `reply 含暗号「${session.memoryProbe}」→ 宿主可能自动带了全文`
-            : `期望暗号「${session.memoryProbe}」\nreply：${reply}\n→ 宿主可能未带上文，或模型未遵守回忆测试格式`
-        );
-        state.currentOptions = options || state.currentOptions;
-        if (options) {
-          window.PomDebug?.logLocal("选项已更新（界面展示）", options.map((o) => o.line));
-        }
-      } else if (isClose) {
+      if (isClose) {
         if (options) {
           window.PomDebug?.logLocal("收束轮忽略多余 options");
         }
@@ -360,36 +330,6 @@
       renderMap();
       positionBubble();
     }
-  }
-
-  async function pickOption(optionId) {
-    const pick = state.currentOptions?.find((o) => o.id === optionId);
-    if (!pick?.line) {
-      setStatus("选项尚未就绪", true);
-      return;
-    }
-    await sendDialogueTurn(pick);
-  }
-
-  async function runMemoryProbeTest() {
-    if (!state.talkingId) {
-      window.PomDebug?.logLocalWarn("测记忆", "请先与角色开聊");
-      return;
-    }
-    const session = getSession(state, state.talkingId);
-    if (!session.memoryProbeInjected) {
-      window.PomDebug?.logLocalWarn("测记忆", "请先至少发送 1 次普通选项（首包会带暗号）");
-      return;
-    }
-    const pick = {
-      id: 0,
-      intent: "keypoint",
-      line: window.GameMemoryProbe.MEMORY_TEST_LINE,
-    };
-    await sendDialogueTurn(pick, {
-      isMemoryTest: true,
-      logLabel: "回忆测试（测记忆按钮）",
-    });
   }
 
   function handleMapClick(clientX, clientY) {
@@ -478,10 +418,6 @@
   document.getElementById("clearDebugBtn")?.addEventListener("click", () => {
     window.PomDebug?.clear();
   });
-  document.getElementById("memoryTestBtn")?.addEventListener("click", () => {
-    runMemoryProbeTest();
-  });
-
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("scroll", positionBubble, true);
 
@@ -504,7 +440,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。首轮选项不发 API。开聊后首包带暗号，点「测记忆」验证宿主是否自动带全文。"
+      "灰=本地 · 黄=发AI · 绿=AI回。首轮选项不发 API。发AI 含最近 2 轮 messages 历史。"
     );
   }
   requestAnimationFrame(gameLoop);

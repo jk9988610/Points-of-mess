@@ -38,7 +38,7 @@ cp js/config.example.js js/config.js
 3. **Settings → Pages** 的 Source 为 **`gh-pages` / (root)**（不要指向已删除的 `cursor/...` 分支）  
 4. 浏览器 **强制刷新**（Ctrl+Shift+R），避免缓存旧 `app.js`  
 
-验收：标题旁应显示 **`v0.1.8`**，调试首行含 `v0.1.8 已加载`，并有 **「测记忆」** 按钮。
+验收：标题旁应显示 **`v0.1.9`**；第 2 轮对话起「发AI」应含多条 `messages` 历史。
 
 > **注意：** 线上**不会**包含本机 `js/config.js`（密钥在 `.gitignore`）。在线调 API 需在 `gh-pages` 单独放密钥（有风险），**推荐本地**测试。勿把密钥提交到 `main`。
 
