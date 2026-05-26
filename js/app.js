@@ -436,7 +436,7 @@
   setOptionsVisible(false);
   setBubble("");
   showConfigSetupIfNeeded();
-  window.PomDebug?.logLocal("Points-of-mess v0.1.4 已加载");
+  window.PomDebug?.logLocal("Points-of-mess v0.1.5 已加载（调试分色=内联样式）");
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",

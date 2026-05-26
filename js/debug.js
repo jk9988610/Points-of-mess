@@ -3,7 +3,43 @@
   const entries = [];
   const plainLines = [];
 
-  /** @typedef {'ai-out'|'ai-in'|'local'|'local-warn'|'local-error'} Audience */
+  const THEME = {
+    "ai-out": {
+      border: "3px solid #f59e0b",
+      tagBg: "#b45309",
+      tagFg: "#fffbeb",
+      text: "#fde68a",
+      bodyBg: "rgba(180, 83, 9, 0.25)",
+    },
+    "ai-in": {
+      border: "3px solid #22c55e",
+      tagBg: "#15803d",
+      tagFg: "#ecfdf5",
+      text: "#bbf7d0",
+      bodyBg: "rgba(21, 128, 61, 0.25)",
+    },
+    local: {
+      border: "3px solid #64748b",
+      tagBg: "#475569",
+      tagFg: "#f1f5f9",
+      text: "#cbd5e1",
+      bodyBg: "rgba(71, 85, 105, 0.35)",
+    },
+    "local-warn": {
+      border: "3px solid #f97316",
+      tagBg: "#c2410c",
+      tagFg: "#fff7ed",
+      text: "#fdba74",
+      bodyBg: "rgba(194, 65, 12, 0.25)",
+    },
+    "local-error": {
+      border: "3px solid #ef4444",
+      tagBg: "#b91c1c",
+      tagFg: "#fef2f2",
+      text: "#fca5a5",
+      bodyBg: "rgba(185, 28, 28, 0.25)",
+    },
+  };
 
   function ts() {
     return new Date().toLocaleTimeString("zh-CN", { hour12: false });
@@ -60,15 +96,42 @@
     }
     el.innerHTML = entries
       .map((e) => {
+        const t = THEME[e.audience] || THEME.local;
+        const entryStyle = [
+          "margin-bottom:8px",
+          "padding:0 0 6px 8px",
+          "border-left:" + t.border,
+        ].join(";");
+        const tagStyle = [
+          "display:inline-block",
+          "min-width:3em",
+          "margin-right:4px",
+          "padding:1px 5px",
+          "border-radius:4px",
+          "font-size:0.62rem",
+          "font-weight:800",
+          "background:" + t.tagBg,
+          "color:" + t.tagFg,
+        ].join(";");
+        const titleStyle = "font-weight:700;color:" + t.text;
+        const timeStyle = "color:#64748b";
+        const bodyStyle = [
+          "margin:4px 0 0",
+          "padding:6px 8px",
+          "border-radius:6px",
+          "white-space:pre-wrap",
+          "color:" + t.text,
+          "background:" + t.bodyBg,
+        ].join(";");
         const bodyBlock = e.body
-          ? `<pre class="dbg-body">${escapeHtml(e.body)}</pre>`
+          ? `<pre style="${bodyStyle}">${escapeHtml(e.body)}</pre>`
           : "";
         return (
-          `<div class="dbg-entry dbg-${e.audience}">` +
-          `<div class="dbg-head">` +
-          `<span class="dbg-time">[${escapeHtml(e.time)}]</span> ` +
-          `<span class="dbg-tag">${escapeHtml(audienceLabel(e.audience))}</span> ` +
-          `<span class="dbg-title">${escapeHtml(e.title)}</span>` +
+          `<div class="dbg-entry" style="${entryStyle}">` +
+          `<div>` +
+          `<span style="${timeStyle}">[${escapeHtml(e.time)}]</span> ` +
+          `<span style="${tagStyle}">${escapeHtml(audienceLabel(e.audience))}</span> ` +
+          `<span style="${titleStyle}">${escapeHtml(e.title)}</span>` +
           `</div>${bodyBlock}</div>`
         );
       })
@@ -77,7 +140,6 @@
   }
 
   window.PomDebug = {
-    /** 仅本地 / 界面 / 程序逻辑，不原样发往 API 的日志 */
     logLocal(title, detail) {
       if (detail === undefined) {
         appendEntry("local", String(title));
@@ -105,11 +167,9 @@
             : JSON.stringify(detail, null, 2);
       appendEntry("local-error", String(title), body);
     },
-    /** 兼容旧调用：默认本地 */
     log(title, detail) {
       this.logLocal(title, detail);
     },
-    /** 发往 DeepSeek 的请求体 */
     logRequest(label, payload) {
       appendEntry(
         "ai-out",
@@ -117,7 +177,6 @@
         typeof payload === "string" ? payload : JSON.stringify(payload, null, 2)
       );
     },
-    /** DeepSeek 返回的原始内容 */
     logResponse(label, text) {
       appendEntry("ai-in", `← ${label}`, String(text ?? ""));
     },
