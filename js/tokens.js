@@ -12,8 +12,8 @@
     OPTIONS: 1024,
     /** 仅生成角色一句 */
     REPLY_ONLY: 768,
-    /** 剧情摘要 */
-    SUMMARY: 512,
+    /** 剧情摘要（宽摘要，见 PLAN-narrative Phase A） */
+    SUMMARY: 2048,
     /** 输入框自由问 */
     FREEFORM: 512,
     /** api.js 未指定时的默认 */

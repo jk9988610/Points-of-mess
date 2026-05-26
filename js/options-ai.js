@@ -15,53 +15,6 @@
     return OPTION_SCHEMA.map((o) => `- ${o.intent}（${o.label}）`).join("\n");
   }
 
-  function optionsSignature(options) {
-    return (options || [])
-      .map((o) => `${o.intent}:${String(o.line || "").trim()}`)
-      .join("|");
-  }
-
-  function optionsUnchanged(prev, next) {
-    if (!prev?.length || !next?.length) {
-      return false;
-    }
-    return optionsSignature(prev) === optionsSignature(next);
-  }
-
-  /** 与上一轮 options 中 line 完全相同的条数 */
-  function countOverlappingOptionLines(prev, next) {
-    const prevLines = new Set(
-      (prev || []).map((o) => String(o.line || "").trim()).filter(Boolean)
-    );
-    let count = 0;
-    for (const o of next || []) {
-      const line = String(o.line || "").trim();
-      if (line && prevLines.has(line)) {
-        count += 1;
-      }
-    }
-    return count;
-  }
-
-  const AI_OPTION_INTENTS = ["keypoint", "followup"];
-
-  function filterOptionsByIntents(options, intents) {
-    return (options || []).filter((o) => intents.includes(o.intent));
-  }
-
-  function shouldRegenerateOptions(prev, next) {
-    const prevAi = filterOptionsByIntents(prev, AI_OPTION_INTENTS);
-    const nextAi = filterOptionsByIntents(next, AI_OPTION_INTENTS);
-    if (optionsUnchanged(prevAi, nextAi)) {
-      return { yes: true, reason: "要点+追问与上一轮完全相同" };
-    }
-    const overlap = countOverlappingOptionLines(prevAi, nextAi);
-    if (overlap >= 2) {
-      return { yes: true, reason: `要点/追问有 ${overlap} 条与上一轮相同` };
-    }
-    return { yes: false };
-  }
-
   function fixedCloseLine(archetype) {
     const preset = archetype.options?.find((o) => o.intent === "close")?.line;
     return String(archetype.closeLine || preset || "行。我就当成你没参与。").trim();
@@ -117,12 +70,6 @@
     return { keypoint, followup };
   }
 
-  function avoidLinesForAiOptions(options) {
-    return filterOptionsByIntents(options, AI_OPTION_INTENTS).map((o) =>
-      String(o.line || "").trim()
-    );
-  }
-
   function isWeakReply(text) {
     const t = String(text || "").trim();
     return !t || /^[.…·\s]+$/.test(t) || t.length < 2;
@@ -155,7 +102,7 @@ ${archetype.system}
       : "";
 
     const summaryBlock = turn.plotSummary?.trim()
-      ? `\n【剧情摘要】（较早对白已压缩，与 messages 最近原话一起理解）\n${turn.plotSummary.trim()}\n`
+      ? `\n【剧情摘要】（长程记忆；已写明的事实勿在 reply 里重复追问）\n${turn.plotSummary.trim()}\n`
       : "";
 
     return `${base}
@@ -366,7 +313,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     if (!text) {
       return "";
     }
-    return `\n【剧情摘要】（较早对白已压缩，与 messages 最近原话一起理解）\n${text}\n`;
+    return `\n【剧情摘要】（长程记忆；事实以此为准。reply 接最近一轮对白，勿重复摘要已写明的内容。）\n${text}\n`;
   }
 
   async function requestReplyOnly({ systemPrompt, apiMessages, signal, plotSummary }) {
@@ -393,7 +340,6 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     archetype,
     session,
     signal,
-    previousOptions,
     temperature = 0.5,
     logTag = "拆分·②选项",
   }) {
@@ -403,19 +349,11 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     const last =
       assistantLineForOptions(lastLine) || lastUsableAssistantLine(session, archetype);
 
-    const prevOpts = previousOptions || [];
-    const avoidForAi = avoidLinesForAiOptions(prevOpts);
-
-    const avoidBlock =
-      avoidForAi.length > 0
-        ? `\n【禁止重复】下列 keypoint/followup 不得原样出现：\n${avoidForAi.map((l) => `- ${l}`).join("\n")}\n`
-        : "";
-
     const userContent = `角色名：${character.name}
 角色上一句台词：${last}
 ${priorText ? `最近对话：\n${priorText}` : ""}
 
-请生成 keypoint 与 followup 两条 JSON。${avoidBlock}`;
+请生成 keypoint 与 followup 两条 JSON。`;
 
     window.PomDebug?.logRequest(`→ ${logTag}`, {
       system: OPTIONS_SYSTEM_DUO.slice(0, 60) + "…",
@@ -494,28 +432,13 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
       ],
     };
 
-    let options = await generateOptions({
+    const options = await generateOptions({
       character,
       archetype,
       session: sessionWithReply,
       signal,
-      previousOptions: turn.options,
       logTag: "拆分·②选项",
     });
-
-    const regen = shouldRegenerateOptions(turn.options, options);
-    if (regen.yes) {
-      window.PomDebug?.logLocalWarn("选项需重生成", regen.reason);
-      options = await generateOptions({
-        character,
-        archetype,
-        session: sessionWithReply,
-        signal,
-        previousOptions: turn.options,
-        temperature: 0.62,
-        logTag: "拆分·②选项(重试)",
-      });
-    }
 
     return { reply, options };
   }
@@ -585,25 +508,6 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
       return parsed;
     }
 
-    const regen = shouldRegenerateOptions(turn.options, parsed.options);
-    if (regen.yes) {
-      window.PomDebug?.logLocalWarn("选项需重生成", regen.reason);
-      parsed.options = await generateOptions({
-        character,
-        archetype,
-        session: {
-          messages: [
-            ...session.messages,
-            { role: "assistant", content: parsed.reply, status: "done" },
-          ],
-        },
-        signal,
-        previousOptions: turn.options,
-        temperature: 0.62,
-        logTag: "合并后·选项(重试)",
-      });
-    }
-
     return parsed;
   }
 
@@ -669,7 +573,6 @@ ${priorText ? `最近对话：\n${priorText}` : ""}
           archetype,
           session: sessionWithReply,
           signal,
-          previousOptions: turn.options,
           logTag: "备用·②选项",
         });
         return { reply, options };
