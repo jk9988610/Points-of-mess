@@ -426,7 +426,7 @@
   setOptionsVisible(false);
   setBubble("");
   showConfigSetupIfNeeded();
-  window.PomDebug?.log("Points-of-mess v0.1.2 已加载（首轮程序选项 + 合并 JSON API）");
+  window.PomDebug?.log("Points-of-mess v0.1.3 已加载（首轮程序选项 + 合并 JSON API）");
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.log(
       "测试模式",

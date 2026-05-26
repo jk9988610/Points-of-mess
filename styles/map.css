@@ -72,9 +72,94 @@ body {
   font-family: ui-monospace, Consolas, monospace;
   font-size: 0.7rem;
   line-height: 1.35;
-  color: #a5f3fc;
-  white-space: pre-wrap;
+  color: var(--muted);
   word-break: break-word;
+}
+
+.dbg-entry {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dbg-entry:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.dbg-head {
+  white-space: pre-wrap;
+}
+
+.dbg-time {
+  color: #64748b;
+}
+
+.dbg-title {
+  font-weight: 700;
+}
+
+.dbg-body {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  white-space: pre-wrap;
+  font-size: inherit;
+  color: inherit;
+}
+
+.dbg-boot .dbg-title {
+  color: #94a3b8;
+}
+
+.dbg-info .dbg-title {
+  color: #cbd5e1;
+}
+
+.dbg-event .dbg-title {
+  color: #a78bfa;
+}
+
+.dbg-preset .dbg-title,
+.dbg-preset .dbg-body {
+  color: #22d3ee;
+}
+
+.dbg-player .dbg-title,
+.dbg-player .dbg-body {
+  color: #4ade80;
+}
+
+.dbg-options .dbg-title,
+.dbg-options .dbg-body {
+  color: #c084fc;
+}
+
+.dbg-request .dbg-title {
+  color: #fbbf24;
+}
+
+.dbg-request .dbg-body {
+  color: #fde68a;
+}
+
+.dbg-response .dbg-title {
+  color: #86efac;
+}
+
+.dbg-response .dbg-body {
+  color: #bbf7d0;
+}
+
+.dbg-warn .dbg-title,
+.dbg-warn .dbg-body {
+  color: #fb923c;
+}
+
+.dbg-error .dbg-title,
+.dbg-error .dbg-body {
+  color: #f87171;
 }
 
 .app-header {
