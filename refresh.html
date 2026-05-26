@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>正在刷新 Points-of-mess…</title>
+  <title>强制更新 Points-of-mess</title>
   <style>
     body {
       margin: 0;
@@ -23,21 +23,27 @@
     }
     a { color: #818cf8; }
     code { color: #fde68a; }
+    .ver { font-weight: 700; color: #86efac; }
   </style>
 </head>
 <body>
   <div>
-    <p>正在跳转到最新版（绕过旧缓存）…</p>
+    <p>正在拉取最新版 <span class="ver">v0.3.5</span>（绕过 Chrome 旧缓存）…</p>
     <p id="hint">若未自动跳转，请点：<a id="link" href="#">进入游戏</a></p>
+    <p style="font-size:0.85rem;color:#94a3b8">与 Edge 不同，Chrome 可能长期缓存旧 <code>index.html</code>，请收藏本页以便日后更新。</p>
   </div>
   <script>
     (function () {
-      var target =
-        "index.html?fresh=" + Date.now() + "&from=refresh";
+      var target = "index.html?fresh=" + Date.now() + "&from=refresh&v=0.3.5";
       var link = document.getElementById("link");
       link.href = target;
       try {
         sessionStorage.removeItem("pom_fresh_redirect");
+        Object.keys(sessionStorage).forEach(function (k) {
+          if (k.indexOf("pom_auto_refresh_") === 0) {
+            sessionStorage.removeItem(k);
+          }
+        });
       } catch (e) {}
       location.replace(target);
     })();
