@@ -74,6 +74,7 @@
 - [x] `USE_SPLIT_FIRST = true`（`js/tokens.js`）：每轮 **先纯文本 reply，再 JSON options**，不再走易坏的合并 JSON。
 - [x] `js/json-parse.js`：修复尾逗号、弯引号；失败时用正则抠 `reply` / `options`。
 - [x] v0.4.1：调试改为 `拆分·①reply` / `拆分·②选项`；选项 ≥2 条与上轮相同则重生成；reply 带剧情摘要。
+- [x] v0.4.2：**混合选项** — AI 只生成 keypoint+followup；pivot/close 从 `pivotPool`/`closePool` 程序轮换；重复检测仅看 ①②。
 - [ ] 调试里打印 `finish_reason`、返回字数（待做）。
 - [ ] 合并成功率高后再尝试降回 1 次请求（待做）。
 

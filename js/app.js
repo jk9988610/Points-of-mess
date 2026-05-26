@@ -612,7 +612,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。每轮：拆分·①reply→②选项；最近2轮原话+摘要(每4轮)。"
+      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②①②AI③④程序选项；换题/收束不检测重复。"
     );
   }
   requestAnimationFrame(gameLoop);
