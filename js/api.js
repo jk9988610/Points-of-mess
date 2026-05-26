@@ -84,5 +84,47 @@
     }
   }
 
-  window.ChatApi = { streamChat };
+  async function completeChat({
+    systemPrompt,
+    messages,
+    signal,
+    temperature,
+    max_tokens,
+  }) {
+    const cfg = getConfig();
+
+    const body = {
+      model: cfg.model,
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+      stream: false,
+      temperature: temperature ?? cfg.temperature ?? 0.6,
+      max_tokens: max_tokens ?? cfg.maxTokens ?? 80,
+    };
+
+    const response = await fetch(cfg.apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${cfg.apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+
+    if (!response.ok) {
+      let message = `请求失败 (${response.status})`;
+      try {
+        const data = await response.json();
+        message = data.error?.message || data.message || message;
+      } catch {
+        /* non-json */
+      }
+      throw new Error(message);
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content ?? "";
+  }
+
+  window.ChatApi = { streamChat, completeChat };
 })();

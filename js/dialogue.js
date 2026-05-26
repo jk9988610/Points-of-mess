@@ -5,18 +5,18 @@
     return send.replace(/^\[intent:\w+\]\s*/, "");
   }
 
-  function buildChoicesBlock(archetype) {
-    return archetype.options
+  function buildChoicesBlock(options) {
+    return options
       .map((o) => `${o.id} ${o.label} → 「${o.line}」`)
       .join("\n");
   }
 
-  function buildGameUserMessage(character, archetype, pick) {
+  function buildGameUserMessage(character, options, pick) {
     return `[game]
 character: ${character.name}
 
 [choices]
-${buildChoicesBlock(archetype)}
+${buildChoicesBlock(options)}
 
 [player_pick]
 id: ${pick.id}

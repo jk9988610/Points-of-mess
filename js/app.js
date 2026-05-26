@@ -3,6 +3,7 @@
   const { createId, createInitialState, getSession, persist } = window.GameState;
   const { buildGameUserMessage, getHistoryForApi } = window.GameDialogue;
   const { streamChat } = window.ChatApi;
+  const { generateOptions, fallbackOptions } = window.GameOptionsAi;
   const {
     draw,
     tickMove,
@@ -26,7 +27,11 @@
   const CHAR_BUBBLE_GAP = 36;
 
   const state = createInitialState();
+  state.currentOptions = null;
+  state.optionsLoading = false;
+
   let abortController = null;
+  let optionsAbortController = null;
   let lastFrame = performance.now();
   let highlightId = null;
 
@@ -48,13 +53,28 @@
     statusBannerEl.textContent = text;
     statusBannerEl.classList.add("visible");
     statusBannerEl.classList.toggle("error", Boolean(isError));
+    window.PomDebug?.log(isError ? "错误" : "提示", text);
   }
 
   function setOptionsVisible(visible) {
     optionsBar.classList.toggle("hidden", !visible);
-    optionsBar.querySelectorAll("button").forEach((btn) => {
-      btn.disabled = state.isStreaming;
-    });
+  }
+
+  function renderOptionButtons(options, loading) {
+    const disabled = loading || state.isStreaming;
+    for (const btn of optionsBar.querySelectorAll(".option-btn")) {
+      const id = Number(btn.dataset.optionId);
+      const opt = options?.find((o) => o.id === id);
+      const kindEl = btn.querySelector(".option-kind");
+      const lineEl = btn.querySelector(".option-line");
+      if (kindEl) {
+        kindEl.textContent = opt?.label || kindEl.textContent;
+      }
+      if (lineEl) {
+        lineEl.textContent = loading ? "生成中…" : opt?.line || "—";
+      }
+      btn.disabled = disabled || !opt?.line || loading;
+    }
   }
 
   function resizeCanvas() {
@@ -95,18 +115,77 @@
       highlightId,
     });
     hintEl.textContent = state.talkingId
-      ? "选择下方选项"
+      ? state.optionsLoading
+        ? "正在生成选项…"
+        : "点选下方 AI 生成的句子"
       : near
         ? `点击「${near.name}」交谈`
         : "点击空地移动 · 靠近角色后点击交谈";
   }
 
   function endTalking() {
+    optionsAbortController?.abort();
+    optionsAbortController = null;
     state.talkingId = null;
+    state.currentOptions = null;
+    state.optionsLoading = false;
     setBubble("");
     setOptionsVisible(false);
     stopButtonEl.disabled = true;
     renderMap();
+    window.PomDebug?.log("结束对话");
+  }
+
+  function ensureApiConfig() {
+    const status = window.PomConfig?.getConfigStatus?.();
+    if (status && !status.ok) {
+      setStatus(status.message, true);
+      return false;
+    }
+    return true;
+  }
+
+  async function refreshAiOptions() {
+    if (!state.talkingId) {
+      return;
+    }
+    if (!ensureApiConfig()) {
+      const archetype = getArchetype(getCharacter(state.talkingId).archetypeId);
+      state.currentOptions = fallbackOptions(archetype);
+      renderOptionButtons(state.currentOptions, false);
+      return;
+    }
+
+    const character = getCharacter(state.talkingId);
+    const archetype = getArchetype(character.archetypeId);
+    const session = getSession(state, state.talkingId);
+
+    state.optionsLoading = true;
+    renderOptionButtons(state.currentOptions, true);
+    renderMap();
+
+    optionsAbortController?.abort();
+    optionsAbortController = new AbortController();
+
+    try {
+      state.currentOptions = await generateOptions({
+        character,
+        archetype,
+        session,
+        signal: optionsAbortController.signal,
+      });
+      window.PomDebug?.log("选项已更新", state.currentOptions.map((o) => o.line));
+    } catch (e) {
+      if (e.name !== "AbortError") {
+        setStatus(e.message || "选项生成失败", true);
+        state.currentOptions = fallbackOptions(archetype);
+      }
+    } finally {
+      state.optionsLoading = false;
+      optionsAbortController = null;
+      renderOptionButtons(state.currentOptions, false);
+      renderMap();
+    }
   }
 
   function startTalking(characterId) {
@@ -123,16 +202,16 @@
     state.talkingId = characterId;
     const session = getSession(state, characterId);
     setStatus("", false);
+    window.PomDebug?.log("开始对话", character.name);
 
     if (session.messages.length === 0) {
-      const openingMsg = {
+      session.messages.push({
         id: createId(),
         role: "assistant",
         content: archetype.opening,
         createdAt: Date.now(),
         status: "done",
-      };
-      session.messages.push(openingMsg);
+      });
       persist(state);
       setBubble(archetype.opening, false);
     } else {
@@ -146,55 +225,54 @@
     stopButtonEl.disabled = true;
     renderMap();
     positionBubble();
-  }
-
-  function ensureApiConfig() {
-    const status = window.PomConfig?.getConfigStatus?.();
-    if (status && !status.ok) {
-      setStatus(status.message, true);
-      return false;
-    }
-    return true;
+    refreshAiOptions();
   }
 
   async function pickOption(optionId) {
-    if (!state.talkingId || state.isStreaming) {
+    if (!state.talkingId || state.isStreaming || state.optionsLoading) {
       return;
     }
     if (!ensureApiConfig()) {
       return;
     }
 
-    const character = getCharacter(state.talkingId);
-    const archetype = getArchetype(character.archetypeId);
-    const pick = archetype.options.find((o) => o.id === optionId);
-    if (!pick) {
+    const pick = state.currentOptions?.find((o) => o.id === optionId);
+    if (!pick?.line) {
+      setStatus("选项尚未就绪", true);
       return;
     }
 
+    const character = getCharacter(state.talkingId);
+    const archetype = getArchetype(character.archetypeId);
     const session = getSession(state, state.talkingId);
+    const optionsSnapshot = state.currentOptions.map((o) => ({ ...o }));
 
-    const userMessage = {
+    window.PomDebug?.log("玩家选择", { intent: pick.intent, line: pick.line });
+
+    session.messages.push({
       id: createId(),
       role: "user",
       content: pick.line,
       intent: pick.intent,
       createdAt: Date.now(),
       status: "done",
-    };
-
-    session.messages.push(userMessage);
+    });
     persist(state);
 
     const history = getHistoryForApi(session.messages);
-    const apiUserContent = buildGameUserMessage(character, archetype, pick);
+    const apiUserContent = buildGameUserMessage(character, optionsSnapshot, pick);
     const apiMessages = [
       ...history.slice(0, -1),
       { role: "user", content: apiUserContent },
     ];
 
+    window.PomDebug?.logRequest("角色回复", {
+      system: archetype.system.slice(0, 60) + "…",
+      messages: apiMessages,
+    });
+
     state.isStreaming = true;
-    setOptionsVisible(true);
+    renderOptionButtons(state.currentOptions, false);
     stopButtonEl.disabled = false;
     setBubble("", true);
     setStatus("", false);
@@ -203,11 +281,10 @@
     abortController = new AbortController();
 
     try {
-      const closeTokens = pick.intent === "close" ? 50 : undefined;
       await streamChat({
         systemPrompt: archetype.system,
         messages: apiMessages,
-        max_tokens: closeTokens,
+        max_tokens: pick.intent === "close" ? 50 : undefined,
         signal: abortController.signal,
         onDelta(chunk) {
           assistantContent += chunk;
@@ -215,19 +292,22 @@
         },
       });
 
-      const assistantMessage = {
+      window.PomDebug?.logResponse("角色回复", assistantContent);
+
+      session.messages.push({
         id: createId(),
         role: "assistant",
         content: assistantContent,
         createdAt: Date.now(),
         status: "done",
-      };
-      session.messages.push(assistantMessage);
+      });
       persist(state);
       setBubble(assistantContent, false);
 
       if (pick.intent === "close") {
         setTimeout(() => endTalking(), 600);
+      } else {
+        refreshAiOptions();
       }
     } catch (error) {
       if (error.name === "AbortError") {
@@ -245,8 +325,7 @@
       } else {
         session.messages.pop();
         persist(state);
-        const msg = error.message || "生成失败，请稍后重试。";
-        setStatus(msg, true);
+        setStatus(error.message || "生成失败", true);
         const prev = [...session.messages]
           .reverse()
           .find((m) => m.role === "assistant" && m.status === "done");
@@ -256,7 +335,7 @@
       state.isStreaming = false;
       abortController = null;
       stopButtonEl.disabled = true;
-      setOptionsVisible(state.talkingId !== null);
+      renderOptionButtons(state.currentOptions, state.optionsLoading);
       renderMap();
       positionBubble();
     }
@@ -300,10 +379,12 @@
     lastFrame = now;
 
     if (state.moveTarget && !state.talkingId) {
-      const next = tickMove(state.player, state.moveTarget, dt);
-      state.player = next;
+      state.player = tickMove(state.player, state.moveTarget, dt);
       if (
-        Math.hypot(next.x - state.moveTarget.x, next.y - state.moveTarget.y) < 0.004
+        Math.hypot(
+          state.player.x - state.moveTarget.x,
+          state.player.y - state.moveTarget.y
+        ) < 0.004
       ) {
         state.moveTarget = null;
         persist(state);
@@ -314,10 +395,7 @@
     requestAnimationFrame(gameLoop);
   }
 
-  canvas.addEventListener("click", (e) => {
-    handleMapClick(e.clientX, e.clientY);
-  });
-
+  canvas.addEventListener("click", (e) => handleMapClick(e.clientX, e.clientY));
   canvas.addEventListener(
     "touchstart",
     (e) => {
@@ -333,14 +411,21 @@
 
   optionsBar.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-option-id]");
-    if (!btn) {
-      return;
+    if (btn) {
+      pickOption(Number(btn.dataset.optionId));
     }
-    pickOption(Number(btn.dataset.optionId));
   });
 
   stopButtonEl.addEventListener("click", () => {
     abortController?.abort();
+    window.PomDebug?.log("停止生成");
+  });
+
+  document.getElementById("copyDebugBtn")?.addEventListener("click", () => {
+    window.PomDebug?.copyAll();
+  });
+  document.getElementById("clearDebugBtn")?.addEventListener("click", () => {
+    window.PomDebug?.clear();
   });
 
   window.addEventListener("resize", resizeCanvas);
@@ -349,11 +434,9 @@
   function showConfigSetupIfNeeded() {
     const status = window.PomConfig?.getConfigStatus?.();
     if (status && !status.ok) {
-      if (configSetupEl) {
-        configSetupEl.hidden = false;
-      }
+      configSetupEl.hidden = false;
       setStatus(status.message, true);
-    } else if (configSetupEl) {
+    } else {
       configSetupEl.hidden = true;
     }
   }
@@ -362,5 +445,6 @@
   setOptionsVisible(false);
   setBubble("");
   showConfigSetupIfNeeded();
+  window.PomDebug?.log("Points-of-mess v0 已加载");
   requestAnimationFrame(gameLoop);
 })();
