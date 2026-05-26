@@ -1,5 +1,20 @@
 # GitHub Pages 配置说明
 
+## 为什么 `gh-pages` 已是新版，网址仍是 0.2.5？
+
+GitHub Pages 会再跑一层 **pages build**。只有 build **built** 的提交才会出现在 `https://jk9988610.github.io/...`。
+
+| 地址 | 常见结果 |
+|------|----------|
+| `raw.githubusercontent.com/.../gh-pages/js/version.js` | 分支上的**最新文件**（应对 0.2.6+） |
+| `jk9988610.github.io/.../js/version.js` | 上一次 **build 成功** 的缓存（可能仍是 0.2.5） |
+
+若最近多次 build 为 **errored**，线上会一直卡在旧版（例如 `deploy: f11f988` 那次）。
+
+**处理**：保证 `gh-pages` 含根目录 `.nojekyll`（已加入），再同步分支并等 build 变绿；或到仓库 **Deployments / Pages** 看失败原因。
+
+---
+
 ## 发布原理（必读）
 
 本仓库线上地址：**https://jk9988610.github.io/Points-of-mess/**
