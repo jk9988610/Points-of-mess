@@ -2,6 +2,8 @@
 
 个人专用的静态 Web 应用：在混乱宇宙地图上点击移动，靠近预设角色后通过选项对话。无需 Node，浏览器即可运行。
 
+**日常说明（含安卓平板、GitHub 与本地区别、Pages 经验）：[docs/常用说明.md](docs/常用说明.md)**  
+
 **产品定义见 [docs/PRODUCT.md](docs/PRODUCT.md)；v0 实现定稿见 [docs/DESIGN-v0.md](docs/DESIGN-v0.md)。**
 
 ## 如何访问
@@ -25,7 +27,7 @@ cp js/config.example.js js/config.js
 
 若打开页面顶部出现黄色配置说明，按其中三步操作即可。
 
-**平板**：把整个项目文件夹拷到平板，按上面步骤建好 `js/config.js` 后，用文件管理器或 Safari/Chrome 打开 `index.html` 即可（与电脑相同）。
+**安卓平板**：见 [docs/常用说明.md](docs/常用说明.md) 第 3 节。简要：拷项目 → 建 `js/config.js` → Chrome 打开 `index.html`；或只开 Pages 看界面（线上默认无密钥）。
 
 ### 2. 在线（GitHub Pages）
 
