@@ -239,6 +239,13 @@ body {
   background: rgba(15, 23, 42, 0.92);
 }
 
+.app-version {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
 .app-title {
   margin: 0;
   font-size: 1.1rem;

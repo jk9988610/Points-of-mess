@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Points-of-mess</title>
-  <link rel="stylesheet" href="styles/map.css?v=0.1.5">
+  <link rel="stylesheet" href="styles/map.css?v=0.1.8">
 </head>
 <body>
   <div class="app-shell">
     <header class="app-header">
-      <h1 class="app-title">Points-of-mess</h1>
+      <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion">v0.1.8</span></h1>
       <button class="stop-button" type="button" id="stopGeneration" disabled>停止</button>
     </header>
 
@@ -22,6 +22,7 @@
           <span class="legend-ai-in">■ AI回</span>
           <span class="legend-local">■ 本地</span>
         </span>
+        <button type="button" class="debug-btn" id="memoryTestBtn" title="不发 probe，测宿主是否记得首包暗号">测记忆</button>
         <button type="button" class="debug-btn" id="copyDebugBtn">复制</button>
         <button type="button" class="debug-btn" id="clearDebugBtn">清空</button>
       </div>
@@ -63,15 +64,17 @@
     </nav>
   </div>
 
-  <script src="js/config.js?v=0.1.5" onerror="window.__POM_CONFIG_MISSING__=true"></script>
-  <script src="js/config-check.js?v=0.1.5"></script>
-  <script src="js/debug.js?v=0.1.5"></script>
-  <script src="js/presets.js?v=0.1.5"></script>
-  <script src="js/dialogue.js?v=0.1.5"></script>
-  <script src="js/state.js?v=0.1.5"></script>
-  <script src="js/map.js?v=0.1.5"></script>
-  <script src="js/api.js?v=0.1.5"></script>
-  <script src="js/options-ai.js?v=0.1.5"></script>
-  <script src="js/app.js?v=0.1.5"></script>
+  <script src="js/version.js?v=0.1.8"></script>
+  <script src="js/config.js?v=0.1.8" onerror="window.__POM_CONFIG_MISSING__=true"></script>
+  <script src="js/config-check.js?v=0.1.8"></script>
+  <script src="js/debug.js?v=0.1.8"></script>
+  <script src="js/memory-probe.js?v=0.1.8"></script>
+  <script src="js/presets.js?v=0.1.8"></script>
+  <script src="js/dialogue.js?v=0.1.8"></script>
+  <script src="js/state.js?v=0.1.8"></script>
+  <script src="js/map.js?v=0.1.8"></script>
+  <script src="js/api.js?v=0.1.8"></script>
+  <script src="js/options-ai.js?v=0.1.8"></script>
+  <script src="js/app.js?v=0.1.8"></script>
 </body>
 </html>

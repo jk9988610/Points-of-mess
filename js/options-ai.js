@@ -13,7 +13,8 @@
 
   function buildCombinedSystem(archetype) {
     return `你是文字冒险游戏的对话引擎：同时生成角色台词（reply）与下一轮玩家选项（options）。
-本请求的 user 仅含本轮 [choices] 与 [player_pick]；此前对白由平台自动注入，勿要求重复发送。
+本请求的 user 仅含本轮 [choices] 与 [player_pick]（首包可含 [memory_probe]）；此前对白由平台自动注入，勿要求重复发送。
+若 player_pick.line 含「回忆测试」，须从会话上文找回 [memory_probe] 的 codeword 并原样写在 reply 开头。
 
 【角色风格】（写入 reply 时遵守）
 ${archetype.system}

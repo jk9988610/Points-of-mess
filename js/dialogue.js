@@ -18,14 +18,32 @@
   /** 仅本轮：不含历史对白（由调用端/平台自动附带会话上下文） */
   function buildGameUserMessage(character, options, pick, formatOpts) {
     const jsonMode = formatOpts?.jsonMode;
-    const outputRule = jsonMode
+    const memoryTest = Boolean(formatOpts?.memoryTest);
+    const memoryProbe = formatOpts?.memoryProbe;
+    let outputRule = jsonMode
       ? '只输出一个 JSON 对象：含 reply；非收束轮含 options（四条 intent 分别为 keypoint、followup、pivot、close）。禁止 markdown、禁止代码块。options 的 line 为玩家口语一句，不要外加「」引号；followup 须引用本条 reply 中的具体词。'
       : "只输出角色台词。短。禁止寒暄。收束轮禁止新问题。";
+    if (memoryTest) {
+      outputRule +=
+        " 本条为回忆测试：reply 必须以本会话首次出现的 [memory_probe] codeword 原样开头，随后 1 句角色台词；若不知 codeword 则 reply 仅写「未收到暗号」。";
+    }
 
-    return [
+    const parts = [
       "[game]",
       `character: ${character.name}`,
       "",
+    ];
+
+    if (memoryProbe) {
+      parts.push(
+        "[memory_probe]",
+        `codeword: ${memoryProbe}`,
+        "note: 仅此包发送一次；用于检测宿主是否自动带上文。",
+        ""
+      );
+    }
+
+    parts.push(
       "[choices]",
       buildChoicesBlock(options),
       "",
@@ -34,8 +52,10 @@
       `line: ${pick.line}`,
       "",
       "[output]",
-      outputRule,
-    ].join("\n");
+      outputRule
+    );
+
+    return parts.join("\n");
   }
 
   /** 选项兜底 API 用；主流程合并请求不发送历史 */
