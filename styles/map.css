@@ -261,6 +261,10 @@ body {
   color: #fecaca;
   font-weight: 700;
   cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .stop-button:disabled {
