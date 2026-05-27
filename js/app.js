@@ -661,11 +661,18 @@
     abortController = new AbortController();
 
     const signal = abortController.signal;
-    const runSummaryParallel =
+    const willSummary =
       !isClose && window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
 
+    if (willSummary) {
+      window.PomDebug?.logLocal(
+        "API 路径",
+        "串行 · ①reply → ②选项 → ③压缩剧情摘要（assistant 写入 session 后）"
+      );
+    }
+
     try {
-      const { reply, options, summaryOk } = await requestCombinedTurn({
+      const { reply, options } = await requestCombinedTurn({
         character,
         archetype,
         session,
@@ -673,13 +680,6 @@
         turn: { character, options: optionsSnapshot, pick, isClose },
         isClose,
         signal,
-        parallelSummaryRunner: runSummaryParallel
-          ? (assistantReply) =>
-              window.GameSummary.maybeRefreshPlotSummary(session, signal, {
-                afterReply: true,
-                assistantReply,
-              })
-          : null,
       });
 
       session.messages.push({
@@ -703,8 +703,20 @@
         window.PomDebug?.logLocal("选项已更新（界面展示）", options.map((o) => o.line));
       }
 
-      if (summaryOk) {
-        persist(state);
+      if (willSummary) {
+        try {
+          const summaryOk = await window.GameSummary.maybeRefreshPlotSummary(
+            session,
+            signal
+          );
+          if (summaryOk) {
+            persist(state);
+          }
+        } catch (e) {
+          if (e.name !== "AbortError") {
+            window.PomDebug?.logLocalWarn("剧情摘要失败", e.message);
+          }
+        }
       }
     } catch (error) {
       if (error.name === "AbortError") {
@@ -930,7 +942,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。每轮①→②；第4/8…轮：①后②∥摘要(含本轮对白)。"
+      "灰=本地 · 黄=发AI · 绿=AI回。串行：①→②→③摘要(第4/8…轮)。"
     );
   }
   requestAnimationFrame(gameLoop);

@@ -47,7 +47,7 @@
     }
   }
 
-  function summarySkipReason(session, opts = {}) {
+  function summarySkipReason(session) {
     const optionTurns = countOptionTurns(session.messages);
     if (optionTurns < SUMMARY_EVERY_OPTION_TURNS) {
       return `未满 ${SUMMARY_EVERY_OPTION_TURNS} 轮选项（当前 ${optionTurns}）`;
@@ -58,63 +58,61 @@
     if (session.lastSummaryAtOptionTurn === optionTurns) {
       return `第 ${optionTurns} 轮已压过摘要`;
     }
-    const { toSummarize } = buildSummaryPayload(session, opts);
+    const last = session.messages[session.messages.length - 1];
+    if (!last || last.role !== "assistant" || last.status === "error") {
+      return "锋利回复尚未写入 session（须在 ①② 之后压摘要）";
+    }
+    const { toSummarize } = buildSummaryPayload(session);
     if (toSummarize.length === 0) {
       return "无可压缩对白";
     }
     return "";
   }
 
-  /** 本局是否会在「① 完成后」触发摘要（仅看轮次，不依赖锋利是否已写入 session） */
+  /** 本局本轮是否会压摘要（仅看选项轮次；执行在 ①② 与 assistant 写入之后） */
   function willRefreshPlotSummaryThisPick(session) {
-    return !summarySkipReason(session, { afterReply: true });
-  }
-
-  function shouldRefreshPlotSummary(session, opts = {}) {
-    return !summarySkipReason(session, opts);
-  }
-
-  function buildSummaryPayload(session, opts = {}) {
     const optionTurns = countOptionTurns(session.messages);
-    let messages = session.messages;
-    if (opts.afterReply && opts.assistantReply) {
-      messages = [
-        ...messages,
-        {
-          role: "assistant",
-          content: String(opts.assistantReply).trim(),
-          status: "done",
-        },
-      ];
+    if (optionTurns < SUMMARY_EVERY_OPTION_TURNS) {
+      return false;
     }
-    const done = window.GameDialogue.getDoneMessages(messages);
+    if (optionTurns % SUMMARY_EVERY_OPTION_TURNS !== 0) {
+      return false;
+    }
+    return session.lastSummaryAtOptionTurn !== optionTurns;
+  }
+
+  function shouldRefreshPlotSummary(session) {
+    return !summarySkipReason(session);
+  }
+
+  function buildSummaryPayload(session) {
+    const optionTurns = countOptionTurns(session.messages);
+    const done = window.GameDialogue.getDoneMessages(session.messages);
     const keepRecent = window.GameDialogue.HISTORY_TURNS * 2;
     let toSummarize = done.slice(0, Math.max(0, done.length - keepRecent));
     let mergedProtected = 0;
 
-    if (opts.afterReply) {
-      const protectedTail = done.slice(Math.max(0, done.length - keepRecent));
-      if (
-        protectedTail.length > 0 &&
-        protectedTail[protectedTail.length - 1]?.role === "assistant"
-      ) {
-        toSummarize = [...toSummarize, ...protectedTail];
-        mergedProtected = protectedTail.length;
-      }
+    const protectedTail = done.slice(Math.max(0, done.length - keepRecent));
+    if (
+      protectedTail.length > 0 &&
+      protectedTail[protectedTail.length - 1]?.role === "assistant"
+    ) {
+      toSummarize = [...toSummarize, ...protectedTail];
+      mergedProtected = protectedTail.length;
     }
 
     return { optionTurns, toSummarize, mergedProtected, keepRecent };
   }
 
-  async function maybeRefreshPlotSummary(session, signal, opts = {}) {
-    const skip = summarySkipReason(session, opts);
+  async function maybeRefreshPlotSummary(session, signal) {
+    const skip = summarySkipReason(session);
     if (skip) {
       window.PomDebug?.logLocal("摘要未执行", skip, ["ui", "summary-skip"]);
       return false;
     }
 
     const { optionTurns, toSummarize, mergedProtected, keepRecent } =
-      buildSummaryPayload(session, opts);
+      buildSummaryPayload(session);
 
     const block = toSummarize
       .map((m) => `${m.role === "assistant" ? "锋利" : "玩家"}: ${m.content}`)
@@ -124,9 +122,7 @@
       : `【新增对话】\n${block}`;
     const userContent = SUMMARY_USER_PREFIX + body;
 
-    const modeLabel = opts.afterReply
-      ? "并行 · ① 完成后与 ②选项 同时"
-      : "串行 · ①② 完成后";
+    const modeLabel = "串行 · ①② 完成且 assistant 已写入 session 后";
     const scopeNote =
       mergedProtected > 0
         ? ` · 含短上下文保护区 ${mergedProtected} 条（本轮完整对白已齐）`

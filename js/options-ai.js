@@ -533,18 +533,14 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     apiMessages,
     turn,
     signal,
-    parallelSummaryRunner,
   }) {
     const systemPrompt = buildCombinedSystem(archetype, {
       ...turn,
       plotSummary: session.plotSummary,
     });
-    const runSummary = typeof parallelSummaryRunner === "function";
     window.PomDebug?.logLocal(
       "API 路径",
-      runSummary
-        ? "拆分 · ①reply → ②选项 ∥ 压缩剧情摘要"
-        : "拆分 · ①reply → ②选项 + ③挂起(固定)"
+      "串行 · ①reply → ②选项（摘要在 app 中 ①② 完成后执行）"
     );
 
     const reply = await requestReplyOnly({
@@ -562,7 +558,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       ],
     };
 
-    const optionsPromise = generateOptions({
+    const options = await generateOptions({
       character,
       archetype,
       session: sessionWithReply,
@@ -571,19 +567,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       logTag: "拆分·②选项",
     });
 
-    if (!runSummary) {
-      const options = await optionsPromise;
-      return { reply, options, summaryOk: false };
-    }
-
-    const summaryPromise = parallelSummaryRunner(reply).catch((e) => {
-      if (e.name !== "AbortError") {
-        window.PomDebug?.logLocalWarn("剧情摘要失败（与②并行）", e.message);
-      }
-      return false;
-    });
-    const [options, summaryOk] = await Promise.all([optionsPromise, summaryPromise]);
-    return { reply, options, summaryOk };
+    return { reply, options };
   }
 
   async function requestCombinedTurn({
@@ -594,7 +578,6 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     turn,
     isClose,
     signal,
-    parallelSummaryRunner,
   }) {
     const systemPrompt = buildCombinedSystem(archetype, {
       ...turn,
@@ -619,7 +602,6 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
         apiMessages,
         turn,
         signal,
-        parallelSummaryRunner,
       });
     }
 
@@ -656,7 +638,6 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     turn,
     isClose,
     signal,
-    parallelSummaryRunner,
   }) {
     try {
       return await requestCombinedTurn({
@@ -667,7 +648,6 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
         turn,
         isClose,
         signal,
-        parallelSummaryRunner,
       });
     } catch (e) {
       window.PomDebug?.logLocalWarn("主路径失败，走备用拆分", e.message);
@@ -708,7 +688,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       };
 
       try {
-        const optionsPromise = generateOptions({
+        const options = await generateOptions({
           character,
           archetype,
           session: sessionWithReply,
@@ -716,21 +696,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
           plotSummary: session.plotSummary,
           logTag: "备用·②选项",
         });
-        if (typeof parallelSummaryRunner === "function") {
-          const summaryPromise = parallelSummaryRunner(reply).catch((err) => {
-            if (err.name !== "AbortError") {
-              window.PomDebug?.logLocalWarn("剧情摘要失败（备用·与②并行）", err.message);
-            }
-            return false;
-          });
-          const [options, summaryOk] = await Promise.all([
-            optionsPromise,
-            summaryPromise,
-          ]);
-          return { reply, options, summaryOk };
-        }
-        const options = await optionsPromise;
-        return { reply, options, summaryOk: false };
+        return { reply, options };
       } catch (e2) {
         window.PomDebug?.logLocalWarn("备用选项 API 失败，仍用程序预设", e2.message);
         return { reply, options: presetOptions(archetype) };
