@@ -54,10 +54,10 @@
     const name = String(characterName || "锋利").trim() || "锋利";
     return `你是选项撰稿人。玩家与「${name}」对峙。选项=玩家说的话（问句/祈使），禁止陈述断言。
 
-- keypoint（深挖）：针对「${name}」上一句中具体名词/事实追问；勿复述对方条件句。
-- followup（推进）：换核心质问或催促，不纠缠细枝。
+- keypoint（深挖）：对准【程序·洋葱】#1，可写「若我说…你就…」交换信息。
+- followup（推进）：对准 #2 或另一待核实；宜让步/交易，勿只逼对方先答。
 
-禁止两条同类型或 line 相同；尽量避免与上一轮雷同。
+禁止两条同义或 line 相同；禁止连续两轮都只问「你先告诉我X」。
 
 只输出 JSON（无 markdown）：
 {"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."}]}
@@ -509,12 +509,13 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       : "你是角色「锋利」，短句、直接。";
   }
 
-  function plotSummaryBlock(plotSummary) {
-    const text = String(plotSummary || "").trim();
-    if (!text) {
+  function plotSummaryBlock(plotSummary, replyContext) {
+    const full = String(plotSummary || "").trim();
+    if (!full) {
       return "";
     }
-    const onionHint = window.GameOnion?.formatReplyHint?.(text) || "";
+    const text = window.GameOnion?.compactPlotSummaryForApi?.(full) || full;
+    const onionHint = window.GameOnion?.formatReplyHint?.(full, replyContext) || "";
     return `\n【剧情摘要】（长程记忆；事实以此为准。reply 接最近一轮对白，勿重复摘要已写明的内容。）\n${text}${onionHint}\n`;
   }
 
@@ -524,8 +525,9 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     signal,
     plotSummary,
     debugLabel,
+    replyContext,
   }) {
-    const replySystem = `${roleStyleFromSystem(systemPrompt)}${plotSummaryBlock(plotSummary)}
+    const replySystem = `${roleStyleFromSystem(systemPrompt)}${plotSummaryBlock(plotSummary, replyContext)}
 只输出角色的一句台词：1～2 句中文，≤40 字。不要 JSON、不要 markdown、不要解释。`;
 
     const raw = await window.ChatApi.completeChat({
@@ -565,8 +567,10 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     return raw;
   }
 
-  function buildOptionsUserContent({ character, last, priorText, plotSummary }) {
-    const summaryBlock = plotSummaryForOptions(plotSummary);
+  function buildOptionsUserContent({ character, last, priorText, plotSummary, onionContext }) {
+    const summaryBlock =
+      window.GameOnion?.formatOptionsBlock?.(plotSummary, onionContext) ||
+      plotSummaryForOptions(plotSummary);
     const parts = [
       `角色名：${character.name}`,
       `角色上一句台词：${last}`,
@@ -589,6 +593,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     temperature = window.PomTokens?.TEMP_OPTIONS ?? 0.4,
     logTag = "拆分·②选项",
     plotSummary = "",
+    onionContext = null,
   }) {
     const { lastLine, priorText } = window.GameDialogue.formatRecentDialogueForOptions(
       session.messages,
@@ -606,6 +611,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       last,
       priorText,
       plotSummary,
+      onionContext,
     });
 
     let raw = await requestOptionsJson({
@@ -675,13 +681,37 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       ...turn,
       plotSummary: session.plotSummary,
     });
-    const reply = await requestReplyOnly({
-      systemPrompt,
-      apiMessages,
-      signal,
-      plotSummary: session.plotSummary,
-      debugLabel: "拆分·①reply",
-    });
+    const replyContext = window.GameOnion?.replyContextFromSession?.(
+      session,
+      turn?.pick?.intent
+    );
+    const onionContext = {
+      stallTurns: session?.stallTurns ?? 0,
+    };
+    const retry = window.PomApiRetry?.withApiRetries;
+
+    const reply = retry
+      ? await retry(
+          "拆分·①reply",
+          () =>
+            requestReplyOnly({
+              systemPrompt,
+              apiMessages,
+              signal,
+              plotSummary: session.plotSummary,
+              debugLabel: "拆分·①reply",
+              replyContext,
+            }),
+          { signal }
+        )
+      : await requestReplyOnly({
+          systemPrompt,
+          apiMessages,
+          signal,
+          plotSummary: session.plotSummary,
+          debugLabel: "拆分·①reply",
+          replyContext,
+        });
 
     const sessionWithReply = {
       messages: [
@@ -690,14 +720,30 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       ],
     };
 
-    const options = await generateOptions({
-      character,
-      archetype,
-      session: sessionWithReply,
-      signal,
-      plotSummary: session.plotSummary,
-      logTag: "拆分·②选项",
-    });
+    const options = retry
+      ? await retry(
+          "拆分·②选项",
+          () =>
+            generateOptions({
+              character,
+              archetype,
+              session: sessionWithReply,
+              signal,
+              plotSummary: session.plotSummary,
+              logTag: "拆分·②选项",
+              onionContext,
+            }),
+          { signal }
+        )
+      : await generateOptions({
+          character,
+          archetype,
+          session: sessionWithReply,
+          signal,
+          plotSummary: session.plotSummary,
+          logTag: "拆分·②选项",
+          onionContext,
+        });
 
     return { reply, options };
   }
@@ -771,7 +817,24 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     isClose,
     signal,
   }) {
+    const retry = window.PomApiRetry?.withApiRetries;
     try {
+      if (retry) {
+        return await retry(
+          "主路径·拆分",
+          () =>
+            requestCombinedTurn({
+              character,
+              archetype,
+              session,
+              apiMessages,
+              turn,
+              isClose,
+              signal,
+            }),
+          { signal, retries: 2 }
+        );
+      }
       return await requestCombinedTurn({
         character,
         archetype,
@@ -782,9 +845,21 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
         signal,
       });
     } catch (e) {
-      window.PomDebug?.logLocalWarn("主路径失败，走备用拆分", e.message);
+      if (window.PomApiRetry?.isRetryableApiError?.(e)) {
+        window.PomDebug?.logLocalWarn(
+          "主路径重试后仍失败",
+          `${e.message} · 走备用拆分`,
+          ["ui-warn", "api"]
+        );
+      } else {
+        window.PomDebug?.logLocalWarn("主路径失败，走备用拆分", e.message);
+      }
       let reply = "";
       try {
+        const replyContext = window.GameOnion?.replyContextFromSession?.(
+          session,
+          turn?.pick?.intent
+        );
         reply = await requestReplyOnly({
           systemPrompt: buildCombinedSystem(archetype, {
             ...turn,
@@ -794,6 +869,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
           signal,
           plotSummary: session.plotSummary,
           debugLabel: "备用·①reply",
+          replyContext,
         });
       } catch {
         /* use empty */
@@ -827,6 +903,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
           signal,
           plotSummary: session.plotSummary,
           logTag: "备用·②选项",
+          onionContext: { stallTurns: session?.stallTurns ?? 0 },
         });
         return { reply, options };
       } catch (e2) {

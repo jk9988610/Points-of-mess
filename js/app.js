@@ -383,6 +383,8 @@
       session.lastSummaryAtOptionTurn = 0;
       session.endingOffered = false;
       session.inEndingCloseChoices = false;
+      session.stallTurns = 0;
+      session.lastConfirmedCount = 0;
       persist(state);
     }
     state.talkingId = null;
@@ -525,6 +527,8 @@
       session.lastSummaryAtOptionTurn = 0;
       session.endingOffered = false;
       session.inEndingCloseChoices = false;
+      session.stallTurns = 0;
+      session.lastConfirmedCount = 0;
       persist(state);
     }
     state.currentOptions = null;
@@ -817,6 +821,15 @@
             window.PomDebug?.logLocalWarn("剧情摘要失败", e.message, ["summary"]);
           }
         }
+      }
+
+      const stall = window.GameOnion?.updateStallCounters?.(session, session.plotSummary);
+      if (stall && stall.stallTurns >= 2) {
+        window.PomDebug?.logLocalWarn(
+          "洋葱·僵局",
+          `连续 ${stall.stallTurns} 轮 [已确认] 无增加 · 下轮 reply/选项已加强让步与破局提示`,
+          ["summary"]
+        );
       }
     } catch (error) {
       if (error.name === "AbortError") {

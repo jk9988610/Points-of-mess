@@ -47,6 +47,8 @@
           lastSummaryAtOptionTurn: 0,
           endingOffered: false,
           inEndingCloseChoices: false,
+          stallTurns: 0,
+          lastConfirmedCount: 0,
         };
       }
       return state.sessions[characterId];

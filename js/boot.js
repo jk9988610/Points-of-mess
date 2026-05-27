@@ -20,6 +20,7 @@
     "json-parse.js",
     "desktop.js",
     "api.js",
+    "api-retry.js",
     "tokens.js",
     "options-ai.js",
     "app.js",
