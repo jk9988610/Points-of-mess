@@ -10,7 +10,7 @@
 
     const lines = [];
     if (goal) {
-      lines.push("【本局目标】", `- ${goal}`, "");
+      lines.push("【本局目标】（唯一，仅此一条）", `- ${goal}`, "");
     }
     lines.push("【剧情档案】");
     for (const c of confirmed) {
@@ -135,11 +135,12 @@
     const stallTurns = context?.stallTurns ?? 0;
     const parts = [
       "【程序·洋葱中层】",
-      "keypoint 对准 #1；followup 对准 #2 或另一待核实。",
-      "宜写「若我说…你就…」类交易句，避免双方只互要求对方先答。",
+      "仅一个本局核心目标；#1/#2 是并行中层线索，都指向同一幕后，不是两个终局。",
+      "keypoint 对准 #1；followup 对准 #2。宜写「若我说…你就…」交易句。",
+      "禁止「你必须先答另一条线」式拒绝。",
     ];
     if (goal) {
-      parts.push(`本局目标：${goal}`);
+      parts.push(`本局核心目标：${goal}`);
     }
     pending.slice(0, 4).forEach((p, i) => {
       parts.push(`#${i + 1} ${p}`);
@@ -186,7 +187,8 @@
     }
 
     if (goal) {
-      lines.push(`本局目标：${goal}`);
+      lines.push(`本局唯一核心：${goal}`);
+      lines.push("所有待核实均服务此核心；剥任一中层即可，勿强迫玩家先答另一条线");
     }
     lines.push("一次只剥一层；每轮须推进至少一条待核实（回答、收窄或部分确认）");
 
@@ -220,7 +222,30 @@
     return `核心 [已确认]×${confirmed} · 中层 [待核实]×${pending}${goal ? " · 已设本局目标" : ""}`;
   }
 
-  /** 中层剥完且核心条数足够 → 可进入结局（程序判定，不调 API） */
+  function extractConfirmedLines(text) {
+    const body = String(text || "");
+    const archiveMatch = body.match(/【剧情档案】([\s\S]*?)(?=【关系与态度】|$)/);
+    const archiveBody = archiveMatch ? archiveMatch[1] : body;
+    const lines = [];
+    for (const line of archiveBody.split("\n")) {
+      const t = line.trim();
+      if (/\[已确认\]/.test(t)) {
+        lines.push(t.replace(/^[-*•]\s*/, ""));
+      }
+    }
+    return lines;
+  }
+
+  function hasCoreGoalAchieved(plotSummary, seed) {
+    const keywords = seed?.endingCoreKeywords;
+    if (!Array.isArray(keywords) || keywords.length === 0) {
+      return true;
+    }
+    const confirmed = extractConfirmedLines(plotSummary).join("\n");
+    return keywords.some((k) => confirmed.includes(String(k).trim()));
+  }
+
+  /** 中层剥完、核心条数足够且档案已写出「幕后/指使」等 → 可进入结局 */
   function isReadyForEnding(plotSummary, seed) {
     const goal = extractGoal(plotSummary);
     if (!goal) {
@@ -232,7 +257,10 @@
     }
     const minConfirmed = Number(seed?.endingMinConfirmed) > 0 ? seed.endingMinConfirmed : 2;
     const { confirmed } = countLayers(plotSummary);
-    return confirmed >= minConfirmed;
+    if (confirmed < minConfirmed) {
+      return false;
+    }
+    return hasCoreGoalAchieved(plotSummary, seed);
   }
 
   window.GameOnion = {
@@ -245,6 +273,8 @@
     formatReplyHint,
     formatLayersDebug,
     isReadyForEnding,
+    hasCoreGoalAchieved,
+    extractConfirmedLines,
     updateStallCounters,
     replyContextFromSession,
   };

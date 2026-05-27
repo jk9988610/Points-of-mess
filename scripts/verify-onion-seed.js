@@ -8,7 +8,7 @@ function buildSeedPlotSummary(seed) {
   const attitude = (seed?.attitude || []).map((s) => String(s).trim()).filter(Boolean);
   const lines = [];
   if (goal) {
-    lines.push("【本局目标】", `- ${goal}`, "");
+    lines.push("【本局目标】（唯一，仅此一条）", `- ${goal}`, "");
   }
   lines.push("【剧情档案】");
   for (const c of confirmed) {
@@ -50,17 +50,17 @@ function extractPendingLines(text) {
 }
 
 const seed = {
-  goal: "弄清账本",
-  confirmed: ["开场质问"],
-  pending: ["阻拦者是谁", "账本在哪"],
+  goal: "查明：谁在背后操控这一切",
+  confirmed: ["锋利曾被阻拦"],
+  pending: ["阻拦者指使者", "账本下落"],
   attitude: ["戒备"],
 };
 const plot = buildSeedPlotSummary(seed);
-if (!plot.includes("【本局目标】") || !plot.includes("[待核实#1]")) {
+if (!plot.includes("【本局目标】（唯一") || !plot.includes("[待核实#1]")) {
   console.error("seed format missing sections");
   process.exit(1);
 }
-if (!extractGoal(plot).includes("账本")) {
+if (!extractGoal(plot).includes("操控")) {
   console.error("extractGoal failed");
   process.exit(1);
 }
