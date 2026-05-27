@@ -136,7 +136,7 @@
     const parts = [
       "【程序·洋葱中层】",
       "仅一个本局核心目标；#1/#2 是并行中层线索，都指向同一幕后，不是两个终局。",
-      "keypoint 对准 #1；followup 对准 #2。宜写「若我说…你就…」交易句。",
+      "keypoint 对准 #1；followup 对准 #2。交易句须先亮牌（见下方规则）。",
       "禁止「你必须先答另一条线」式拒绝。",
     ];
     if (goal) {
@@ -147,6 +147,15 @@
     });
     if (stallTurns >= 2) {
       parts.push("（僵局：选项须含让步/交换，迫使双方各让一步）");
+    }
+    if (context?.emptyPromiseCount >= 2) {
+      parts.push(
+        "（信用破产：禁止「若我说…你就…」空泛交易；选项须直接陈述具体事实，如「账本在刘老三手里，换你说陈四背后是谁」）"
+      );
+    } else {
+      parts.push(
+        "交易选项须**先亮牌**：line 中须含玩家已给出的具体信息（人名/地点/物证），禁止仅写「账本下落换你一句实话」等空头承诺"
+      );
     }
     parts.push(
       "禁止生成「用【已确认】里已有的事实」换新线索的选项（如再拿老周/经手人报价）"
@@ -165,6 +174,23 @@
     const stallTurns = context?.stallTurns ?? 0;
     const lines = [];
 
+    if (context?.emptyPromiseBankrupt) {
+      lines.push(
+        "【信用破产】玩家多次空头承诺；不再接受任何「若我说…你就…」交易",
+        "只回复类似：「你每次都只说不做。没信用的人，我不谈交易。」勿再给出新的人名/幕后线索"
+      );
+    } else if (context?.hollowTradeOffer) {
+      lines.push(
+        "【空头交易】玩家提议交换但未亮牌（无具体人名/地点/物证）；本轮不得先给新线索",
+        "须要求玩家先兑现其承诺的具体内容，例：「你先把账本说清楚，我再开口。」",
+        "禁止用未来承诺换当轮情报；禁止先给陈四/老九等再讨玩家承诺"
+      );
+    } else if (context?.tradeOfferNeedsPlayerFirst) {
+      lines.push(
+        "【交易规则】玩家提议「若我说X你就Y」或「X换Y」：须要求玩家**先说出具体X**（人名/地点/物证），再回应Y",
+        "禁止先给信息换取玩家「未来的承诺」；未亮牌前不得输出新的人名/幕后/账本线索"
+      );
+    }
     if (context?.redundantOffer) {
       lines.push(
         "【信息价值】玩家拿【已确认】里已有的事实来交易；须拒绝并指出「这我已经知道了，拿我不知道的来换」",
@@ -234,7 +260,13 @@
   const MASTERMIND_RE =
     /(?:是|叫|名叫|背后是|乃是).{0,12}(?:派|指使|让我拦|派人)|\S{1,8}派我(?:来)?拦|指使者是|谁指使/;
   const OFFER_KNOWN_RE =
-    /我告诉|我说(?:出|了)?|拿.{0,8}换|用.{0,12}换|给你.{0,6}换/;
+    /我告诉|我说(?:出|了)?|拿.{0,8}换|用.{0,12}换|给你.{0,6}换|换你|换一句|换一条/;
+  const TRADE_OFFER_RE =
+    /若我(?:说|告诉)|我拿|用.{0,24}换|换你|换一句|换一条|账本下落换|下落换/;
+  const VAGUE_TRADE_TOKEN_RE =
+    /账本下落|指使者|实话|真相|线索|谁派|幕后|下落(?!为|在)|一句实话|一句真话/;
+  const CONCRETE_PLAYER_INFO_RE =
+    /在[\u4e00-\u9fa5]{1,8}(?:手里|处|家|那儿)|藏在|经手(?:人)?(?:是|为)|见过[\u4e00-\u9fa5]{1,6}|[\u4e00-\u9fa5]{2,4}(?:手里|身上|派我|拦我)/;
   const ACTION_RE = /带我去|领我去|帮我找|陪我去|跟我去|带我去找/;
 
   function normalizePlayerLineForApi(playerLine) {
@@ -283,6 +315,87 @@
     return MASTERMIND_RE.test(String(playerLine || ""));
   }
 
+  function hasConcretePlayerInfo(playerLine) {
+    const line = String(playerLine || "").trim();
+    if (!line) {
+      return false;
+    }
+    if (CONCRETE_PLAYER_INFO_RE.test(line)) {
+      return true;
+    }
+    if (MASTERMIND_RE.test(line) && /[\u4e00-\u9fa5]{2,4}/.test(line)) {
+      return true;
+    }
+    return false;
+  }
+
+  /** 玩家提出交易但未给出可核对的具体信息（空头支票） */
+  function detectHollowTradeOffer(playerLine) {
+    const line = String(playerLine || "").trim();
+    if (!line || !TRADE_OFFER_RE.test(line)) {
+      return false;
+    }
+    if (hasConcretePlayerInfo(line)) {
+      return false;
+    }
+    if (VAGUE_TRADE_TOKEN_RE.test(line) || OFFER_KNOWN_RE.test(line)) {
+      return true;
+    }
+    return TRADE_OFFER_RE.test(line);
+  }
+
+  function detectTradeOfferNeedsPlayerFirst(playerLine) {
+    const line = String(playerLine || "").trim();
+    return TRADE_OFFER_RE.test(line) && !hasConcretePlayerInfo(line);
+  }
+
+  function trackEmptyPromise(session, playerLine) {
+    if (!session) {
+      return 0;
+    }
+    if (detectHollowTradeOffer(playerLine)) {
+      session.emptyPromiseCount = (session.emptyPromiseCount || 0) + 1;
+    } else if (hasConcretePlayerInfo(playerLine)) {
+      session.emptyPromiseCount = 0;
+    }
+    return session.emptyPromiseCount || 0;
+  }
+
+  function isEmptyPromiseBankrupt(session) {
+    return (session?.emptyPromiseCount || 0) >= 2;
+  }
+
+  /** 回合初：根据玩家本轮台词更新回避 #1 计数（与摘要是否压缩无关） */
+  function bumpNeglectBeforeReply(session, playerLine, plotSummary, seed) {
+    if (!session) {
+      return getNeglectState(session, seed);
+    }
+    const pending = extractPendingLines(plotSummary);
+    if (pending.length === 0) {
+      session.neglectPrimaryRounds = 0;
+      return getNeglectState(session, seed);
+    }
+    if (detectPlayerNamesMastermind(playerLine)) {
+      session.neglectPrimaryRounds = 0;
+      return getNeglectState(session, seed);
+    }
+    session.neglectPrimaryRounds = (session.neglectPrimaryRounds || 0) + 1;
+    return getNeglectState(session, seed);
+  }
+
+  function resetNeglectAfterPlotProgress(session, plotBefore, plotAfter, playerLine, seed) {
+    if (!session) {
+      return getNeglectState(session, seed);
+    }
+    const progress =
+      detectPlayerNamesMastermind(playerLine) ||
+      primaryPendingAdvanced(plotBefore, plotAfter, seed);
+    if (extractPendingLines(plotAfter).length === 0 || progress) {
+      session.neglectPrimaryRounds = 0;
+    }
+    return getNeglectState(session, seed);
+  }
+
   function primaryPendingAdvanced(plotBefore, plotAfter, seed) {
     const beforeP = extractPendingLines(plotBefore);
     const afterP = extractPendingLines(plotAfter);
@@ -303,20 +416,7 @@
   }
 
   function trackPrimaryProgress(session, plotBefore, plotAfter, playerLine, seed) {
-    if (!session) {
-      return { neglectPrimaryRounds: 0, shouldWarn: false, shouldFail: false };
-    }
-    const progress =
-      detectPlayerNamesMastermind(playerLine) ||
-      primaryPendingAdvanced(plotBefore, plotAfter, seed);
-    if (extractPendingLines(plotAfter).length === 0) {
-      session.neglectPrimaryRounds = 0;
-    } else if (progress) {
-      session.neglectPrimaryRounds = 0;
-    } else {
-      session.neglectPrimaryRounds = (session.neglectPrimaryRounds || 0) + 1;
-    }
-    return getNeglectState(session, seed);
+    return resetNeglectAfterPlotProgress(session, plotBefore, plotAfter, playerLine, seed);
   }
 
   function getNeglectState(session, seed) {
@@ -331,6 +431,8 @@
   }
 
   function replyContextFromSession(session, pickIntent, extra) {
+    const emptyCount = session?.emptyPromiseCount ?? extra?.emptyPromiseCount ?? 0;
+    const bankrupt = emptyCount >= 2 || Boolean(extra?.emptyPromiseBankrupt);
     return {
       pickIntent: pickIntent || "",
       stallTurns: session?.stallTurns ?? 0,
@@ -338,6 +440,10 @@
       neglectFail: Boolean(extra?.neglectFail),
       redundantOffer: Boolean(extra?.redundantOffer),
       playerNamesMastermind: Boolean(extra?.playerNamesMastermind),
+      hollowTradeOffer: Boolean(extra?.hollowTradeOffer),
+      tradeOfferNeedsPlayerFirst: Boolean(extra?.tradeOfferNeedsPlayerFirst),
+      emptyPromiseBankrupt: bankrupt,
+      emptyPromiseCount: emptyCount,
     };
   }
 
@@ -402,6 +508,13 @@
     normalizePlayerLineForApi,
     detectRedundantPlayerOffer,
     detectPlayerNamesMastermind,
+    detectHollowTradeOffer,
+    detectTradeOfferNeedsPlayerFirst,
+    hasConcretePlayerInfo,
+    trackEmptyPromise,
+    isEmptyPromiseBankrupt,
+    bumpNeglectBeforeReply,
+    resetNeglectAfterPlotProgress,
     trackPrimaryProgress,
     getNeglectState,
     updateStallCounters,

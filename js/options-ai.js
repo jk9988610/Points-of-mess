@@ -52,10 +52,14 @@
 
   function buildOptionsSystemDuo(characterName) {
     const name = String(characterName || "锋利").trim() || "锋利";
-    return `你是选项撰稿人。玩家与「${name}」对峙。选项=玩家说的话（问句/祈使），禁止陈述断言。
+    return `你是选项撰稿人。玩家与「${name}」对峙。选项=玩家说的话（问句/祈使/交易）。
 
-- keypoint（深挖）：对准【程序·洋葱】#1，可写「若我说…你就…」交换信息。
-- followup（推进）：对准 #2 或另一待核实；宜让步/交易，勿只逼对方先答。
+- keypoint（深挖）：对准【程序·洋葱】#1。
+- followup（推进）：对准 #2 或另一待核实。
+
+【交易·先亮牌】若写交换句，line 中**必须包含玩家已给出的具体信息**（人名/地点/物证），再要求对方回报。
+- ❌ 禁止：「账本下落换你一句实话」「若我说指使者你就说老九」等空头承诺
+- ✅ 允许：「账本在刘老三手里，换你说陈四背后是谁」
 
 禁止两条同义或 line 相同；禁止连续两轮都只问「你先告诉我X」。
 
@@ -733,6 +737,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     );
     const onionContext = {
       stallTurns: session?.stallTurns ?? 0,
+      emptyPromiseCount: session?.emptyPromiseCount ?? 0,
     };
     const retry = window.PomApiRetry?.withApiRetries;
 
@@ -950,7 +955,10 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
           signal,
           plotSummary: session.plotSummary,
           logTag: "备用·②选项",
-          onionContext: { stallTurns: session?.stallTurns ?? 0 },
+          onionContext: {
+            stallTurns: session?.stallTurns ?? 0,
+            emptyPromiseCount: session?.emptyPromiseCount ?? 0,
+          },
         });
         return { reply, options };
       } catch (e2) {
