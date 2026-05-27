@@ -2,7 +2,8 @@
   const { characters, getArchetype, getCharacter } = window.GamePresets;
   const { createId, createInitialState, getSession, persist } = window.GameState;
   const { getHistoryForApi } = window.GameDialogue;
-  const { presetOptions, requestCombinedTurn } = window.GameOptionsAi;
+  const { presetOptions, requestCombinedTurn, requestEndingSequence } =
+    window.GameOptionsAi;
   const {
     draw,
     tickMove,
@@ -47,6 +48,7 @@
   state.currentOptions = null;
   state.optionsLoading = false;
   state.dialogueHungUp = false;
+  state.episodeAwaitingRestart = false;
   state.playerBubbleText = "";
 
   let abortController = null;
@@ -320,12 +322,17 @@
             : lineText
         );
       }
-      btn.classList.toggle(
-        "option-btn--pause",
-        opt?.intent === "suspend" || opt?.intent === "close"
-      );
+      btn.classList.toggle("option-btn--pause", opt?.intent === "suspend");
+      btn.classList.toggle("option-btn--close", opt?.intent === "close");
       btn.disabled = disabled || !opt?.line || loading;
     }
+    const btn3 = optionsBar.querySelector('[data-option-id="3"]');
+    if (btn3) {
+      const showThird = (options?.length || 0) >= 3;
+      btn3.classList.toggle("hidden", !showThird);
+      btn3.hidden = !showThird;
+    }
+    optionsBar.classList.toggle("options-bar--ending", options?.length === 2);
   }
 
   function resizeCanvas() {
@@ -355,9 +362,11 @@
       ? state.isStreaming
         ? "等待角色回复… · 点击可移动（可走出橙圈）"
         : isDialogueSuspended()
-          ? state.dialogueHungUp && isInTalkZoneNow()
-            ? "对话已挂起 · 走出橙圈再进入可继续"
-            : "回到橙圈内，对话气泡会恢复"
+          ? state.episodeAwaitingRestart && isInTalkZoneNow()
+            ? "本局已结束 · 再点锋利重新开始"
+            : state.dialogueHungUp && isInTalkZoneNow()
+              ? "对话已挂起 · 走出橙圈再进入可继续"
+              : "回到橙圈内，对话气泡会恢复"
           : "点选下方句子 · 点击移动（走出橙圈将暂停选项）"
       : near
         ? `点击「${near.name}」交谈`
@@ -372,12 +381,15 @@
       session.messages = [];
       session.plotSummary = "";
       session.lastSummaryAtOptionTurn = 0;
+      session.endingOffered = false;
+      session.inEndingCloseChoices = false;
       persist(state);
     }
     state.talkingId = null;
     state.currentOptions = null;
     state.optionsLoading = false;
     state.dialogueHungUp = false;
+    state.episodeAwaitingRestart = false;
     state.playerBubbleText = "";
     state.bubbleText = "";
     setBubble("");
@@ -488,12 +500,47 @@
     if (!isInTalkZoneNow()) {
       return;
     }
+    if (state.episodeAwaitingRestart) {
+      state.episodeAwaitingRestart = false;
+      state.dialogueHungUp = false;
+      startTalking(state.talkingId);
+      return;
+    }
     state.dialogueHungUp = false;
     setOptionsVisible(true);
     setMemoryInputVisible(true);
     renderOptionButtons(state.currentOptions, false);
     setStatus("", false);
     window.PomDebug?.logUser("恢复对话 UI", reason || "回到橙圈内");
+    renderMap();
+    syncSpeechBubbles(false);
+  }
+
+  function finishEpisodeAfterClose() {
+    const characterId = state.talkingId;
+    if (characterId) {
+      const session = getSession(state, characterId);
+      session.messages = [];
+      session.plotSummary = "";
+      session.lastSummaryAtOptionTurn = 0;
+      session.endingOffered = false;
+      session.inEndingCloseChoices = false;
+      persist(state);
+    }
+    state.currentOptions = null;
+    state.optionsLoading = false;
+    state.episodeAwaitingRestart = true;
+    state.dialogueHungUp = true;
+    setOptionsVisible(false);
+    setMemoryInputVisible(false);
+    setPlayerBubble("");
+    stopButtonEl.disabled = true;
+    window.PomDebug?.logLocal(
+      "本局结局结束",
+      "已重置会话并挂起 · 再点锋利重新开始",
+      ["ui"]
+    );
+    setStatus("本局已结束。再点锋利重新开始。", false);
     renderMap();
     syncSpeechBubbles(false);
   }
@@ -635,6 +682,26 @@
     const optionsSnapshot = state.currentOptions.map((o) => ({ ...o }));
     const isClose = pick.intent === "close";
 
+    if (session.inEndingCloseChoices && isClose) {
+      window.PomDebug?.logUser("玩家选择", {
+        intent: "close",
+        line: pick.line,
+        phase: "结局离场",
+      });
+      session.messages.push({
+        id: createId(),
+        role: "user",
+        content: pick.line,
+        intent: pick.intent,
+        createdAt: Date.now(),
+        status: "done",
+      });
+      persist(state);
+      setPlayerBubble(pick.line);
+      finishEpisodeAfterClose();
+      return;
+    }
+
     if (pick.intent === "suspend") {
       handleSuspendOption();
       return;
@@ -674,11 +741,16 @@
     abortController = new AbortController();
 
     const signal = abortController.signal;
-    const willSummary =
-      !isClose && window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
+    const goalEnding =
+      !session.endingOffered &&
+      !session.inEndingCloseChoices &&
+      window.GameOnion?.isReadyForEnding?.(session.plotSummary, archetype.onionSeed);
 
-    const apiSteps = isClose
-      ? ["①reply（收束）"]
+    const willSummary =
+      !goalEnding && window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
+
+    const apiSteps = goalEnding
+      ? ["结局·①宣布", "结局·②close×2"]
       : willSummary
         ? ["①reply", "②选项", "③摘要"]
         : ["①reply", "②选项"];
@@ -689,15 +761,34 @@
     );
 
     try {
-      const { reply, options } = await requestCombinedTurn({
-        character,
-        archetype,
-        session,
-        apiMessages,
-        turn: { character, options: optionsSnapshot, pick, isClose },
-        isClose,
-        signal,
-      });
+      let reply;
+      let options;
+
+      if (goalEnding) {
+        session.endingOffered = true;
+        const ending = await requestEndingSequence({
+          character,
+          archetype,
+          session,
+          apiMessages,
+          signal,
+        });
+        reply = ending.reply;
+        options = ending.options;
+        session.inEndingCloseChoices = true;
+      } else {
+        const turn = await requestCombinedTurn({
+          character,
+          archetype,
+          session,
+          apiMessages,
+          turn: { character, options: optionsSnapshot, pick, isClose: false },
+          isClose: false,
+          signal,
+        });
+        reply = turn.reply;
+        options = turn.options;
+      }
 
       session.messages.push({
         id: createId(),
@@ -708,16 +799,9 @@
       });
       persist(state);
       setBubble(reply, false, { thinking: false });
-      setStatus("", false);
+      setStatus(goalEnding ? "选一句离场结束本局。" : "", false);
 
-      if (isClose) {
-        if (options) {
-          window.PomDebug?.logLocal("结束对话 · 忽略多余选项");
-        }
-        setTimeout(() => endTalking(), 600);
-      } else {
-        state.currentOptions = options;
-      }
+      state.currentOptions = options;
 
       if (willSummary) {
         try {
@@ -753,7 +837,7 @@
       setMemoryInputBusy(false);
       abortController = null;
       stopButtonEl.disabled = true;
-      if (state.talkingId && pick.intent !== "close") {
+      if (state.talkingId) {
         renderOptionButtons(state.currentOptions, false);
       }
       renderMap();
@@ -792,7 +876,13 @@
           hungUp: state.dialogueHungUp,
         });
         if (state.dialogueHungUp && isInTalkZoneNow()) {
-          resumeDialogueUi("点击角色");
+          if (state.episodeAwaitingRestart) {
+            state.episodeAwaitingRestart = false;
+            state.dialogueHungUp = false;
+            startTalking(hit.id);
+          } else {
+            resumeDialogueUi("点击角色");
+          }
         }
         return;
       }
@@ -873,7 +963,7 @@
             character: ch.name,
             distance: window.GameMap.dist(state.player, ch).toFixed(3),
           });
-          if (inZone && state.dialogueHungUp) {
+          if (inZone && state.dialogueHungUp && !state.episodeAwaitingRestart) {
             resumeDialogueUi("走进橙圈");
           }
         }

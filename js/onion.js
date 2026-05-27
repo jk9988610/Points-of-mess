@@ -117,6 +117,21 @@
     return `核心 [已确认]×${confirmed} · 中层 [待核实]×${pending}${goal ? " · 已设本局目标" : ""}`;
   }
 
+  /** 中层剥完且核心条数足够 → 可进入结局（程序判定，不调 API） */
+  function isReadyForEnding(plotSummary, seed) {
+    const goal = extractGoal(plotSummary);
+    if (!goal) {
+      return false;
+    }
+    const pending = extractPendingLines(plotSummary);
+    if (pending.length > 0) {
+      return false;
+    }
+    const minConfirmed = Number(seed?.endingMinConfirmed) > 0 ? seed.endingMinConfirmed : 2;
+    const { confirmed } = countLayers(plotSummary);
+    return confirmed >= minConfirmed;
+  }
+
   window.GameOnion = {
     buildSeedPlotSummary,
     extractGoal,
@@ -125,5 +140,6 @@
     formatOptionsBlock,
     formatReplyHint,
     formatLayersDebug,
+    isReadyForEnding,
   };
 })();

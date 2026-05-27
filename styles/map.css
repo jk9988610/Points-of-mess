@@ -636,6 +636,10 @@ body.login-locked .memory-input-bar {
   transition: background 120ms ease, border-color 120ms ease;
 }
 
+.option-btn.hidden {
+  display: none !important;
+}
+
 .option-btn--pause,
 .option-btn--close {
   border-color: rgba(148, 163, 184, 0.4);

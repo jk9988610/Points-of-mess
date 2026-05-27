@@ -87,6 +87,143 @@
     };
   }
 
+  function buildEndingCloseOptions(duo) {
+    const a = String(duo?.closeA || "").trim();
+    const b = String(duo?.closeB || "").trim();
+    return [
+      { id: 1, intent: "close", line: a, send: a },
+      { id: 2, intent: "close", line: b, send: b },
+    ];
+  }
+
+  function parseCloseDuoFromRaw(raw) {
+    const obj = extractJsonObject(raw);
+    const list = Array.isArray(obj.options) ? obj.options : [];
+    const lines = [];
+    for (const item of list) {
+      const line = lineFromOptionItem(item);
+      if (line) {
+        lines.push(line);
+      }
+    }
+    if (lines.length < 2 && list[0] && list[1]) {
+      lines[0] = lines[0] || lineFromOptionItem(list[0]);
+      lines[1] = lines[1] || lineFromOptionItem(list[1]);
+    }
+    if (lines.length < 2) {
+      throw new Error("缺少两条 close 选项");
+    }
+    return {
+      closeA: lines[0].replace(/^「+/, "").replace(/」+$/, ""),
+      closeB: lines[1].replace(/^「+/, "").replace(/」+$/, ""),
+    };
+  }
+
+  async function requestEndingReply({
+    character,
+    archetype,
+    apiMessages,
+    plotSummary,
+    signal,
+  }) {
+    const goal = window.GameOnion?.extractGoal?.(plotSummary) || "";
+    const name = character.name;
+    const epilogueSystem = `${roleStyleFromSystem(archetype.system)}${plotSummaryBlock(plotSummary)}
+【结局轮·宣布】本局目标已达成：${goal}
+你是「${name}」。用 1～2 句中文（≤40 字）向玩家**点明结局**（目标已实现、局势如何收束），勿再追问 [待核实]。
+只输出角色台词，不要 JSON。`;
+
+    const raw = await window.ChatApi.completeChat({
+      systemPrompt: epilogueSystem,
+      messages: apiMessages,
+      temperature: window.PomTokens?.TEMP_REPLY ?? 0.4,
+      max_tokens: tokenLimit("REPLY_ONLY", 768),
+      signal,
+      debugLabel: "结局·①宣布",
+    });
+    const reply = replyFromRaw(raw);
+    if (reply && !isWeakReply(reply)) {
+      return reply;
+    }
+    throw new Error("无法解析结局宣布台词");
+  }
+
+  async function requestEndingCloseOptions({
+    character,
+    archetype,
+    session,
+    signal,
+    plotSummary,
+  }) {
+    const goal = window.GameOnion?.extractGoal?.(plotSummary) || "";
+    const name = character.name;
+    const fallback = archetype.closeOptionLines || {
+      a: "明白了，我先走。",
+      b: "就这样吧。",
+    };
+    const systemPrompt = `你是选项撰稿人。本局目标已达成：${goal}。玩家与「${name}」对峙已收束。
+输出玩家**结束对话**的两句不同离场白（中文各一句 ≤35 字），都是告别/收口，不要继续追问。
+
+只输出 JSON：
+{"options":[{"intent":"close","line":"..."},{"intent":"close","line":"..."}]}`;
+
+    const last =
+      [...session.messages]
+        .reverse()
+        .find((m) => m.role === "assistant" && m.status === "done")?.content || "";
+    const userContent = [
+      `角色名：${name}`,
+      `角色刚宣布的结局台词：${last}`,
+      "请输出两条 intent 均为 close 的玩家离场句。",
+    ].join("\n\n");
+
+    let raw = "";
+    try {
+      raw = await requestOptionsJson({
+        systemPrompt,
+        userContent,
+        temperature: window.PomTokens?.TEMP_OPTIONS ?? 0.4,
+        signal,
+        logTag: "结局·②close选项",
+      });
+      return parseCloseDuoFromRaw(raw);
+    } catch (e) {
+      window.PomDebug?.logLocalWarn("结局 close 选项失败，用预设", e.message);
+      return { closeA: fallback.a, closeB: fallback.b };
+    }
+  }
+
+  async function requestEndingSequence({
+    character,
+    archetype,
+    session,
+    apiMessages,
+    signal,
+  }) {
+    const plotSummary = session.plotSummary;
+    const reply = await requestEndingReply({
+      character,
+      archetype,
+      apiMessages,
+      plotSummary,
+      signal,
+    });
+    const sessionWithReply = {
+      messages: [
+        ...session.messages,
+        { role: "assistant", content: reply, status: "done" },
+      ],
+    };
+    const duo = await requestEndingCloseOptions({
+      character,
+      archetype,
+      session: sessionWithReply,
+      signal,
+      plotSummary,
+    });
+    return { reply, options: buildEndingCloseOptions(duo) };
+  }
+
   function buildHybridOptions(archetype, duo) {
     const suspendLine = fixedSuspendLine(archetype);
 
@@ -703,6 +840,8 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     OPTION_SCHEMA,
     presetOptions,
     generateOptions,
+    requestEndingSequence,
+    buildEndingCloseOptions,
     requestCombinedTurn: requestCombinedTurnWithFallback,
   };
 })();

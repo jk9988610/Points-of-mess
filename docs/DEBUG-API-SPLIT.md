@@ -52,6 +52,14 @@
 
 调试：**打印选择** 勾选类型 → **应用** 过滤面板；**按选择复制** 一键导出。
 
+## 结局轮（程序触发）
+
+当 `GameOnion.isReadyForEnding`（有目标、无 `[待核实]`、`[已确认]` ≥ `endingMinConfirmed`）：
+
+1. **结局·①宣布** — reply 点明目标已达成  
+2. **结局·②close×2** — 两条 `intent: close` 选项（隐藏第 3 钮）  
+3. 玩家选任一条 close → 重置 session、挂起；**再点锋利** 重新 `startTalking`（新种子）
+
 ---
 
 ## 调试面板：必打 vs 不必打

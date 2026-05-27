@@ -45,6 +45,8 @@
           messages: [],
           plotSummary: "",
           lastSummaryAtOptionTurn: 0,
+          endingOffered: false,
+          inEndingCloseChoices: false,
         };
       }
       return state.sessions[characterId];

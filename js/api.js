@@ -41,10 +41,10 @@
   function inferApiTags(label, direction) {
     const s = String(label || "");
     const tags = [direction === "out" ? "api-out" : "api-in"];
-    if (/reply|①|角色回复|结束对话/.test(s)) {
+    if (/reply|①|角色回复|结束对话|结局·①/.test(s)) {
       tags.push("api-reply");
       tags.push(direction === "out" ? "api-reply-out" : "api-reply-in");
-    } else if (/选项|②/.test(s)) {
+    } else if (/选项|②|结局·②/.test(s)) {
       tags.push("api-options");
       tags.push(direction === "out" ? "api-options-out" : "api-options-in");
     } else if (/摘要|③/.test(s)) {
