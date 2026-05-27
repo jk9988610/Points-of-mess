@@ -75,7 +75,7 @@
     }
   }
 
-  function shouldRefreshPlotSummary(session) {
+  function shouldRefreshPlotSummary(session, opts = {}) {
     const optionTurns = countOptionTurns(session.messages);
     if (optionTurns < SUMMARY_EVERY_OPTION_TURNS) {
       return false;
@@ -86,33 +86,27 @@
     if (session.lastSummaryAtOptionTurn === optionTurns) {
       return false;
     }
-    const done = window.GameDialogue.getDoneMessages(session.messages);
-    const keepRecent = window.GameDialogue.HISTORY_TURNS * 2;
-    const toSummarize = done.slice(0, Math.max(0, done.length - keepRecent));
+    const { toSummarize } = buildSummaryPayload(session, opts);
     return toSummarize.length > 0;
   }
 
   function buildSummaryPayload(session, opts = {}) {
     const optionTurns = countOptionTurns(session.messages);
-    let done = window.GameDialogue.getDoneMessages(session.messages);
-    const keepRecent = window.GameDialogue.HISTORY_TURNS * 2;
-    const parallel = Boolean(opts.parallel);
-    const last = done[done.length - 1];
-    const inFlightUser =
-      parallel &&
-      last?.role === "user" &&
-      last.intent &&
-      last.intent !== "freeform";
-    if (inFlightUser) {
-      done = done.slice(0, -1);
+    let messages = session.messages;
+    if (opts.afterReply && opts.assistantReply) {
+      messages = [
+        ...messages,
+        {
+          role: "assistant",
+          content: String(opts.assistantReply).trim(),
+          status: "done",
+        },
+      ];
     }
+    const done = window.GameDialogue.getDoneMessages(messages);
+    const keepRecent = window.GameDialogue.HISTORY_TURNS * 2;
     const toSummarize = done.slice(0, Math.max(0, done.length - keepRecent));
-    return {
-      optionTurns,
-      toSummarize,
-      inFlightUser,
-      pendingUserLine: inFlightUser ? last.content : "",
-    };
+    return { optionTurns, toSummarize };
   }
 
   async function maybeRefreshPlotSummary(session, signal, opts = {}) {
@@ -120,21 +114,19 @@
       return false;
     }
 
-    const { optionTurns, toSummarize, inFlightUser, pendingUserLine } =
-      buildSummaryPayload(session, opts);
+    const { optionTurns, toSummarize } = buildSummaryPayload(session, opts);
 
     const block = toSummarize
       .map((m) => `${m.role === "assistant" ? "锋利" : "玩家"}: ${m.content}`)
       .join("\n");
-    const pendingNote = inFlightUser
-      ? `\n\n【本轮玩家已选（锋利回复尚未生成，勿写入 [已确认]）】\n玩家: ${pendingUserLine}`
-      : "";
     const body = session.plotSummary
-      ? `【已有摘要】\n${session.plotSummary}\n\n【新增对话】\n${block}${pendingNote}`
-      : `【新增对话】\n${block}${pendingNote}`;
+      ? `【已有摘要】\n${session.plotSummary}\n\n【新增对话】\n${block}`
+      : `【新增对话】\n${block}`;
     const userContent = SUMMARY_USER_CHECKLIST + body;
 
-    const modeLabel = opts.parallel ? "并行 · 与 ①② 同时进行" : "串行 · ①② 完成后";
+    const modeLabel = opts.afterReply
+      ? "并行 · ① 完成后与 ②选项 同时"
+      : "串行 · ①② 完成后";
     window.PomDebug?.logLocal(
       "触发剧情摘要压缩",
       `${modeLabel} · 第 ${optionTurns} 轮选项 · ${toSummarize.length} 条对白入模 · 上限 ${SUMMARY_MAX_CHARS} 字`
