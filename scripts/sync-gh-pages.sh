@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
 # 发布到 gh-pages（排除 .github，避免 Pages Jekyll build 失败）
-# 用法：在仓库根目录 ./scripts/sync-gh-pages.sh
+# 用法：在仓库根目录 ./scripts/sync-gh-pages.sh [git-ref]
+#   默认 origin/main；可传 HEAD 或分支名发布当前工作区对应提交
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-git fetch origin main
-REF="$(git rev-parse origin/main)"
-SHORT="$(git rev-parse --short origin/main)"
+REF_ARG="${1:-origin/main}"
+git fetch origin main 2>/dev/null || true
+if git rev-parse --verify "$REF_ARG" >/dev/null 2>&1; then
+  REF="$(git rev-parse "$REF_ARG")"
+else
+  git fetch origin "$REF_ARG" 2>/dev/null || true
+  REF="$(git rev-parse "$REF_ARG")"
+fi
+SHORT="$(git rev-parse --short "$REF")"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

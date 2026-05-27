@@ -758,16 +758,34 @@
     const playerNamesMastermind = Boolean(
       window.GameOnion?.detectPlayerNamesMastermind?.(apiLine)
     );
-    const neglectBefore = window.GameOnion?.getNeglectState?.(
+    const hollowTradeOffer = Boolean(
+      window.GameOnion?.detectHollowTradeOffer?.(apiLine)
+    );
+    const tradeOfferNeedsPlayerFirst = Boolean(
+      window.GameOnion?.detectTradeOfferNeedsPlayerFirst?.(apiLine)
+    );
+    const emptyPromiseCount = window.GameOnion?.trackEmptyPromise?.(
       session,
-      archetype.onionSeed
-    ) || { shouldWarn: false, shouldFail: false };
+      apiLine
+    );
+    const emptyPromiseBankrupt = Boolean(
+      window.GameOnion?.isEmptyPromiseBankrupt?.(session)
+    );
+    const neglectBefore =
+      window.GameOnion?.bumpNeglectBeforeReply?.(
+        session,
+        apiLine,
+        plotBefore,
+        archetype.onionSeed
+      ) || { shouldWarn: false, shouldFail: false };
 
     window.PomDebug?.logUser("玩家选择", {
       intent: pick.intent,
       line: rawLine,
       apiLine: apiLine !== rawLine ? apiLine : undefined,
       redundantOffer,
+      hollowTradeOffer,
+      emptyPromiseCount,
       neglectRounds: neglectBefore.neglectPrimaryRounds,
     });
 
@@ -853,6 +871,10 @@
       redundantOffer,
       playerNamesMastermind,
       neglectWarn: neglectBefore.shouldWarn,
+      hollowTradeOffer,
+      tradeOfferNeedsPlayerFirst,
+      emptyPromiseBankrupt,
+      emptyPromiseCount,
     };
 
     const goalEnding =
@@ -947,7 +969,7 @@
           ["summary"]
         );
       }
-      const neglect = window.GameOnion?.trackPrimaryProgress?.(
+      const neglect = window.GameOnion?.resetNeglectAfterPlotProgress?.(
         session,
         plotBefore,
         session.plotSummary,
@@ -965,6 +987,15 @@
         window.PomDebug?.logLocalWarn(
           "信息价值",
           "玩家复读【已确认】情报报价 · reply 应拒绝交易",
+          ["summary"]
+        );
+      }
+      if (hollowTradeOffer || emptyPromiseBankrupt) {
+        window.PomDebug?.logLocalWarn(
+          "交易·先亮牌",
+          emptyPromiseBankrupt
+            ? `空头承诺 ${emptyPromiseCount} 次 · 信用破产`
+            : "玩家空头交易 · reply 须拒先给线索",
           ["summary"]
         );
       }

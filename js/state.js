@@ -50,6 +50,7 @@
           stallTurns: 0,
           lastConfirmedCount: 0,
           neglectPrimaryRounds: 0,
+          emptyPromiseCount: 0,
         };
       }
       return state.sessions[characterId];
