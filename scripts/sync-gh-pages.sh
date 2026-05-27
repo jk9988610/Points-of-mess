@@ -32,5 +32,11 @@ git commit -q -m "deploy: ${SHORT}"
 git push -f "$(git -C "$ROOT" remote get-url origin)" HEAD:gh-pages
 
 echo "已发布 ${SHORT} → gh-pages（无 .github 目录）"
-echo "等 1～3 分钟 Pages build 变 built 后访问："
-echo "https://jk9988610.github.io/Points-of-mess/js/version.js"
+echo ""
+echo "⚠️  若 Settings → Pages → Source 为 **GitHub Actions**（推荐），"
+echo "    线上 CDN 不会读 gh-pages 分支，须："
+echo "    1) 合并到 main 后 push，或"
+echo "    2) Actions →「GitHub Pages (official)」→ Run workflow（分支 main）"
+echo ""
+echo "验收：https://jk9988610.github.io/Points-of-mess/js/version.js"
+echo "      应与 js/version.js 中 POM_VERSION 一致（当前仓库 $(grep -oP 'POM_VERSION = "\K[^"]+' "$ROOT/js/version.js" || echo '?')）"
