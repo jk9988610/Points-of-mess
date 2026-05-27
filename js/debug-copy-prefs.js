@@ -15,6 +15,9 @@
     { id: "apiOtherOut", label: "发AI·其它", tag: "api-other-out" },
     { id: "apiOtherIn", label: "AI回·其它", tag: "api-other-in" },
     { id: "user", label: "用户操作", tag: "user" },
+    { id: "summaryUi", label: "摘要·入模/结果(灰)", tag: "summary-in" },
+    { id: "summaryUiOut", label: "摘要·写入全文(灰)", tag: "summary-out" },
+    { id: "summarySkip", label: "摘要·跳过说明", tag: "summary-skip" },
     { id: "ui", label: "程序状态", tag: "ui" },
     { id: "uiWarn", label: "程序·警告", tag: "ui-warn" },
     { id: "uiError", label: "程序·错误", tag: "ui-error" },
@@ -98,6 +101,10 @@
       const sections = [
         { title: "API", ids: GROUPS.filter((g) => g.id.startsWith("api")).map((g) => g.id) },
         { title: "用户", ids: ["user"] },
+        {
+          title: "摘要(灰)",
+          ids: ["summaryUi", "summaryUiOut", "summarySkip", "summary"],
+        },
         { title: "程序", ids: ["ui", "uiWarn", "uiError"] },
       ];
       let html = "";

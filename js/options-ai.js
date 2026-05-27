@@ -64,7 +64,7 @@
   function buildIntentHintsForApi() {
     return `- keypoint（深挖）
 - followup（推进）
-- close（收束）`;
+- 结束对话`;
   }
 
   function fixedSuspendLine(archetype) {
@@ -519,7 +519,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
           ? tokenLimit("COMBINED_CLOSE", 768)
           : tokenLimit("COMBINED", 2048),
         signal,
-        debugLabel: isClose ? "角色收束" : "角色回复+选项（合并）",
+        debugLabel: isClose ? "结束对话·回复" : "角色回复+选项（合并）",
       },
       { preferPlain: true }
     );
@@ -544,7 +544,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       "API 路径",
       runSummary
         ? "拆分 · ①reply → ②选项 ∥ 压缩剧情摘要"
-        : "拆分优先 · ①reply → ②深挖/推进(AI)+③收束(固定)"
+        : "拆分 · ①reply → ②选项 + ③挂起(固定)"
     );
 
     const reply = await requestReplyOnly({
@@ -602,13 +602,13 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     });
     if (window.PomTokens?.USE_SPLIT_FIRST) {
       if (isClose) {
-        window.PomDebug?.logLocal("API 路径", "收束 · 仅 拆分·①reply");
+        window.PomDebug?.logLocal("API 路径", "结束对话 · 仅 ①reply");
         const reply = await requestReplyOnly({
           systemPrompt,
           apiMessages,
           signal,
           plotSummary: session.plotSummary,
-          debugLabel: "拆分·①reply（收束）",
+          debugLabel: "拆分·①reply（结束对话）",
         });
         return { reply, options: null };
       }
@@ -689,7 +689,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
 
       if (isClose) {
         if (isWeakReply(reply)) {
-          throw new Error("收束回复生成失败，请重试");
+          throw new Error("结束对话回复生成失败，请重试");
         }
         return { reply, options: null };
       }

@@ -41,7 +41,7 @@
   function inferApiTags(label, direction) {
     const s = String(label || "");
     const tags = [direction === "out" ? "api-out" : "api-in"];
-    if (/reply|①|角色回复|收束/.test(s)) {
+    if (/reply|①|角色回复|结束对话/.test(s)) {
       tags.push("api-reply");
       tags.push(direction === "out" ? "api-reply-out" : "api-reply-in");
     } else if (/选项|②/.test(s)) {

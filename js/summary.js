@@ -47,19 +47,31 @@
     }
   }
 
-  function shouldRefreshPlotSummary(session, opts = {}) {
+  function summarySkipReason(session, opts = {}) {
     const optionTurns = countOptionTurns(session.messages);
     if (optionTurns < SUMMARY_EVERY_OPTION_TURNS) {
-      return false;
+      return `未满 ${SUMMARY_EVERY_OPTION_TURNS} 轮选项（当前 ${optionTurns}）`;
     }
     if (optionTurns % SUMMARY_EVERY_OPTION_TURNS !== 0) {
-      return false;
+      return `非压缩轮（每 ${SUMMARY_EVERY_OPTION_TURNS} 轮一次）`;
     }
     if (session.lastSummaryAtOptionTurn === optionTurns) {
-      return false;
+      return `第 ${optionTurns} 轮已压过摘要`;
     }
     const { toSummarize } = buildSummaryPayload(session, opts);
-    return toSummarize.length > 0;
+    if (toSummarize.length === 0) {
+      return "无可压缩对白";
+    }
+    return "";
+  }
+
+  /** 本局是否会在「① 完成后」触发摘要（仅看轮次，不依赖锋利是否已写入 session） */
+  function willRefreshPlotSummaryThisPick(session) {
+    return !summarySkipReason(session, { afterReply: true });
+  }
+
+  function shouldRefreshPlotSummary(session, opts = {}) {
+    return !summarySkipReason(session, opts);
   }
 
   function buildSummaryPayload(session, opts = {}) {
@@ -95,7 +107,9 @@
   }
 
   async function maybeRefreshPlotSummary(session, signal, opts = {}) {
-    if (!shouldRefreshPlotSummary(session, opts)) {
+    const skip = summarySkipReason(session, opts);
+    if (skip) {
+      window.PomDebug?.logLocal("摘要未执行", skip, ["ui", "summary-skip"]);
       return false;
     }
 
@@ -119,7 +133,18 @@
         : ` · 保护区外 ${toSummarize.length} 条`;
     window.PomDebug?.logLocal(
       "触发剧情摘要压缩",
-      `${modeLabel} · 第 ${optionTurns} 轮选项 · ${toSummarize.length} 条对白入模 · 保留最近 ${keepRecent / 2} 轮供 API${scopeNote} · 上限 ${SUMMARY_MAX_CHARS} 字`
+      `${modeLabel} · 第 ${optionTurns} 轮选项 · ${toSummarize.length} 条对白入模 · 保留最近 ${keepRecent / 2} 轮供 API${scopeNote} · 上限 ${SUMMARY_MAX_CHARS} 字`,
+      ["ui", "summary"]
+    );
+    window.PomDebug?.logLocal(
+      "摘要·入模全文（user 消息）",
+      userContent,
+      ["ui", "summary-in"]
+    );
+    window.PomDebug?.logLocal(
+      "摘要·system 字数",
+      String(SUMMARY_SYSTEM.length),
+      ["ui", "summary"]
     );
 
     const summary = await window.ChatApi.completeChat({
@@ -145,8 +170,14 @@
     session.plotSummary = text;
     session.lastSummaryAtOptionTurn = optionTurns;
     window.PomDebug?.logLocal(
-      "剧情摘要已写入 session",
-      `${session.plotSummary.length} 字（下一轮起注入 reply/选项 system）`
+      "摘要·写入 session 全文",
+      text,
+      ["ui", "summary-out"]
+    );
+    window.PomDebug?.logLocal(
+      "剧情摘要已写入",
+      `${text.length} 字 · 下一轮起注入 reply/选项 system`,
+      ["ui", "summary"]
     );
     return true;
   }
@@ -155,6 +186,7 @@
     SUMMARY_EVERY_OPTION_TURNS,
     SUMMARY_MAX_CHARS,
     shouldRefreshPlotSummary,
+    willRefreshPlotSummaryThisPick,
     maybeRefreshPlotSummary,
   };
 })();

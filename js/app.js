@@ -662,7 +662,7 @@
 
     const signal = abortController.signal;
     const runSummaryParallel =
-      !isClose && window.GameSummary?.shouldRefreshPlotSummary?.(session);
+      !isClose && window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
 
     try {
       const { reply, options, summaryOk } = await requestCombinedTurn({
@@ -695,7 +695,7 @@
 
       if (isClose) {
         if (options) {
-          window.PomDebug?.logLocal("收束轮忽略多余 options");
+          window.PomDebug?.logLocal("结束对话 · 忽略多余选项");
         }
         setTimeout(() => endTalking(), 600);
       } else {
