@@ -2,8 +2,12 @@
   const { characters, getArchetype, getCharacter } = window.GamePresets;
   const { createId, createInitialState, getSession, persist } = window.GameState;
   const { getHistoryForApi } = window.GameDialogue;
-  const { presetOptions, requestCombinedTurn, requestEndingSequence } =
-    window.GameOptionsAi;
+  const {
+    presetOptions,
+    requestCombinedTurn,
+    requestEndingSequence,
+    requestFailureSequence,
+  } = window.GameOptionsAi;
   const {
     draw,
     tickMove,
@@ -383,8 +387,7 @@
       session.lastSummaryAtOptionTurn = 0;
       session.endingOffered = false;
       session.inEndingCloseChoices = false;
-      session.stallTurns = 0;
-      session.lastConfirmedCount = 0;
+      resetSessionProgressFlags(session);
       persist(state);
     }
     state.talkingId = null;
@@ -525,10 +528,8 @@
       session.messages = [];
       session.plotSummary = "";
       session.lastSummaryAtOptionTurn = 0;
-      session.endingOffered = false;
-      session.inEndingCloseChoices = false;
-      session.stallTurns = 0;
-      session.lastConfirmedCount = 0;
+      session.lastSummaryAtOptionTurn = 0;
+      resetSessionProgressFlags(session);
       persist(state);
     }
     state.currentOptions = null;
@@ -545,6 +546,42 @@
       ["ui"]
     );
     setStatus("本局已结束。再点锋利重新开始。", false);
+    renderMap();
+    syncSpeechBubbles(false);
+  }
+
+  function resetSessionProgressFlags(session) {
+    session.stallTurns = 0;
+    session.lastConfirmedCount = 0;
+    session.neglectPrimaryRounds = 0;
+    session.endingOffered = false;
+    session.inEndingCloseChoices = false;
+  }
+
+  function finishEpisodeAfterFailure() {
+    const characterId = state.talkingId;
+    if (characterId) {
+      const session = getSession(state, characterId);
+      session.messages = [];
+      session.plotSummary = "";
+      session.lastSummaryAtOptionTurn = 0;
+      resetSessionProgressFlags(session);
+      persist(state);
+    }
+    state.currentOptions = null;
+    state.optionsLoading = false;
+    state.episodeAwaitingRestart = true;
+    state.dialogueHungUp = true;
+    setOptionsVisible(false);
+    setMemoryInputVisible(false);
+    setPlayerBubble("");
+    stopButtonEl.disabled = true;
+    window.PomDebug?.logLocal(
+      "本局失败",
+      "回避 #1 达上限 · 已重置并挂起 · 再点锋利重新开始",
+      ["ui"]
+    );
+    setStatus("本局失败。再点锋利重新开始。", false);
     renderMap();
     syncSpeechBubbles(false);
   }
@@ -711,23 +748,90 @@
       return;
     }
 
+    const plotBefore = session.plotSummary;
+    const rawLine = pick.line;
+    const apiLine =
+      window.GameOnion?.normalizePlayerLineForApi?.(rawLine) || rawLine;
+    const redundantOffer = Boolean(
+      window.GameOnion?.detectRedundantPlayerOffer?.(apiLine, plotBefore)
+    );
+    const playerNamesMastermind = Boolean(
+      window.GameOnion?.detectPlayerNamesMastermind?.(apiLine)
+    );
+    const neglectBefore = window.GameOnion?.getNeglectState?.(
+      session,
+      archetype.onionSeed
+    ) || { shouldWarn: false, shouldFail: false };
+
     window.PomDebug?.logUser("玩家选择", {
       intent: pick.intent,
-      line: pick.line,
+      line: rawLine,
+      apiLine: apiLine !== rawLine ? apiLine : undefined,
+      redundantOffer,
+      neglectRounds: neglectBefore.neglectPrimaryRounds,
     });
 
     session.messages.push({
       id: createId(),
       role: "user",
-      content: pick.line,
+      content: apiLine,
       intent: pick.intent,
       createdAt: Date.now(),
       status: "done",
     });
     persist(state);
-    setPlayerBubble(pick.line);
+    setPlayerBubble(rawLine);
 
     const apiMessages = getHistoryForApi(session.messages);
+
+    if (neglectBefore.shouldFail && !session.endingOffered) {
+      state.isStreaming = true;
+      state.optionsLoading = true;
+      setMemoryInputBusy(true);
+      renderOptionButtons(state.currentOptions, true);
+      stopButtonEl.disabled = false;
+      setBubble(
+        [...session.messages]
+          .reverse()
+          .find((m) => m.role === "assistant" && m.status === "done")?.content || "",
+        true,
+        { thinking: true }
+      );
+      setStatus("锋利结束对峙…", false);
+      abortController = new AbortController();
+      try {
+        const fail = await requestFailureSequence({
+          character,
+          archetype,
+          session,
+          apiMessages,
+          signal: abortController.signal,
+        });
+        session.messages.push({
+          id: createId(),
+          role: "assistant",
+          content: fail.reply,
+          createdAt: Date.now(),
+          status: "done",
+        });
+        persist(state);
+        setBubble(fail.reply, false, { thinking: false });
+        finishEpisodeAfterFailure();
+      } catch (e) {
+        if (e.name !== "AbortError") {
+          setStatus(e.message || "生成失败", true);
+        }
+      } finally {
+        state.isStreaming = false;
+        state.optionsLoading = false;
+        setMemoryInputBusy(false);
+        abortController = null;
+        stopButtonEl.disabled = true;
+        renderMap();
+        syncSpeechBubbles(false);
+      }
+      return;
+    }
 
     state.isStreaming = true;
     state.optionsLoading = true;
@@ -745,6 +849,12 @@
     abortController = new AbortController();
 
     const signal = abortController.signal;
+    const onionExtra = {
+      redundantOffer,
+      playerNamesMastermind,
+      neglectWarn: neglectBefore.shouldWarn,
+    };
+
     const goalEnding =
       !session.endingOffered &&
       !session.inEndingCloseChoices &&
@@ -786,7 +896,13 @@
           archetype,
           session,
           apiMessages,
-          turn: { character, options: optionsSnapshot, pick, isClose: false },
+          turn: {
+            character,
+            options: optionsSnapshot,
+            pick,
+            isClose: false,
+            onionExtra,
+          },
           isClose: false,
           signal,
         });
@@ -828,6 +944,27 @@
         window.PomDebug?.logLocalWarn(
           "洋葱·僵局",
           `连续 ${stall.stallTurns} 轮 [已确认] 无增加 · 下轮 reply/选项已加强让步与破局提示`,
+          ["summary"]
+        );
+      }
+      const neglect = window.GameOnion?.trackPrimaryProgress?.(
+        session,
+        plotBefore,
+        session.plotSummary,
+        apiLine,
+        archetype.onionSeed
+      );
+      if (neglect?.shouldWarn) {
+        window.PomDebug?.logLocalWarn(
+          "洋葱·回避#1",
+          `已连续 ${neglect.neglectPrimaryRounds} 轮未推进指使者 · 下轮加压`,
+          ["summary"]
+        );
+      }
+      if (redundantOffer) {
+        window.PomDebug?.logLocalWarn(
+          "信息价值",
+          "玩家复读【已确认】情报报价 · reply 应拒绝交易",
           ["summary"]
         );
       }

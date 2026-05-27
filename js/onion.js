@@ -148,6 +148,9 @@
     if (stallTurns >= 2) {
       parts.push("（僵局：选项须含让步/交换，迫使双方各让一步）");
     }
+    parts.push(
+      "禁止生成「用【已确认】里已有的事实」换新线索的选项（如再拿老周/经手人报价）"
+    );
     return parts.join("\n");
   }
 
@@ -161,6 +164,24 @@
     const pickIntent = context?.pickIntent || "";
     const stallTurns = context?.stallTurns ?? 0;
     const lines = [];
+
+    if (context?.redundantOffer) {
+      lines.push(
+        "【信息价值】玩家拿【已确认】里已有的事实来交易；须拒绝并指出「这我已经知道了，拿我不知道的来换」",
+        "勿因玩家复读已知信息而给出钥匙/带路等新线索"
+      );
+    }
+    if (context?.playerNamesMastermind) {
+      lines.push(
+        "玩家已供述指使者/幕后；须接住并写入事实，可评估是否达成核心目标，勿再逼「你先说指使」"
+      );
+    }
+    if (context?.neglectWarn) {
+      lines.push("【警告】玩家多轮回避 #1；语气加压：下次不再绕开指使者");
+    }
+    if (context?.neglectFail) {
+      lines.push("【终局】直接结束对峙：对方不肯说指使者，你没时间了");
+    }
 
     if (stallTurns >= 2) {
       lines.push(
@@ -210,10 +231,113 @@
     return { stallTurns: session.stallTurns, confirmed };
   }
 
-  function replyContextFromSession(session, pickIntent) {
+  const MASTERMIND_RE =
+    /(?:是|叫|名叫|背后是|乃是).{0,12}(?:派|指使|让我拦|派人)|\S{1,8}派我(?:来)?拦|指使者是|谁指使/;
+  const OFFER_KNOWN_RE =
+    /我告诉|我说(?:出|了)?|拿.{0,8}换|用.{0,12}换|给你.{0,6}换/;
+  const ACTION_RE = /带我去|领我去|帮我找|陪我去|跟我去|带我去找/;
+
+  function normalizePlayerLineForApi(playerLine) {
+    let s = String(playerLine || "").trim();
+    if (!s) {
+      return s;
+    }
+    if (ACTION_RE.test(s)) {
+      const topic = s
+        .replace(/带我去|领我去|帮我找|陪我去|跟我去|带我去找/g, "")
+        .replace(/^找/, "")
+        .trim();
+      if (topic && !/[？?]$/.test(topic)) {
+        if (/女儿|人在|在哪/.test(topic)) {
+          s = `${topic}可能在哪里？`;
+        } else {
+          s = `关于${topic}，你有什么线索？`;
+        }
+      } else if (topic) {
+        s = topic.endsWith("？") ? topic : `${topic}？`;
+      } else {
+        s = "这事你还有别的线索吗？";
+      }
+    }
+    return s;
+  }
+
+  function detectRedundantPlayerOffer(playerLine, plotSummary) {
+    const line = String(playerLine || "").trim();
+    if (!line || !OFFER_KNOWN_RE.test(line)) {
+      return false;
+    }
+    const confirmed = extractConfirmedLines(plotSummary).join(" ");
+    if (!confirmed) {
+      return false;
+    }
+    const chunks = [...line.matchAll(/[\u4e00-\u9fa5]{2,6}/g)].map((m) => m[0]);
+    const stop = new Set(
+      "我告诉你我说已经知道了换用拿是的有在人不".split("")
+    );
+    const hits = chunks.filter((c) => c.length >= 2 && !stop.has(c) && confirmed.includes(c));
+    return hits.length >= 2 || (hits.length >= 1 && /经手|老周|账本|钥匙|保险柜|女儿/.test(line));
+  }
+
+  function detectPlayerNamesMastermind(playerLine) {
+    return MASTERMIND_RE.test(String(playerLine || ""));
+  }
+
+  function primaryPendingAdvanced(plotBefore, plotAfter, seed) {
+    const beforeP = extractPendingLines(plotBefore);
+    const afterP = extractPendingLines(plotAfter);
+    if (beforeP[0] && (!afterP[0] || afterP[0] !== beforeP[0])) {
+      return true;
+    }
+    const keywords = ["指使", "指派", "派我", "幕后", "主使", ...(seed?.endingCoreKeywords || [])];
+    const beforeN = countLayers(plotBefore).confirmed;
+    const afterN = countLayers(plotAfter).confirmed;
+    if (afterN > beforeN) {
+      const allAfter = extractConfirmedLines(plotAfter).join("\n");
+      const allBefore = extractConfirmedLines(plotBefore).join("\n");
+      if (keywords.some((k) => allAfter.includes(k) && !allBefore.includes(k))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function trackPrimaryProgress(session, plotBefore, plotAfter, playerLine, seed) {
+    if (!session) {
+      return { neglectPrimaryRounds: 0, shouldWarn: false, shouldFail: false };
+    }
+    const progress =
+      detectPlayerNamesMastermind(playerLine) ||
+      primaryPendingAdvanced(plotBefore, plotAfter, seed);
+    if (extractPendingLines(plotAfter).length === 0) {
+      session.neglectPrimaryRounds = 0;
+    } else if (progress) {
+      session.neglectPrimaryRounds = 0;
+    } else {
+      session.neglectPrimaryRounds = (session.neglectPrimaryRounds || 0) + 1;
+    }
+    return getNeglectState(session, seed);
+  }
+
+  function getNeglectState(session, seed) {
+    const n = session?.neglectPrimaryRounds || 0;
+    const warnAt = Number(seed?.neglectPrimaryWarnAt) > 0 ? seed.neglectPrimaryWarnAt : 3;
+    const failAt = Number(seed?.neglectPrimaryFailAt) > 0 ? seed.neglectPrimaryFailAt : 5;
+    return {
+      neglectPrimaryRounds: n,
+      shouldWarn: n >= warnAt && n < failAt,
+      shouldFail: n >= failAt,
+    };
+  }
+
+  function replyContextFromSession(session, pickIntent, extra) {
     return {
       pickIntent: pickIntent || "",
       stallTurns: session?.stallTurns ?? 0,
+      neglectWarn: Boolean(extra?.neglectWarn),
+      neglectFail: Boolean(extra?.neglectFail),
+      redundantOffer: Boolean(extra?.redundantOffer),
+      playerNamesMastermind: Boolean(extra?.playerNamesMastermind),
     };
   }
 
@@ -275,6 +399,11 @@
     isReadyForEnding,
     hasCoreGoalAchieved,
     extractConfirmedLines,
+    normalizePlayerLineForApi,
+    detectRedundantPlayerOffer,
+    detectPlayerNamesMastermind,
+    trackPrimaryProgress,
+    getNeglectState,
     updateStallCounters,
     replyContextFromSession,
   };

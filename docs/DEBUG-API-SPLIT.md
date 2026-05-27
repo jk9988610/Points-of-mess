@@ -61,6 +61,15 @@
 2. **结局·②close×2** — 两条 `intent: close` 选项（隐藏第 3 钮）  
 3. 玩家选任一条 close → 重置 session、挂起；**再点锋利** 重新 `startTalking`（新种子）
 
+## P0：信息价值 / 胜败（v0.5.28）
+
+| 机制 | 程序 |
+|------|------|
+| 复读【已确认】报价 | `detectRedundantPlayerOffer` → reply 拒交易 |
+| 动作句「带我去…」 | `normalizePlayerLineForApi` 改写为问询 |
+| 回避 #1 | `neglectPrimaryRounds`：3 轮警告、5 轮 `失败·①终局` 后挂起重置 |
+| 供述指使者 | `detectPlayerNamesMastermind` → reply 接住，摘要后走胜利结局 |
+
 ---
 
 ## 调试面板：必打 vs 不必打

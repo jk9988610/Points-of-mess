@@ -193,6 +193,54 @@
     }
   }
 
+  async function requestFailureReply({
+    character,
+    archetype,
+    apiMessages,
+    plotSummary,
+    signal,
+  }) {
+    const name = character.name;
+    const pending = window.GameOnion?.extractPendingLines?.(plotSummary) || [];
+    const p1 = pending[0] || "指使者是谁";
+    const failLine = String(archetype.failureLine || "你不肯说指使者，我没时间了。").trim();
+    const failSystem = `${roleStyleFromSystem(archetype.system)}${plotSummaryBlock(plotSummary)}
+【失败轮】玩家多轮回避 #1「${p1}」。你是「${name}」。
+用 1～2 句（≤40 字）结束对峙，参考语气：「${failLine}」
+只输出角色台词，不要 JSON。`;
+
+    const raw = await window.ChatApi.completeChat({
+      systemPrompt: failSystem,
+      messages: apiMessages,
+      temperature: window.PomTokens?.TEMP_REPLY ?? 0.4,
+      max_tokens: tokenLimit("REPLY_ONLY", 768),
+      signal,
+      debugLabel: "失败·①终局",
+    });
+    const reply = replyFromRaw(raw);
+    if (reply && !isWeakReply(reply)) {
+      return reply;
+    }
+    return failLine;
+  }
+
+  async function requestFailureSequence({
+    character,
+    archetype,
+    session,
+    apiMessages,
+    signal,
+  }) {
+    const reply = await requestFailureReply({
+      character,
+      archetype,
+      apiMessages,
+      plotSummary: session.plotSummary,
+      signal,
+    });
+    return { reply, options: null };
+  }
+
   async function requestEndingSequence({
     character,
     archetype,
@@ -683,7 +731,8 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     });
     const replyContext = window.GameOnion?.replyContextFromSession?.(
       session,
-      turn?.pick?.intent
+      turn?.pick?.intent,
+      turn?.onionExtra
     );
     const onionContext = {
       stallTurns: session?.stallTurns ?? 0,
@@ -858,7 +907,8 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       try {
         const replyContext = window.GameOnion?.replyContextFromSession?.(
           session,
-          turn?.pick?.intent
+          turn?.pick?.intent,
+          turn?.onionExtra
         );
         reply = await requestReplyOnly({
           systemPrompt: buildCombinedSystem(archetype, {
@@ -918,6 +968,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     presetOptions,
     generateOptions,
     requestEndingSequence,
+    requestFailureSequence,
     buildEndingCloseOptions,
     requestCombinedTurn: requestCombinedTurnWithFallback,
   };

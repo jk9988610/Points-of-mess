@@ -24,7 +24,10 @@
         endingMinConfirmed: 3,
         /** [已确认] 须含其一才允许结局（与「待核实清空」同时满足） */
         endingCoreKeywords: ["幕后", "指使", "操控", "主使"],
+        neglectPrimaryWarnAt: 3,
+        neglectPrimaryFailAt: 5,
       },
+      failureLine: "你不肯说指使者，我没时间了。",
       closeOptionLines: {
         a: "明白了，我先走。",
         b: "账本的事我会守口如瓶。",
