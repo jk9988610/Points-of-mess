@@ -25,9 +25,6 @@
       document.write(
         '<script src="js/version.js?v=' + encodeURIComponent(bust) + '"><\/script>'
       );
-      document.write(
-        '<script src="js/boot.js?v=' + encodeURIComponent(bust) + '"><\/script>'
-      );
     })();
   </script>
   <script>
@@ -49,7 +46,7 @@
   <div class="app-shell">
     <header class="app-header">
       <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion"></span></h1>
-      <a class="stop-button stop-button--ghost" href="refresh.html" title="Chrome 缓存旧版时点此">更新</a>
+      <a class="stop-button stop-button--ghost" href="play.html" title="绕过 Chrome 旧缓存进入最新版">更新</a>
       <button class="stop-button stop-button--ghost" type="button" id="logoutBtn">退出</button>
       <button class="stop-button" type="button" id="stopGeneration" disabled>停止</button>
     </header>
@@ -170,5 +167,17 @@
     </nav>
   </div>
 
+  <script>
+    (function () {
+      var bust =
+        window.__POM_CACHE_BUST ||
+        window.POM_VERSION ||
+        new URLSearchParams(location.search).get("v") ||
+        String(Date.now());
+      document.write(
+        '<script src="js/boot.js?v=' + encodeURIComponent(bust) + '"><\/script>'
+      );
+    })();
+  </script>
 </body>
 </html>

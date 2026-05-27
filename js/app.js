@@ -20,6 +20,14 @@
   const MEMORY_INPUT_ENABLED = false;
 
   const canvas = document.getElementById("gameCanvas");
+  if (!canvas) {
+    console.error("Points-of-mess: #gameCanvas 未找到，请确认 boot.js 在 </body> 前加载");
+    window.PomDebug?.logLocalError(
+      "启动失败",
+      "游戏画布未就绪（脚本加载顺序错误）"
+    );
+    return;
+  }
   const ctx = canvas.getContext("2d");
   const bubbleEl = document.getElementById("speechBubble");
   const bubbleTextEl = document.getElementById("speechBubbleText");
