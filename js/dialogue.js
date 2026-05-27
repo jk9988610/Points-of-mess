@@ -14,7 +14,8 @@
       (m) =>
         m.status !== "error" &&
         (m.role === "user" || m.role === "assistant") &&
-        m.intent !== "pause"
+        m.intent !== "pause" &&
+        m.intent !== "suspend"
     );
   }
 

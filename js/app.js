@@ -39,7 +39,7 @@
   const state = createInitialState();
   state.currentOptions = null;
   state.optionsLoading = false;
-  state.optionsPaused = false;
+  state.dialogueHungUp = false;
   state.playerBubbleText = "";
 
   let abortController = null;
@@ -50,6 +50,15 @@
   function isInTalkZoneNow() {
     const ch = state.talkingId ? getCharacter(state.talkingId) : null;
     return ch ? isInTalkZone(state.player, ch) : false;
+  }
+
+  /** 挂起按钮或走出橙圈：对话 UI 暂停，等同离圈 */
+  function isDialogueSuspended() {
+    return Boolean(state.talkingId && (state.dialogueHungUp || !isInTalkZoneNow()));
+  }
+
+  function isDialogueUiActive() {
+    return Boolean(state.talkingId && isInTalkZoneNow() && !state.dialogueHungUp);
   }
 
   function bubbleRect(left, top, width, height) {
@@ -159,7 +168,7 @@
   function syncSpeechBubbles(streaming, options) {
     const thinking = Boolean(options?.thinking);
     const ch = state.talkingId ? getCharacter(state.talkingId) : null;
-    const inZone = isInTalkZoneNow();
+    const active = isDialogueUiActive();
 
     bubbleTextEl.textContent =
       state.bubbleText || (streaming && !thinking ? "…" : "");
@@ -170,15 +179,15 @@
 
     const showNpc =
       Boolean(state.talkingId) &&
-      inZone &&
+      active &&
       (state.bubbleText || (streaming && !thinking));
     const showPlayer =
-      Boolean(state.talkingId) && inZone && Boolean(state.playerBubbleText);
+      Boolean(state.talkingId) && active && Boolean(state.playerBubbleText);
 
     bubbleEl.classList.toggle("visible", showNpc);
     playerBubbleEl.classList.toggle("visible", showPlayer);
 
-    const suspended = Boolean(state.talkingId && !inZone);
+    const suspended = isDialogueSuspended();
     optionsBar.classList.toggle("options-bar--suspended", suspended);
     if (state.talkingId) {
       if (memoryInputEl) {
@@ -195,7 +204,7 @@
       renderOptionButtons(state.currentOptions, state.optionsLoading);
     }
 
-    if (!state.talkingId || !inZone) {
+    if (!state.talkingId || !active) {
       return;
     }
 
@@ -280,13 +289,12 @@
   const INTENT_ARIA = {
     keypoint: "深挖",
     followup: "推进",
-    pause: "待会再来",
+    suspend: "挂起",
     close: "结束对话",
   };
 
   function renderOptionButtons(options, loading) {
-    const outOfZone = Boolean(state.talkingId && !isInTalkZoneNow());
-    const disabled = loading || state.isStreaming || outOfZone;
+    const disabled = loading || state.isStreaming || isDialogueSuspended();
     optionsBar.classList.toggle("is-loading", loading);
     for (const btn of optionsBar.querySelectorAll(".option-btn")) {
       const id = Number(btn.dataset.optionId);
@@ -307,7 +315,7 @@
       }
       btn.classList.toggle(
         "option-btn--pause",
-        opt?.intent === "pause" || opt?.intent === "close"
+        opt?.intent === "suspend" || opt?.intent === "close"
       );
       btn.disabled = disabled || !opt?.line || loading;
     }
@@ -339,9 +347,10 @@
     hintEl.textContent = state.talkingId
       ? state.isStreaming
         ? "等待角色回复… · 可在橙圈内移动"
-        : getCharacter(state.talkingId) &&
-            !isInTalkZone(state.player, getCharacter(state.talkingId))
-          ? "回到橙圈内，对话气泡会恢复"
+        : isDialogueSuspended()
+          ? state.dialogueHungUp && isInTalkZoneNow()
+            ? "对话已挂起 · 走出橙圈再进入可继续"
+            : "回到橙圈内，对话气泡会恢复"
           : "点选下方句子 · 可在橙圈内点击移动"
       : near
         ? `点击「${near.name}」交谈`
@@ -361,7 +370,7 @@
     state.talkingId = null;
     state.currentOptions = null;
     state.optionsLoading = false;
-    state.optionsPaused = false;
+    state.dialogueHungUp = false;
     state.playerBubbleText = "";
     state.bubbleText = "";
     setBubble("");
@@ -402,7 +411,7 @@
 
     state.talkingId = characterId;
     state.playerBubbleText = "";
-    state.optionsPaused = false;
+    state.dialogueHungUp = false;
     const session = getSession(state, characterId);
     setStatus("", false);
     window.PomDebug?.logUser("开始对话", {
@@ -443,27 +452,29 @@
     syncSpeechBubbles(false);
   }
 
-  function resumeTalkOptions() {
+  function resumeDialogueUi(reason) {
     if (!state.talkingId || state.isStreaming) {
       return;
     }
-    state.optionsPaused = false;
+    if (!isInTalkZoneNow()) {
+      return;
+    }
+    state.dialogueHungUp = false;
     setOptionsVisible(true);
     setMemoryInputVisible(true);
     renderOptionButtons(state.currentOptions, false);
     setStatus("", false);
-    window.PomDebug?.logLocal("继续对话", "已恢复选项栏");
+    window.PomDebug?.logUser("恢复对话 UI", reason || "回到橙圈内");
+    renderMap();
+    syncSpeechBubbles(false);
   }
 
-  async function handlePauseOption(pick) {
-    /** 第三项「待会」：仅玩家↔程序 UI，不写入 session，后续 API/摘要均不可见 */
-    setPlayerBubble(pick.line);
-    state.optionsPaused = true;
-    setOptionsVisible(false);
-    setMemoryInputVisible(false);
-    window.PomDebug?.logUser("待会（仅程序）", {
-      line: pick.line,
-      note: "未写入 session，不调用 AI，角色台词保持上一轮",
+  function handleSuspendOption() {
+    /** 第三钮：挂起，等同走出检测圈；不写入 session、不告知 AI */
+    state.dialogueHungUp = true;
+    state.playerBubbleText = "";
+    window.PomDebug?.logUser("挂起对话", {
+      note: "等同离圈：隐藏气泡、禁用选项；不写入 session、不调用 AI",
     });
     renderMap();
     syncSpeechBubbles(false);
@@ -473,7 +484,7 @@
     if (!state.talkingId || state.isStreaming || state.optionsLoading) {
       return;
     }
-    if (!isInTalkZoneNow()) {
+    if (!isDialogueUiActive()) {
       setStatus("回到橙圈内再继续输入。", false);
       return;
     }
@@ -575,7 +586,7 @@
     if (!state.talkingId || state.isStreaming || state.optionsLoading) {
       return;
     }
-    if (!isInTalkZoneNow()) {
+    if (!isDialogueUiActive()) {
       setStatus("回到橙圈内再选选项。", false);
       return;
     }
@@ -600,8 +611,8 @@
       line: pick.line,
     });
 
-    if (pick.intent === "pause") {
-      await handlePauseOption(pick);
+    if (pick.intent === "suspend") {
+      handleSuspendOption();
       return;
     }
 
@@ -739,10 +750,10 @@
         window.PomDebug?.logUser("地图点击", {
           action: "点角色",
           character: talking?.name,
-          optionsPaused: state.optionsPaused,
+          hungUp: state.dialogueHungUp,
         });
-        if (state.optionsPaused) {
-          resumeTalkOptions();
+        if (state.dialogueHungUp && isInTalkZoneNow()) {
+          resumeDialogueUi("点击角色");
         }
         return;
       }
@@ -824,6 +835,9 @@
             character: ch.name,
             distance: window.GameMap.dist(state.player, ch).toFixed(3),
           });
+          if (inZone && state.dialogueHungUp) {
+            resumeDialogueUi("走进橙圈");
+          }
         }
         lastInZone = inZone;
       }
@@ -906,7 +920,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②深挖/推进(AI)+③待会(仅程序)。"
+      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②深挖/推进(AI)+③挂起(仅程序)。"
     );
   }
   requestAnimationFrame(gameLoop);

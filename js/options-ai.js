@@ -2,7 +2,7 @@
   const OPTION_SCHEMA = [
     { id: 1, intent: "keypoint", label: "深挖" },
     { id: 2, intent: "followup", label: "推进" },
-    { id: 3, intent: "pause", label: "待会" },
+    { id: 3, intent: "suspend", label: "挂起" },
   ];
 
   /** Phase A+：优先 [待核实] 行；兼容旧【未解问题】段 */
@@ -64,15 +64,16 @@
 每条 line 为中文一句，≤35 字。不要生成 close（收束由程序固定）。`;
   }
 
-  function buildIntentHintsBlock() {
-    return OPTION_SCHEMA.map((o) => `- ${o.intent}（${o.label}）`).join("\n");
+  /** 仅合并 API 备用路径；挂起按钮不进模型上下文 */
+  function buildIntentHintsForApi() {
+    return `- keypoint（深挖）
+- followup（推进）
+- close（收束）`;
   }
 
-  function fixedPauseLine(archetype) {
-    const preset = archetype.options?.find(
-      (o) => o.intent === "pause" || o.intent === "close"
-    )?.line;
-    return String(archetype.pauseLine || preset || "待会再来找你。").trim();
+  function fixedSuspendLine(archetype) {
+    const preset = archetype.options?.find((o) => o.intent === "suspend")?.line;
+    return String(archetype.suspendLine || preset || "待会再来找你。").trim();
   }
 
   function optionRow(meta, line) {
@@ -85,7 +86,7 @@
   }
 
   function buildHybridOptions(archetype, duo) {
-    const pauseLine = fixedPauseLine(archetype);
+    const suspendLine = fixedSuspendLine(archetype);
 
     return OPTION_SCHEMA.map((meta) => {
       if (meta.intent === "keypoint") {
@@ -94,7 +95,7 @@
       if (meta.intent === "followup") {
         return optionRow(meta, duo.followup);
       }
-      return optionRow(meta, pauseLine);
+      return optionRow(meta, suspendLine);
     });
   }
 
@@ -167,8 +168,8 @@ ${summaryBlock}
 玩家本轮 intent：${turn.pick.intent}
 玩家本轮原话（应与 messages 最后一条 user 一致）：${turn.pick.line}
 
-【四类行动类型 — 只作结构参考，勿把旧选项文字写进 reply】
-${buildIntentHintsBlock()}
+【行动类型 — 只作结构参考，勿把旧选项文字写进 reply】
+${buildIntentHintsForApi()}
 
 【输出】
 ${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."},{"intent":"close","line":"..."}]}。'}
@@ -505,7 +506,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     const merged = buildHybridOptions(archetype, duo);
     window.PomDebug?.logLocal(
       "选项组装",
-      `①深挖/②推进 AI · ③待会固定「${fixedPauseLine(archetype)}」`
+      `①深挖/②推进 AI · ③挂起固定「${fixedSuspendLine(archetype)}」`
     );
     return merged;
   }
