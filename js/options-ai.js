@@ -39,6 +39,10 @@
   }
 
   function plotSummaryForOptions(plotSummary) {
+    const onion = window.GameOnion?.formatOptionsBlock?.(plotSummary);
+    if (onion) {
+      return onion;
+    }
     const excerpt = extractPendingVerification(plotSummary);
     if (!excerpt) {
       return "";
@@ -373,7 +377,8 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     if (!text) {
       return "";
     }
-    return `\n【剧情摘要】（长程记忆；事实以此为准。reply 接最近一轮对白，勿重复摘要已写明的内容。）\n${text}\n`;
+    const onionHint = window.GameOnion?.formatReplyHint?.(text) || "";
+    return `\n【剧情摘要】（长程记忆；事实以此为准。reply 接最近一轮对白，勿重复摘要已写明的内容。）\n${text}${onionHint}\n`;
   }
 
   async function requestReplyOnly({

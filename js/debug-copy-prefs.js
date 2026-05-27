@@ -1,5 +1,5 @@
 (function () {
-  const STORAGE_KEY = "pom_debug_copy_prefs_v2";
+  const STORAGE_KEY = "pom_debug_print_prefs_v1";
 
   const GROUPS = [
     { id: "apiReplyOut", label: "发AI·角色回复", tag: "api-reply-out" },
@@ -124,7 +124,8 @@
         '<div class="debug-prefs-actions">' +
         '<button type="button" class="debug-btn" data-prefs-all>全选</button>' +
         '<button type="button" class="debug-btn" data-prefs-api>仅API</button>' +
-        '<button type="submit" class="debug-btn">保存</button>' +
+        '<button type="submit" class="debug-btn">应用</button>' +
+        '<button type="button" class="debug-btn" data-prefs-copy>按选择复制</button>' +
         '<button type="button" class="debug-btn" data-prefs-cancel>取消</button>' +
         "</div>";
       form.innerHTML = html;
@@ -151,6 +152,18 @@
           el.checked = Boolean(g?.id.startsWith("api"));
         });
       }
+      if (e.target.matches("[data-prefs-copy]")) {
+        const prefs = { ...DEFAULT_PREFS };
+        for (const g of GROUPS) {
+          const input = form.querySelector(`[name="${g.id}"]`);
+          prefs[g.id] = Boolean(input?.checked);
+        }
+        savePrefs(prefs);
+        window.PomDebug?.rerender?.();
+        window.PomDebug?.copyAll?.();
+        dialog.close?.();
+        dialog.removeAttribute("open");
+      }
       if (e.target.matches("[data-prefs-cancel]")) {
         dialog.close?.();
         dialog.removeAttribute("open");
@@ -165,9 +178,10 @@
         prefs[g.id] = Boolean(input?.checked);
       }
       savePrefs(prefs);
+      window.PomDebug?.rerender?.();
       dialog.close?.();
       dialog.removeAttribute("open");
-      window.PomDebug?.logLocal("调试复制偏好已保存", prefs, ["ui"]);
+      window.PomDebug?.logLocal("打印选择已应用", "面板已按勾选过滤显示", ["ui"]);
     });
   }
 
@@ -182,6 +196,7 @@
     savePrefs,
     filterEntries,
     entriesToPlain,
+    entryAllowed,
     GROUPS,
   };
 })();

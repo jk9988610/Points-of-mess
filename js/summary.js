@@ -14,6 +14,7 @@
 - …
 
 【核心规则】
+0. 保留【本局目标】段（若有）；压缩时勿删除或改写目标句。
 1. 在已有摘要上递进更新；禁止整体变短；[已确认] 中的专名（人名、地点、物证）只增不删。
 2. [待核实] 须具体可答；禁止「是否会…」类元问题。新事实用 [已确认] 追加。
 3. 全文 ≤ ${SUMMARY_MAX_CHARS} 字。只输出摘要正文，无 markdown、无说明。
@@ -156,9 +157,10 @@
 
     session.plotSummary = text;
     session.lastSummaryAtOptionTurn = optionTurns;
+    const onionNote = window.GameOnion?.formatLayersDebug?.(text) || "";
     window.PomDebug?.logLocal(
       "③摘要 · 已写入 session",
-      `${text.length} 字 · 下一轮起注入 ①reply system / ②选项 user 摘录 · 正文见绿条 ←拆分·③摘要`,
+      `${text.length} 字 · ${onionNote} · 正文见绿条 ←拆分·③摘要`,
       ["summary-out"]
     );
     return true;

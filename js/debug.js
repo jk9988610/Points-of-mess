@@ -90,12 +90,22 @@
     render();
   }
 
+  function visibleEntries() {
+    const prefs = window.PomDebugCopyPrefs?.loadPrefs?.();
+    const allow = window.PomDebugCopyPrefs?.entryAllowed;
+    if (!prefs || !allow) {
+      return entries;
+    }
+    return entries.filter((e) => allow(e, prefs));
+  }
+
   function render() {
     const el = document.getElementById("debugLog");
     if (!el) {
       return;
     }
-    el.innerHTML = entries
+    const shown = visibleEntries();
+    el.innerHTML = shown
       .map((e) => {
         const t = THEME[e.audience] || THEME.local;
         const entryStyle = [
@@ -146,6 +156,12 @@
   window.PomDebug = {
     getEntries() {
       return entries;
+    },
+    getVisibleEntries() {
+      return visibleEntries();
+    },
+    rerender() {
+      render();
     },
     logLocal(title, detail, tags) {
       const tagList = ["ui", ...(tags || [])];

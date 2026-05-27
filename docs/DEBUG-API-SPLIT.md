@@ -33,6 +33,25 @@
 
 下一轮起：① 的 system 带**完整**新摘要；② 的 user 带**待核实摘录**。
 
+## 洋葱种子（程序 · 开局）
+
+`presets.js` 的 `onionSeed` → `GameOnion.buildSeedPlotSummary` → `session.plotSummary`（`startTalking` 时写入，不调 API）。
+
+| 字段 | 洋葱层 | 写入摘要 |
+|------|--------|----------|
+| `goal` | 本局终点 | `【本局目标】` |
+| `confirmed[]` | 核心 | `[已确认]` |
+| `pending[]` | 中层（#1 #2 优先） | `[待核实#n]` |
+| `attitude[]` | 外层 | `【关系与态度】` |
+
+程序注入（非 prompt 堆砌）：
+
+- ① `GameOnion.formatReplyHint`：优先剥 `#1` 中层
+- ② `GameOnion.formatOptionsBlock`：keypoint→#1，followup→#2
+- ③ 压缩后 `formatLayersDebug` 灰条计数
+
+调试：**打印选择** 勾选类型 → **应用** 过滤面板；**按选择复制** 一键导出。
+
 ---
 
 ## 调试面板：必打 vs 不必打

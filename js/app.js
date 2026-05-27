@@ -405,6 +405,18 @@
     return true;
   }
 
+  function ensureOnionSeedPlotSummary(session, archetype) {
+    if (String(session.plotSummary || "").trim()) {
+      return false;
+    }
+    const seed = archetype?.onionSeed;
+    if (!seed || !window.GameOnion?.buildSeedPlotSummary) {
+      return false;
+    }
+    session.plotSummary = window.GameOnion.buildSeedPlotSummary(seed);
+    return true;
+  }
+
   function startTalking(characterId) {
     const character = getCharacter(characterId);
     const archetype = getArchetype(character.archetypeId);
@@ -420,6 +432,16 @@
     state.playerBubbleText = "";
     state.dialogueHungUp = false;
     const session = getSession(state, characterId);
+    const seeded = ensureOnionSeedPlotSummary(session, archetype);
+    if (seeded) {
+      persist(state);
+      const goal = window.GameOnion?.extractGoal?.(session.plotSummary) || "";
+      window.PomDebug?.logLocal(
+        "洋葱·种子摘要已注入",
+        `${window.GameOnion.formatLayersDebug(session.plotSummary)}${goal ? `\n目标：${goal}` : ""}`,
+        ["summary-out"]
+      );
+    }
     setStatus("", false);
     window.PomDebug?.logUser("开始对话", {
       character: character.name,
@@ -936,7 +958,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "调试说明",
-      "黄/绿=三次 API 全文（权威）。灰=路径/跳过/告警。③摘要仅第4/8…轮。详见 docs/DEBUG-API-SPLIT.md",
+      "打印选择=过滤面板+复制。黄/绿=①②③ API。开局程序注入洋葱种子摘要。详见 docs/DEBUG-API-SPLIT.md",
       ["ui"]
     );
   }
