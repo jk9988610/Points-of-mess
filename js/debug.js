@@ -188,8 +188,7 @@
         el.innerHTML = "";
       }
     },
-    copyAll() {
-      const text = plainLines.join("\n");
+    copyText(text) {
       if (navigator.clipboard?.writeText) {
         return navigator.clipboard.writeText(text);
       }
@@ -200,6 +199,23 @@
       document.execCommand("copy");
       document.body.removeChild(ta);
       return Promise.resolve();
+    },
+    copyAll() {
+      return this.copyText(plainLines.join("\n"));
+    },
+    /** 从最近一次「玩家选择」起复制到末尾（报 bug 用） */
+    copyCurrentTurn() {
+      const version = window.POM_VERSION || "?";
+      let start = Math.max(0, entries.length - 28);
+      for (let i = entries.length - 1; i >= 0; i--) {
+        if (String(entries[i].title).includes("玩家选择")) {
+          start = i;
+          break;
+        }
+      }
+      const slice = plainLines.slice(start);
+      const header = `版本：v${version}\n（以下为最近一轮起）\n`;
+      return this.copyText(header + slice.join("\n"));
     },
   };
 })();

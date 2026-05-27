@@ -612,6 +612,14 @@ body.login-locked .memory-input-bar {
   display: none;
 }
 
+.options-bar.options-bar--suspended {
+  opacity: 0.55;
+}
+
+.options-bar.options-bar--suspended .option-btn {
+  cursor: not-allowed;
+}
+
 .option-btn {
   display: flex;
   align-items: center;

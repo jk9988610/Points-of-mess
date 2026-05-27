@@ -40,41 +40,104 @@
   let lastFrame = performance.now();
   let highlightId = null;
 
-  function placeFloatingBubble(el, anchorX, anchorY, options) {
-    const gap = options?.gap ?? CHAR_BUBBLE_GAP;
-    const preferBelow = Boolean(options?.preferBelow);
-    el.style.visibility = "hidden";
+  function isInTalkZoneNow() {
+    const ch = state.talkingId ? getCharacter(state.talkingId) : null;
+    return ch ? isInTalkZone(state.player, ch) : false;
+  }
+
+  function bubbleRect(left, top, width, height) {
+    return { left, top, right: left + width, bottom: top + height, width, height };
+  }
+
+  function rectsOverlap(a, b, pad = 10) {
+    return !(
+      a.right + pad < b.left ||
+      b.right + pad < a.left ||
+      a.bottom + pad < b.top ||
+      b.bottom + pad < a.top
+    );
+  }
+
+  function measureBubble(el) {
+    const wasVisible = el.classList.contains("visible");
     el.classList.add("visible");
-    const bw = el.offsetWidth || 120;
-    const bh = el.offsetHeight || 40;
+    el.style.visibility = "hidden";
+    el.style.left = "-9999px";
+    el.style.top = "0";
+    const width = el.offsetWidth || 120;
+    const height = el.offsetHeight || 40;
+    if (!wasVisible) {
+      el.classList.remove("visible");
+    }
     el.style.visibility = "";
+    return { width, height };
+  }
 
-    let left = anchorX - bw / 2;
-    let top = preferBelow ? anchorY + gap : anchorY - gap - bh;
-
+  function clampBubblePosition(left, top, width, height) {
     const margin = 8;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    if (top < margin) {
-      top = anchorY + gap;
+    let x = left;
+    let y = top;
+    if (x < margin) {
+      x = margin;
     }
-    if (top + bh > vh - margin) {
-      top = Math.max(margin, anchorY - gap - bh);
+    if (x + width > vw - margin) {
+      x = vw - width - margin;
     }
-    if (left < margin) {
-      left = margin;
+    if (y < margin) {
+      y = margin;
     }
-    if (left + bw > vw - margin) {
-      left = vw - bw - margin;
+    if (y + height > vh - margin) {
+      y = vh - height - margin;
     }
-    el.style.left = `${left}px`;
-    el.style.top = `${top}px`;
+    return { left: x, top: y };
+  }
+
+  function bubblePositionCandidates(anchorX, anchorY, size, options) {
+    const gap = options?.gap ?? CHAR_BUBBLE_GAP;
+    const preferBelow = Boolean(options?.preferBelow);
+    const { width, height } = size;
+    const half = width / 2;
+    const tops = preferBelow
+      ? [anchorY + gap, anchorY - gap - height, anchorY + gap + 12]
+      : [anchorY - gap - height, anchorY + gap, anchorY - gap - height - 12];
+    const xOffsets = [0, -width * 0.35, width * 0.35, -width * 0.55, width * 0.55];
+    const list = [];
+    for (const top of tops) {
+      for (const dx of xOffsets) {
+        list.push(clampBubblePosition(anchorX - half + dx, top, width, height));
+      }
+    }
+    return list;
+  }
+
+  function pickBubblePosition(el, anchorX, anchorY, options) {
+    const size = measureBubble(el);
+    const avoid = options?.avoidRects || [];
+    const candidates = bubblePositionCandidates(anchorX, anchorY, size, options);
+    for (const pos of candidates) {
+      const rect = bubbleRect(pos.left, pos.top, size.width, size.height);
+      if (!avoid.some((r) => rectsOverlap(rect, r))) {
+        return { ...pos, rect };
+      }
+    }
+    const fallback = candidates[0] || clampBubblePosition(anchorX - size.width / 2, anchorY, size.width, size.height);
+    return {
+      ...fallback,
+      rect: bubbleRect(fallback.left, fallback.top, size.width, size.height),
+    };
+  }
+
+  function applyBubblePosition(el, pos) {
+    el.style.left = `${pos.left}px`;
+    el.style.top = `${pos.top}px`;
   }
 
   function syncSpeechBubbles(streaming, options) {
     const thinking = Boolean(options?.thinking);
     const ch = state.talkingId ? getCharacter(state.talkingId) : null;
-    const inZone = ch ? isInTalkZone(state.player, ch) : false;
+    const inZone = isInTalkZoneNow();
 
     bubbleTextEl.textContent =
       state.bubbleText || (streaming && !thinking ? "…" : "");
@@ -93,6 +156,23 @@
     bubbleEl.classList.toggle("visible", showNpc);
     playerBubbleEl.classList.toggle("visible", showPlayer);
 
+    const suspended = Boolean(state.talkingId && !inZone);
+    optionsBar.classList.toggle("options-bar--suspended", suspended);
+    if (state.talkingId) {
+      if (memoryInputEl) {
+        memoryInputEl.disabled =
+          suspended || state.isStreaming || state.optionsLoading;
+      }
+      if (memoryInputSendEl) {
+        memoryInputSendEl.disabled =
+          suspended ||
+          state.isStreaming ||
+          state.optionsLoading ||
+          !state.talkingId;
+      }
+      renderOptionButtons(state.currentOptions, state.optionsLoading);
+    }
+
     if (!state.talkingId || !inZone) {
       return;
     }
@@ -100,18 +180,26 @@
     const npcAnchor = worldToCanvas(canvas, ch.x, ch.y);
     const npcScreenX = npcAnchor.rect.left + npcAnchor.x;
     const npcScreenY = npcAnchor.rect.top + npcAnchor.y;
+
+    let npcRect = null;
     if (showNpc) {
-      placeFloatingBubble(bubbleEl, npcScreenX, npcScreenY, { preferBelow: false });
+      const npcPos = pickBubblePosition(bubbleEl, npcScreenX, npcScreenY, {
+        preferBelow: false,
+      });
+      applyBubblePosition(bubbleEl, npcPos);
+      npcRect = npcPos.rect;
     }
 
     if (showPlayer) {
       const pl = worldToCanvas(canvas, state.player.x, state.player.y);
       const plScreenX = pl.rect.left + pl.x;
       const plScreenY = pl.rect.top + pl.y;
-      placeFloatingBubble(playerBubbleEl, plScreenX, plScreenY, {
+      const playerPos = pickBubblePosition(playerBubbleEl, plScreenX, plScreenY, {
         preferBelow: true,
-        gap: 28,
+        gap: 32,
+        avoidRects: npcRect ? [npcRect] : [],
       });
+      applyBubblePosition(playerBubbleEl, playerPos);
     }
   }
 
@@ -173,7 +261,8 @@
   };
 
   function renderOptionButtons(options, loading) {
-    const disabled = loading || state.isStreaming;
+    const outOfZone = Boolean(state.talkingId && !isInTalkZoneNow());
+    const disabled = loading || state.isStreaming || outOfZone;
     optionsBar.classList.toggle("is-loading", loading);
     for (const btn of optionsBar.querySelectorAll(".option-btn")) {
       const id = Number(btn.dataset.optionId);
@@ -329,6 +418,10 @@
     if (!state.talkingId || state.isStreaming || state.optionsLoading) {
       return;
     }
+    if (!isInTalkZoneNow()) {
+      setStatus("回到橙圈内再继续输入。", false);
+      return;
+    }
     if (!ensureApiConfig()) {
       return;
     }
@@ -429,6 +522,10 @@
 
   async function pickOption(optionId) {
     if (!state.talkingId || state.isStreaming || state.optionsLoading) {
+      return;
+    }
+    if (!isInTalkZoneNow()) {
+      setStatus("回到橙圈内再选选项。", false);
       return;
     }
     if (!ensureApiConfig()) {
@@ -663,6 +760,9 @@
     window.PomDebug?.logLocal("停止生成");
   });
 
+  document.getElementById("copyTurnDebugBtn")?.addEventListener("click", () => {
+    window.PomDebug?.copyCurrentTurn?.();
+  });
   document.getElementById("copyDebugBtn")?.addEventListener("click", () => {
     window.PomDebug?.copyAll();
   });
