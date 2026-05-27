@@ -78,10 +78,12 @@
 
   function optionRow(meta, line) {
     const text = String(line || "").trim();
+    const send =
+      meta.intent === "suspend" ? text : `[intent:${meta.intent}] ${text}`;
     return {
       ...meta,
       line: text,
-      send: `[intent:${meta.intent}] ${text}`,
+      send,
     };
   }
 

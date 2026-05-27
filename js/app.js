@@ -11,7 +11,6 @@
     hitCharacter,
     isNearPlayer,
     isInTalkZone,
-    clampPointToTalkZone,
     HIT_CHARACTER_RADIUS,
     INTERACT_RADIUS,
     TALK_ZONE_RADIUS,
@@ -346,12 +345,12 @@
     });
     hintEl.textContent = state.talkingId
       ? state.isStreaming
-        ? "等待角色回复… · 可在橙圈内移动"
+        ? "等待角色回复… · 点击可移动（可走出橙圈）"
         : isDialogueSuspended()
           ? state.dialogueHungUp && isInTalkZoneNow()
             ? "对话已挂起 · 走出橙圈再进入可继续"
             : "回到橙圈内，对话气泡会恢复"
-          : "点选下方句子 · 可在橙圈内点击移动"
+          : "点选下方句子 · 点击移动（走出橙圈将暂停选项）"
       : near
         ? `点击「${near.name}」交谈`
         : nearDoc
@@ -606,15 +605,15 @@
     const optionsSnapshot = state.currentOptions.map((o) => ({ ...o }));
     const isClose = pick.intent === "close";
 
-    window.PomDebug?.logUser("玩家选择", {
-      intent: pick.intent,
-      line: pick.line,
-    });
-
     if (pick.intent === "suspend") {
       handleSuspendOption();
       return;
     }
+
+    window.PomDebug?.logUser("玩家选择", {
+      intent: pick.intent,
+      line: pick.line,
+    });
 
     session.messages.push({
       id: createId(),
@@ -760,13 +759,12 @@
       if (hit && hit.id !== state.talkingId) {
         return;
       }
-      const rawTarget = talking ? clampPointToTalkZone(world, talking) : world;
-      const target = clampWorldToMap(rawTarget);
+      const target = clampWorldToMap(world);
       state.moveTarget = target;
       window.PomDebug?.logUser("地图点击", {
-        action: "圈内移动",
+        action: "对话中移动",
         target,
-        inZone: talking ? isInTalkZone(state.player, talking) : false,
+        inZone: talking ? isInTalkZone(target, talking) : false,
       });
       setStatus("", false);
       persist(state);
