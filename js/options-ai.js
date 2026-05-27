@@ -645,10 +645,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
   }) {
     const { lastLine, priorText } = window.GameDialogue.formatRecentDialogueForOptions(
       session.messages,
-      {
-        maxTurns: window.GameDialogue.OPTIONS_HISTORY_TURNS,
-        characterName: character.name,
-      }
+      { characterName: character.name }
     );
     const last =
       assistantLineForOptions(lastLine) || lastUsableAssistantLine(session, archetype);
