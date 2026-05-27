@@ -42,7 +42,8 @@
     if (!body.includes("【剧情档案】")) {
       window.PomDebug?.logLocalWarn(
         "摘要格式",
-        "缺少【剧情档案】段（A+）；摘录将走旧格式回退"
+        "缺少【剧情档案】段（A+）；摘录将走旧格式回退",
+        ["summary"]
       );
     }
   }
@@ -107,7 +108,7 @@
   async function maybeRefreshPlotSummary(session, signal) {
     const skip = summarySkipReason(session);
     if (skip) {
-      window.PomDebug?.logLocal("摘要未执行", skip, ["ui", "summary-skip"]);
+      window.PomDebug?.logLocal("摘要未执行", skip, ["summary-skip"]);
       return false;
     }
 
@@ -130,17 +131,17 @@
     window.PomDebug?.logLocal(
       "触发剧情摘要压缩",
       `${modeLabel} · 第 ${optionTurns} 轮选项 · ${toSummarize.length} 条对白入模 · 保留最近 ${keepRecent / 2} 轮供 API${scopeNote} · 上限 ${SUMMARY_MAX_CHARS} 字`,
-      ["ui", "summary"]
+      ["summary"]
     );
     window.PomDebug?.logLocal(
       "摘要·入模全文（user 消息）",
       userContent,
-      ["ui", "summary-in"]
+      ["summary-in"]
     );
     window.PomDebug?.logLocal(
       "摘要·system 字数",
       String(SUMMARY_SYSTEM.length),
-      ["ui", "summary"]
+      ["summary"]
     );
 
     const summary = await window.ChatApi.completeChat({
@@ -156,7 +157,8 @@
     if (text.length > SUMMARY_MAX_CHARS) {
       window.PomDebug?.logLocalWarn(
         "摘要超长已截断",
-        `${text.length} 字 → ${SUMMARY_MAX_CHARS} 字`
+        `${text.length} 字 → ${SUMMARY_MAX_CHARS} 字`,
+        ["summary"]
       );
       text = text.slice(0, SUMMARY_MAX_CHARS);
     }
@@ -168,12 +170,12 @@
     window.PomDebug?.logLocal(
       "摘要·写入 session 全文",
       text,
-      ["ui", "summary-out"]
+      ["summary-out"]
     );
     window.PomDebug?.logLocal(
       "剧情摘要已写入",
       `${text.length} 字 · 下一轮起注入 reply/选项 system`,
-      ["ui", "summary"]
+      ["summary"]
     );
     return true;
   }

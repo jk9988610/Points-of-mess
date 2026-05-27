@@ -638,7 +638,8 @@
     if (session.plotSummary) {
       window.PomDebug?.logLocal(
         "剧情摘要（缓存，随 reply/选项 system 注入）",
-        session.plotSummary
+        session.plotSummary,
+        ["summary-out"]
       );
     }
     window.PomDebug?.logLocal("本轮 messages 字数", String(
@@ -714,7 +715,7 @@
           }
         } catch (e) {
           if (e.name !== "AbortError") {
-            window.PomDebug?.logLocalWarn("剧情摘要失败", e.message);
+            window.PomDebug?.logLocalWarn("剧情摘要失败", e.message, ["summary"]);
           }
         }
       }
