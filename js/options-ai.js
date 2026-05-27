@@ -624,7 +624,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       `角色上一句台词：${last}`,
     ];
     if (priorText) {
-      parts.push(`最近对话：（不含上一句；最多 ${window.GameDialogue.OPTIONS_HISTORY_TURNS} 轮）\n${priorText}`);
+      parts.push(`最近对话：（不含上一句；本局对白全文）\n${priorText}`);
     }
     if (summaryBlock) {
       parts.push(summaryBlock);

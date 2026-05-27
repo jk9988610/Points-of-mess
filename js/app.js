@@ -462,7 +462,7 @@
     setStatus("", false);
     window.PomDebug?.logUser("开始对话", {
       character: character.name,
-      historyTurns: window.GameDialogue.HISTORY_TURNS,
+      dialogue: "本局对白全文入 API（不裁剪）",
       messageCount: session.messages.length,
     });
 

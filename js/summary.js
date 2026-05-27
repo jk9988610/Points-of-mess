@@ -1,5 +1,7 @@
 (function () {
   const SUMMARY_EVERY_OPTION_TURNS = 4;
+  /** 压缩时保留最近若干条对白不进入「待压缩区」（与 API messages 是否全量无关） */
+  const SUMMARY_PROTECT_MESSAGES = 4;
   /** 摘要总字数上限（产品：尽量写满，专名只增不删） */
   const SUMMARY_MAX_CHARS = 1200;
 
@@ -90,7 +92,7 @@
   function buildSummaryPayload(session) {
     const optionTurns = countOptionTurns(session.messages);
     const done = window.GameDialogue.getDoneMessages(session.messages);
-    const keepRecent = window.GameDialogue.HISTORY_TURNS * 2;
+    const keepRecent = SUMMARY_PROTECT_MESSAGES;
     let toSummarize = done.slice(0, Math.max(0, done.length - keepRecent));
     let mergedProtected = 0;
 

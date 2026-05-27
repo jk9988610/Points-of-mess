@@ -1,9 +1,7 @@
 (function () {
+  /** 仅用于调试文案；发给 API 的 messages 不再按轮次/字数裁剪 */
   const HISTORY_TURNS = 2;
-  /** 选项 API 专用：比 reply 多 1 轮上下文，不抬高 HISTORY_TURNS */
   const OPTIONS_HISTORY_TURNS = 3;
-  /** 最近对白总字数上限（约估 token；中文可粗算 1 字 ≈ 1 token） */
-  const HISTORY_MAX_CHARS = 1400;
 
   function stripIntentTag(send) {
     return send.replace(/^\[intent:\w+\]\s*/, "");
@@ -19,30 +17,16 @@
     );
   }
 
-  function historyCharCount(messages) {
-    return messages.reduce((n, m) => n + String(m.content || "").length, 0);
-  }
-
-  /** 最近 N 轮原话；超出字数则从最早一条裁掉（不发明细全文） */
+  /** 本局全部已完成对白（发给 ①reply / 合并路径，不裁剪） */
   function getHistoryForApi(sessionMessages) {
-    const maxMessages = HISTORY_TURNS * 2;
-    let slice = getDoneMessages(sessionMessages).slice(-maxMessages);
-    while (slice.length > 2 && historyCharCount(slice) > HISTORY_MAX_CHARS) {
-      slice = slice.slice(1);
-    }
-    return slice.map((m) => ({
+    return getDoneMessages(sessionMessages).map((m) => ({
       role: m.role,
       content: m.content,
     }));
   }
 
-  function getHistorySliceForOptions(sessionMessages, maxTurns) {
-    const maxMessages = maxTurns * 2;
-    let slice = getDoneMessages(sessionMessages).slice(-maxMessages);
-    while (slice.length > 2 && historyCharCount(slice) > HISTORY_MAX_CHARS) {
-      slice = slice.slice(1);
-    }
-    return slice;
+  function getHistorySliceForOptions(sessionMessages) {
+    return getDoneMessages(sessionMessages);
   }
 
   function formatDialogueLine(m, characterName) {
@@ -57,9 +41,8 @@
    * @param {string} [opts.characterName]
    */
   function formatRecentDialogueForOptions(sessionMessages, opts = {}) {
-    const maxTurns = opts.maxTurns ?? OPTIONS_HISTORY_TURNS;
     const characterName = opts.characterName ?? "锋利";
-    const history = getHistorySliceForOptions(sessionMessages, maxTurns);
+    const history = getHistorySliceForOptions(sessionMessages);
     if (history.length === 0) {
       return { lastLine: "", priorText: "" };
     }
@@ -81,7 +64,6 @@
   window.GameDialogue = {
     HISTORY_TURNS,
     OPTIONS_HISTORY_TURNS,
-    HISTORY_MAX_CHARS,
     stripIntentTag,
     getHistoryForApi,
     formatRecentDialogueForOptions,
