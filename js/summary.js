@@ -3,63 +3,35 @@
   /** 摘要总字数上限（产品：尽量写满，专名只增不删） */
   const SUMMARY_MAX_CHARS = 1200;
 
-  const SUMMARY_SYSTEM = `你是剧情摘要压缩助手。根据「已有摘要」与「新增对话」，输出更新后的结构化摘要。
+  const SUMMARY_SYSTEM = `你是剧情摘要压缩助手。根据「已有摘要」与「新增对话」输出更新后的结构化摘要。
 
-【输出格式】严格两段（每段用 - 列表，一行一事）：
+【输出格式】仅两段（- 列表，一行一事）：
 【剧情档案】
 - [已确认] …
 - [待核实] …
-（极少需要时）[已推翻] …
-
+（极少）[已推翻] …
 【关系与态度】
 - …
 
-【规则】
-1. 在已有摘要基础上递进更新；禁止整体变短；禁止删除已有 [已确认] 行中的专名（人名、地点、物证）。
-2. [待核实] 必须具体、可回答；禁止「是否会…」类元问题。
-3. 新事实用 [已确认] 追加；不要单独写「本轮新增」段。
-4. 全文不超过 ${SUMMARY_MAX_CHARS} 字；优先合并 [待核实] 条数，不删 [已确认] 专名。
-5. 只输出摘要正文，不要 markdown 代码块或其它说明。
+【核心规则】
+1. 在已有摘要上递进更新；禁止整体变短；[已确认] 中的专名（人名、地点、物证）只增不删。
+2. [待核实] 须具体可答；禁止「是否会…」类元问题。新事实用 [已确认] 追加。
+3. 全文 ≤ ${SUMMARY_MAX_CHARS} 字。只输出摘要正文，无 markdown、无说明。
 
-【待核实 → 已确认 — 最高优先级】
-当某个 [待核实] 在本轮【新增对话】中已被明确回答（锋利直接给事实、或玩家确认、或双方短句已构成肯定/否定），必须：
-1. 在【剧情档案】写入对应的 [已确认]（陈述事实，不是问句）；
-2. 从 [待核实] 中删除该条（不得继续挂着已答问题）。
+【待核实 → 已确认】（最高优先级）
+【新增对话】或玩家短句已明确回答某 [待核实]（是/否、职务、地点、人名、时间等）时：写入对应 [已确认]（陈述句），并删除该 [待核实]。部分回答则收窄待办、已出现的线索写入 [已确认]。不得保留与 [已确认] 矛盾的 [待核实]。
 
-判定「已明确回答」包括：是/否、仍在/已离职、具体地点、具体职务、具体人名、具体时间等短句事实。
-示例（结构示范，勿照抄专名）：待办「某人是否仍在职」+ 对话「还在，坐办公室」→ 输出 [已确认] 某人仍在职（坐办公室），并删除原 [待核实]。
+【禁止幻觉】
+仅依据「已有摘要」与「新增对话」；禁止训练记忆或示例专名。每条 [已确认] 须能在上述材料中找到依据。`;
 
-【待核实核对 — 必须执行】
-压缩前逐条阅读【已有摘要】中每一个 [待核实]：
-- 已明确回答 → 按上一节迁入 [已确认] 并删除该 [待核实]（含同义表述，如「曾经的搭档」可回答「与父亲关系」）。
-- 仅部分回答 → 删除原条，改写为更细的一条 [待核实]；同时将已出现的线索（对家、上头、指使、收钱等）写入至少一条 [已确认]。
-- 禁止保留与 [已确认] 矛盾的 [待核实]。
-错误示例：对话已确认「还在，坐办公室」，仍保留 [待核实]「是否仍在职」。
-
-【禁止幻觉 — 必须执行】
-- 只能依据【已有摘要】与【新增对话】更新；禁止引入训练记忆、示例人设或其它会话内容。
-- 每一条 [已确认] 必须能在【新增对话】或【已有摘要】的 [已确认] 中找到依据。
-- 禁止写入上述两栏中均未出现的人名、地点、物证（勿照抄本说明里的示例专名）。
-
-【示例格式（专名仅示范结构，勿照抄进输出）】
-【剧情档案】
-- [已确认] 对方承认存在中间人代号「X」
-- [待核实] 收据上签字者真实姓名
-【关系与态度】
-- 对峙中，一方施压、一方追问`;
-
-  const SUMMARY_USER_CHECKLIST = `【压缩前请自检】
-1. 逐条对照【新增对话】：哪些 [待核实] 已被明确回答？→ 必须写入 [已确认] 并从未解列表删除。
-2. 哪些 [待核实] 仅部分回答？→ 收窄为更细待办 + 补 [已确认]。
-3. 拟写入的每个 [已确认] 专名/事实是否已在【新增对话】或【已有摘要】中出现？若否，不得写入。
-（心中核对即可；最终输出仍只含两段摘要正文。）
+  const SUMMARY_USER_PREFIX = `压缩前自检：已答 [待核实] 须迁入 [已确认]；[已确认] 专名须有依据。只输出两段摘要。
 
 `;
 
   function countOptionTurns(sessionMessages) {
     return sessionMessages.filter(
       (m) => m.role === "user" && m.intent && m.intent !== "freeform"
-    ).length;
+    );
   }
 
   function warnIfSummaryFormatUnexpected(text) {
@@ -105,16 +77,30 @@
     }
     const done = window.GameDialogue.getDoneMessages(messages);
     const keepRecent = window.GameDialogue.HISTORY_TURNS * 2;
-    const toSummarize = done.slice(0, Math.max(0, done.length - keepRecent));
-    return { optionTurns, toSummarize };
+    let toSummarize = done.slice(0, Math.max(0, done.length - keepRecent));
+    let mergedProtected = 0;
+
+    if (opts.afterReply) {
+      const protectedTail = done.slice(Math.max(0, done.length - keepRecent));
+      if (
+        protectedTail.length > 0 &&
+        protectedTail[protectedTail.length - 1]?.role === "assistant"
+      ) {
+        toSummarize = [...toSummarize, ...protectedTail];
+        mergedProtected = protectedTail.length;
+      }
+    }
+
+    return { optionTurns, toSummarize, mergedProtected, keepRecent };
   }
 
   async function maybeRefreshPlotSummary(session, signal, opts = {}) {
-    if (!shouldRefreshPlotSummary(session)) {
+    if (!shouldRefreshPlotSummary(session, opts)) {
       return false;
     }
 
-    const { optionTurns, toSummarize } = buildSummaryPayload(session, opts);
+    const { optionTurns, toSummarize, mergedProtected, keepRecent } =
+      buildSummaryPayload(session, opts);
 
     const block = toSummarize
       .map((m) => `${m.role === "assistant" ? "锋利" : "玩家"}: ${m.content}`)
@@ -122,20 +108,24 @@
     const body = session.plotSummary
       ? `【已有摘要】\n${session.plotSummary}\n\n【新增对话】\n${block}`
       : `【新增对话】\n${block}`;
-    const userContent = SUMMARY_USER_CHECKLIST + body;
+    const userContent = SUMMARY_USER_PREFIX + body;
 
     const modeLabel = opts.afterReply
       ? "并行 · ① 完成后与 ②选项 同时"
       : "串行 · ①② 完成后";
+    const scopeNote =
+      mergedProtected > 0
+        ? ` · 含短上下文保护区 ${mergedProtected} 条（本轮完整对白已齐）`
+        : ` · 保护区外 ${toSummarize.length} 条`;
     window.PomDebug?.logLocal(
       "触发剧情摘要压缩",
-      `${modeLabel} · 第 ${optionTurns} 轮选项 · ${toSummarize.length} 条对白入模 · 上限 ${SUMMARY_MAX_CHARS} 字`
+      `${modeLabel} · 第 ${optionTurns} 轮选项 · ${toSummarize.length} 条对白入模 · 保留最近 ${keepRecent / 2} 轮供 API${scopeNote} · 上限 ${SUMMARY_MAX_CHARS} 字`
     );
 
     const summary = await window.ChatApi.completeChat({
       systemPrompt: SUMMARY_SYSTEM,
       messages: [{ role: "user", content: userContent }],
-      temperature: 0.3,
+      temperature: window.PomTokens?.TEMP_SUMMARY ?? 0.2,
       max_tokens: window.PomTokens?.SUMMARY ?? 2048,
       signal,
       debugLabel: "压缩剧情摘要",
@@ -156,7 +146,7 @@
     session.lastSummaryAtOptionTurn = optionTurns;
     window.PomDebug?.logLocal(
       "剧情摘要已写入 session",
-      `${session.plotSummary.length} 字（上方绿条为 AI 原文）`
+      `${session.plotSummary.length} 字（下一轮起注入 reply/选项 system）`
     );
     return true;
   }

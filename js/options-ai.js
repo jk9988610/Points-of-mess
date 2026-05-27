@@ -48,20 +48,16 @@
 
   function buildOptionsSystemDuo(characterName) {
     const name = String(characterName || "锋利").trim() || "锋利";
-    return `你是文字冒险游戏的选项撰稿人。玩家是与「${name}」对峙的调查者。
+    return `你是选项撰稿人。玩家与「${name}」对峙。选项=玩家说的话（问句/祈使），禁止陈述断言。
 
-【阶段】纯对话，无行动场景。选项必须是玩家说的话（问句或祈使），禁止陈述句断言（如「真相是…」「你就是内鬼」）。
+- keypoint（深挖）：针对「${name}」上一句中具体名词/事实追问；勿复述对方条件句。
+- followup（推进）：换核心质问或催促，不纠缠细枝。
 
-【分工】
-- keypoint（深挖）：针对「${name}」上一句中某一具体名词/事实追问——要信息、澄清矛盾；勿复述对方刚提出的条件句（如「你先告诉我…」）。
-- followup（推进）：不纠缠当前细节；引向更核心问题、换质问角度、或态度+催促（如「别绕圈子，直接说名字」）。
+禁止两条同类型或 line 相同；尽量避免与上一轮雷同。
 
-【禁止】两条都是深挖或都是推进；两条 line 完全相同。
-【软提示】尽量避免与上一轮两条选项高度雷同（不做程序相似度检测）。
-
-必须严格只输出 JSON 对象（不要 markdown）：
+只输出 JSON（无 markdown）：
 {"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."}]}
-每条 line 为中文一句，≤35 字。不要生成 close（收束由程序固定）。`;
+每条 line 中文一句 ≤35 字。不要 close。`;
   }
 
   /** 仅合并 API 备用路径；挂起按钮不进模型上下文 */
@@ -393,7 +389,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     const raw = await window.ChatApi.completeChat({
       systemPrompt: replySystem,
       messages: apiMessages,
-      temperature: 0.45,
+      temperature: window.PomTokens?.TEMP_REPLY ?? 0.4,
       max_tokens: tokenLimit("REPLY_ONLY", 768),
       signal,
       debugLabel: debugLabel || "拆分·①reply",
@@ -448,7 +444,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     archetype,
     session,
     signal,
-    temperature = 0.5,
+    temperature = window.PomTokens?.TEMP_OPTIONS ?? 0.4,
     logTag = "拆分·②选项",
     plotSummary = "",
   }) {
@@ -518,7 +514,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       {
         systemPrompt,
         messages: apiMessages,
-        temperature: 0.45,
+        temperature: window.PomTokens?.TEMP_REPLY ?? 0.4,
         max_tokens: isClose
           ? tokenLimit("COMBINED_CLOSE", 768)
           : tokenLimit("COMBINED", 2048),

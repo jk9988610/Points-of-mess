@@ -5,6 +5,10 @@
 
   window.PomTokens = {
     USE_SPLIT_FIRST,
+    /** 采样温度（降温减幻觉与 JSON 重试） */
+    TEMP_SUMMARY: 0.2,
+    TEMP_OPTIONS: 0.4,
+    TEMP_REPLY: 0.4,
     /** 合并：reply + 4 options */
     COMBINED: 2048,
     COMBINED_CLOSE: 768,
