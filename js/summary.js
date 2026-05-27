@@ -31,7 +31,7 @@
   function countOptionTurns(sessionMessages) {
     return sessionMessages.filter(
       (m) => m.role === "user" && m.intent && m.intent !== "freeform"
-    );
+    ).length;
   }
 
   function warnIfSummaryFormatUnexpected(text) {
@@ -150,7 +150,7 @@
       temperature: window.PomTokens?.TEMP_SUMMARY ?? 0.2,
       max_tokens: window.PomTokens?.SUMMARY ?? 2048,
       signal,
-      debugLabel: "压缩剧情摘要",
+      debugLabel: "拆分·③摘要",
     });
 
     let text = String(summary || "").trim();
