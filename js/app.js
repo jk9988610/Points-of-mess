@@ -10,13 +10,17 @@
     worldToCanvas,
     hitCharacter,
     isNearPlayer,
+    isInTalkZone,
     INTERACT_RADIUS,
+    TALK_ZONE_RADIUS,
   } = window.GameMap;
 
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
   const bubbleEl = document.getElementById("speechBubble");
   const bubbleTextEl = document.getElementById("speechBubbleText");
+  const playerBubbleEl = document.getElementById("playerSpeechBubble");
+  const playerBubbleTextEl = document.getElementById("playerSpeechBubbleText");
   const optionsBar = document.getElementById("optionsBar");
   const memoryInputBar = document.getElementById("memoryInputBar");
   const memoryInputEl = document.getElementById("memoryInput");
@@ -30,19 +34,96 @@
   const state = createInitialState();
   state.currentOptions = null;
   state.optionsLoading = false;
+  state.playerBubbleText = "";
 
   let abortController = null;
   let lastFrame = performance.now();
   let highlightId = null;
 
+  function placeFloatingBubble(el, anchorX, anchorY, options) {
+    const gap = options?.gap ?? CHAR_BUBBLE_GAP;
+    const preferBelow = Boolean(options?.preferBelow);
+    el.style.visibility = "hidden";
+    el.classList.add("visible");
+    const bw = el.offsetWidth || 120;
+    const bh = el.offsetHeight || 40;
+    el.style.visibility = "";
+
+    let left = anchorX - bw / 2;
+    let top = preferBelow ? anchorY + gap : anchorY - gap - bh;
+
+    const margin = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (top < margin) {
+      top = anchorY + gap;
+    }
+    if (top + bh > vh - margin) {
+      top = Math.max(margin, anchorY - gap - bh);
+    }
+    if (left < margin) {
+      left = margin;
+    }
+    if (left + bw > vw - margin) {
+      left = vw - bw - margin;
+    }
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  }
+
+  function syncSpeechBubbles(streaming, options) {
+    const thinking = Boolean(options?.thinking);
+    const ch = state.talkingId ? getCharacter(state.talkingId) : null;
+    const inZone = ch ? isInTalkZone(state.player, ch) : false;
+
+    bubbleTextEl.textContent =
+      state.bubbleText || (streaming && !thinking ? "…" : "");
+    playerBubbleTextEl.textContent = state.playerBubbleText || "";
+
+    bubbleEl.classList.toggle("streaming", Boolean(streaming) && !thinking);
+    bubbleEl.classList.toggle("thinking", thinking);
+
+    const showNpc =
+      Boolean(state.talkingId) &&
+      inZone &&
+      (state.bubbleText || (streaming && !thinking));
+    const showPlayer =
+      Boolean(state.talkingId) && inZone && Boolean(state.playerBubbleText);
+
+    bubbleEl.classList.toggle("visible", showNpc);
+    playerBubbleEl.classList.toggle("visible", showPlayer);
+
+    if (!state.talkingId || !inZone) {
+      return;
+    }
+
+    const npcAnchor = worldToCanvas(canvas, ch.x, ch.y);
+    const npcScreenX = npcAnchor.rect.left + npcAnchor.x;
+    const npcScreenY = npcAnchor.rect.top + npcAnchor.y;
+    if (showNpc) {
+      placeFloatingBubble(bubbleEl, npcScreenX, npcScreenY, { preferBelow: false });
+    }
+
+    if (showPlayer) {
+      const pl = worldToCanvas(canvas, state.player.x, state.player.y);
+      const plScreenX = pl.rect.left + pl.x;
+      const plScreenY = pl.rect.top + pl.y;
+      placeFloatingBubble(playerBubbleEl, plScreenX, plScreenY, {
+        preferBelow: true,
+        gap: 28,
+      });
+    }
+  }
+
   function setBubble(text, streaming, options) {
     const thinking = Boolean(options?.thinking);
     state.bubbleText = text;
-    bubbleTextEl.textContent = text || (streaming && !thinking ? "…" : "");
-    bubbleEl.classList.toggle("visible", Boolean(state.talkingId));
-    bubbleEl.classList.toggle("streaming", Boolean(streaming) && !thinking);
-    bubbleEl.classList.toggle("thinking", thinking);
-    positionBubble();
+    syncSpeechBubbles(streaming, { thinking });
+  }
+
+  function setPlayerBubble(text) {
+    state.playerBubbleText = String(text || "").trim();
+    syncSpeechBubbles(state.isStreaming, { thinking: false });
   }
 
   function setStatus(text, isError) {
@@ -124,24 +205,8 @@
     canvas.style.width = `${rect.width}px`;
     canvas.style.height = `${rect.height}px`;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    positionBubble();
+    syncSpeechBubbles(false);
     renderMap();
-  }
-
-  function positionBubble() {
-    if (!state.talkingId) {
-      return;
-    }
-    const ch = getCharacter(state.talkingId);
-    if (!ch) {
-      return;
-    }
-    const { x, y, rect } = worldToCanvas(canvas, ch.x, ch.y);
-    const bubbleRect = bubbleEl.getBoundingClientRect();
-    const left = rect.left + x - bubbleRect.width / 2;
-    const top = rect.top + y - CHAR_BUBBLE_GAP - bubbleRect.height;
-    bubbleEl.style.left = `${Math.max(8, left)}px`;
-    bubbleEl.style.top = `${Math.max(8, top)}px`;
   }
 
   function renderMap() {
@@ -157,8 +222,11 @@
     });
     hintEl.textContent = state.talkingId
       ? state.isStreaming
-        ? "等待角色回复…"
-        : "点选下方句子"
+        ? "等待角色回复… · 可在橙圈内移动"
+        : getCharacter(state.talkingId) &&
+            !isInTalkZone(state.player, getCharacter(state.talkingId))
+          ? "回到橙圈内，对话气泡会恢复"
+          : "点选下方句子 · 可在橙圈内点击移动"
       : near
         ? `点击「${near.name}」交谈`
         : nearDoc
@@ -177,6 +245,8 @@
     state.talkingId = null;
     state.currentOptions = null;
     state.optionsLoading = false;
+    state.playerBubbleText = "";
+    state.bubbleText = "";
     setBubble("");
     setOptionsVisible(false);
     setMemoryInputVisible(false);
@@ -214,6 +284,7 @@
     }
 
     state.talkingId = characterId;
+    state.playerBubbleText = "";
     const session = getSession(state, characterId);
     setStatus("", false);
     window.PomDebug?.logLocal("开始对话", {
@@ -251,7 +322,7 @@
     state.optionsLoading = false;
     renderOptionButtons(state.currentOptions, false);
     renderMap();
-    positionBubble();
+    syncSpeechBubbles(false);
   }
 
   async function sendFreeformMemoryQuestion() {
@@ -286,6 +357,7 @@
       status: "done",
     });
     persist(state);
+    setPlayerBubble(text);
 
     state.isStreaming = true;
     setMemoryInputBusy(true);
@@ -351,7 +423,7 @@
         renderOptionButtons(state.currentOptions, false);
       }
       renderMap();
-      positionBubble();
+      syncSpeechBubbles(false);
     }
   }
 
@@ -389,6 +461,7 @@
       status: "done",
     });
     persist(state);
+    setPlayerBubble(pick.line);
 
     const apiMessages = getHistoryForApi(session.messages);
     if (session.plotSummary) {
@@ -478,8 +551,15 @@
         renderOptionButtons(state.currentOptions, false);
       }
       renderMap();
-      positionBubble();
+      syncSpeechBubbles(false);
     }
+  }
+
+  function clampWorldToMap(point) {
+    return {
+      x: Math.max(0.05, Math.min(0.95, point.x)),
+      y: Math.max(0.05, Math.min(0.95, point.y)),
+    };
   }
 
   function handleMapClick(clientX, clientY) {
@@ -505,6 +585,13 @@
     }
 
     if (state.talkingId) {
+      if (hit && hit.id !== state.talkingId) {
+        return;
+      }
+      state.moveTarget = clampWorldToMap(world);
+      setStatus("", false);
+      persist(state);
+      renderMap();
       return;
     }
 
@@ -514,10 +601,7 @@
       return;
     }
 
-    state.moveTarget = {
-      x: Math.max(0.05, Math.min(0.95, world.x)),
-      y: Math.max(0.05, Math.min(0.95, world.y)),
-    };
+    state.moveTarget = clampWorldToMap(world);
     setStatus("", false);
   }
 
@@ -525,7 +609,7 @@
     const dt = Math.min(0.05, (now - lastFrame) / 1000);
     lastFrame = now;
 
-    if (state.moveTarget && !state.talkingId) {
+    if (state.moveTarget) {
       state.player = tickMove(state.player, state.moveTarget, dt);
       if (
         Math.hypot(
@@ -535,8 +619,19 @@
       ) {
         state.moveTarget = null;
         persist(state);
+      } else {
+        persist(state);
       }
       renderMap();
+      if (state.talkingId) {
+        syncSpeechBubbles(state.isStreaming, {
+          thinking: state.isStreaming && state.optionsLoading,
+        });
+      }
+    } else if (state.talkingId) {
+      syncSpeechBubbles(state.isStreaming, {
+        thinking: state.isStreaming && state.optionsLoading,
+      });
     }
 
     requestAnimationFrame(gameLoop);
@@ -584,7 +679,7 @@
     }
   });
   window.addEventListener("resize", resizeCanvas);
-  window.addEventListener("scroll", positionBubble, true);
+  window.addEventListener("scroll", () => syncSpeechBubbles(state.isStreaming), true);
 
   function refreshAuthStatus() {
     const status = window.PomConfig?.getConfigStatus?.();

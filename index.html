@@ -58,8 +58,11 @@
 
     <div class="map-stage" id="mapStage">
       <canvas id="gameCanvas" aria-label="宇宙地图"></canvas>
-      <div class="speech-bubble" id="speechBubble" role="status" aria-live="polite">
+      <div class="speech-bubble speech-bubble--npc" id="speechBubble" role="status" aria-live="polite">
         <p class="speech-bubble-text" id="speechBubbleText"></p>
+      </div>
+      <div class="speech-bubble speech-bubble--player" id="playerSpeechBubble" role="status" aria-live="polite">
+        <p class="speech-bubble-text" id="playerSpeechBubbleText"></p>
       </div>
       <p class="map-hint" id="mapHint">点击空地移动 · 靠近📄读文档或锋利交谈</p>
     </div>

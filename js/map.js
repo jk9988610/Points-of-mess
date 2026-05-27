@@ -1,5 +1,8 @@
 (function () {
-  const INTERACT_RADIUS = 0.12;
+  /** 点击角色开始交谈、高亮「靠近」提示 */
+  const INTERACT_RADIUS = 0.14;
+  /** 对话中玩家可移动范围（大于 INTERACT_RADIUS，与地图橙圈一致） */
+  const TALK_ZONE_RADIUS = 0.26;
   const PLAYER_RADIUS = 0.018;
   const CHAR_RADIUS = 0.022;
   const MOVE_SPEED = 0.42;
@@ -10,12 +13,40 @@
     return Math.hypot(dx, dy);
   }
 
+  function clampPointToTalkZone(point, character) {
+    const d = dist(point, character);
+    if (d <= TALK_ZONE_RADIUS || d < 1e-6) {
+      return { ...point };
+    }
+    const t = TALK_ZONE_RADIUS / d;
+    return {
+      x: character.x + (point.x - character.x) * t,
+      y: character.y + (point.y - character.y) * t,
+    };
+  }
+
   window.GameMap = {
     INTERACT_RADIUS,
+    TALK_ZONE_RADIUS,
     PLAYER_RADIUS,
     CHAR_RADIUS,
     MOVE_SPEED,
     dist,
+    isInTalkZone(player, character) {
+      if (!player || !character) {
+        return false;
+      }
+      return dist(player, character) < TALK_ZONE_RADIUS;
+    },
+    clampPointToTalkZone,
+    clampPlayerToTalkZone(player, character) {
+      return clampPointToTalkZone(player, character);
+    },
+    talkZoneRadiusPx(canvas) {
+      const w = canvas.clientWidth || canvas.width;
+      const h = canvas.clientHeight || canvas.height;
+      return TALK_ZONE_RADIUS * Math.min(w, h);
+    },
     worldToCanvas(canvas, x, y) {
       const rect = canvas.getBoundingClientRect();
       return {
@@ -61,6 +92,8 @@
         talkingId,
       });
 
+      const zonePx = TALK_ZONE_RADIUS * Math.min(w, h);
+
       for (const ch of characters) {
         const cx = ch.x * w;
         const cy = ch.y * h;
@@ -68,11 +101,26 @@
           highlightId === ch.id ||
           (player && dist(player, ch) < INTERACT_RADIUS);
         const active = talkingId === ch.id;
+        const playerInZone = active && player && dist(player, ch) < TALK_ZONE_RADIUS;
 
-        if (near || active) {
+        if (active) {
           ctx.beginPath();
-          ctx.arc(cx, cy, CHAR_RADIUS * w * 2.8, 0, Math.PI * 2);
-          ctx.strokeStyle = active ? "rgba(249,115,22,0.9)" : "rgba(255,255,255,0.35)";
+          ctx.arc(cx, cy, zonePx, 0, Math.PI * 2);
+          ctx.fillStyle = playerInZone
+            ? "rgba(249,115,22,0.08)"
+            : "rgba(249,115,22,0.04)";
+          ctx.fill();
+          ctx.strokeStyle = playerInZone
+            ? "rgba(249,115,22,0.85)"
+            : "rgba(249,115,22,0.45)";
+          ctx.lineWidth = 2;
+          ctx.setLineDash(playerInZone ? [] : [6, 5]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (near) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, INTERACT_RADIUS * Math.min(w, h), 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(255,255,255,0.35)";
           ctx.lineWidth = 2;
           ctx.stroke();
         }

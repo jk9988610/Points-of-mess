@@ -415,6 +415,12 @@ body.login-locked .memory-input-bar {
   background: rgba(0, 0, 0, 0.78);
   color: #fff;
   pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.speech-bubble--player {
+  border-color: rgba(129, 140, 248, 0.55);
+  background: rgba(30, 27, 75, 0.88);
 }
 
 .speech-bubble.visible {
