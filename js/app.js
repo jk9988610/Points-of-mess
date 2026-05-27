@@ -455,30 +455,16 @@
     window.PomDebug?.logLocal("继续对话", "已恢复选项栏");
   }
 
-  async function handlePauseOption(pick, character, archetype, session) {
-    session.messages.push({
-      id: createId(),
-      role: "user",
-      content: pick.line,
-      intent: pick.intent,
-      createdAt: Date.now(),
-      status: "done",
-    });
-    const ack = String(archetype.pauseReply || "嗯。到时候再说。").trim();
-    session.messages.push({
-      id: createId(),
-      role: "assistant",
-      content: ack,
-      createdAt: Date.now(),
-      status: "done",
-    });
-    persist(state);
+  async function handlePauseOption(pick) {
+    /** 第三项「待会」：仅玩家↔程序 UI，不写入 session，后续 API/摘要均不可见 */
     setPlayerBubble(pick.line);
-    setBubble(ack, false);
     state.optionsPaused = true;
     setOptionsVisible(false);
     setMemoryInputVisible(false);
-    window.PomDebug?.logUser("待会", "选项已隐藏；会话与摘要保留，再点锋利可继续");
+    window.PomDebug?.logUser("待会（仅程序）", {
+      line: pick.line,
+      note: "未写入 session，不调用 AI，角色台词保持上一轮",
+    });
     renderMap();
     syncSpeechBubbles(false);
   }
@@ -615,7 +601,7 @@
     });
 
     if (pick.intent === "pause") {
-      await handlePauseOption(pick, character, archetype, session);
+      await handlePauseOption(pick);
       return;
     }
 
@@ -920,7 +906,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②深挖/推进(AI)+③待会(固定)。"
+      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②深挖/推进(AI)+③待会(仅程序)。"
     );
   }
   requestAnimationFrame(gameLoop);

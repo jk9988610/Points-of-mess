@@ -11,7 +11,10 @@
 
   function getDoneMessages(sessionMessages) {
     return sessionMessages.filter(
-      (m) => m.status !== "error" && (m.role === "user" || m.role === "assistant")
+      (m) =>
+        m.status !== "error" &&
+        (m.role === "user" || m.role === "assistant") &&
+        m.intent !== "pause"
     );
   }
 
