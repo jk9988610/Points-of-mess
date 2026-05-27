@@ -123,24 +123,13 @@
       : `【新增对话】\n${block}`;
     const userContent = SUMMARY_USER_PREFIX + body;
 
-    const modeLabel = "串行 · ①② 完成且 assistant 已写入 session 后";
     const scopeNote =
       mergedProtected > 0
-        ? ` · 含短上下文保护区 ${mergedProtected} 条（本轮完整对白已齐）`
-        : ` · 保护区外 ${toSummarize.length} 条`;
+        ? ` · 保护区 ${mergedProtected} 条`
+        : "";
     window.PomDebug?.logLocal(
-      "触发剧情摘要压缩",
-      `${modeLabel} · 第 ${optionTurns} 轮选项 · ${toSummarize.length} 条对白入模 · 保留最近 ${keepRecent / 2} 轮供 API${scopeNote} · 上限 ${SUMMARY_MAX_CHARS} 字`,
-      ["summary"]
-    );
-    window.PomDebug?.logLocal(
-      "摘要·入模全文（user 消息）",
-      userContent,
-      ["summary-in"]
-    );
-    window.PomDebug?.logLocal(
-      "摘要·system 字数",
-      String(SUMMARY_SYSTEM.length),
+      "③摘要 · 即将请求",
+      `第 ${optionTurns} 轮 · ${toSummarize.length} 条对白入模${scopeNote} · 全文见黄条 →拆分·③摘要`,
       ["summary"]
     );
 
@@ -168,14 +157,9 @@
     session.plotSummary = text;
     session.lastSummaryAtOptionTurn = optionTurns;
     window.PomDebug?.logLocal(
-      "摘要·写入 session 全文",
-      text,
+      "③摘要 · 已写入 session",
+      `${text.length} 字 · 下一轮起注入 ①reply system / ②选项 user 摘录 · 正文见绿条 ←拆分·③摘要`,
       ["summary-out"]
-    );
-    window.PomDebug?.logLocal(
-      "剧情摘要已写入",
-      `${text.length} 字 · 下一轮起注入 reply/选项 system`,
-      ["summary"]
     );
     return true;
   }

@@ -635,16 +635,6 @@
     setPlayerBubble(pick.line);
 
     const apiMessages = getHistoryForApi(session.messages);
-    if (session.plotSummary) {
-      window.PomDebug?.logLocal(
-        "剧情摘要（缓存，随 reply/选项 system 注入）",
-        session.plotSummary,
-        ["summary-out"]
-      );
-    }
-    window.PomDebug?.logLocal("本轮 messages 字数", String(
-      apiMessages.reduce((n, m) => n + m.content.length, 0)
-    ));
 
     state.isStreaming = true;
     state.optionsLoading = true;
@@ -665,12 +655,16 @@
     const willSummary =
       !isClose && window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
 
-    if (willSummary) {
-      window.PomDebug?.logLocal(
-        "API 路径",
-        "串行 · ①reply → ②选项 → ③压缩剧情摘要（assistant 写入 session 后）"
-      );
-    }
+    const apiSteps = isClose
+      ? ["①reply（收束）"]
+      : willSummary
+        ? ["①reply", "②选项", "③摘要"]
+        : ["①reply", "②选项"];
+    window.PomDebug?.logLocal(
+      "API 路径",
+      `串行 · ${apiSteps.join(" → ")}${willSummary ? "（③在 assistant 写入后）" : ""}`,
+      ["ui"]
+    );
 
     try {
       const { reply, options } = await requestCombinedTurn({
@@ -701,7 +695,6 @@
         setTimeout(() => endTalking(), 600);
       } else {
         state.currentOptions = options;
-        window.PomDebug?.logLocal("选项已更新（界面展示）", options.map((o) => o.line));
       }
 
       if (willSummary) {
@@ -942,8 +935,9 @@
   window.PomDebug?.logLocal(`Points-of-mess v${ver} 已加载（调试分色=内联样式）`);
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
-      "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。串行：①→②→③摘要(第4/8…轮)。"
+      "调试说明",
+      "黄/绿=三次 API 全文（权威）。灰=路径/跳过/告警。③摘要仅第4/8…轮。详见 docs/DEBUG-API-SPLIT.md",
+      ["ui"]
     );
   }
   requestAnimationFrame(gameLoop);

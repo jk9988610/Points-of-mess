@@ -501,12 +501,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       duo = parseDuoOptionsFromRaw(raw);
     }
 
-    const merged = buildHybridOptions(archetype, duo);
-    window.PomDebug?.logLocal(
-      "选项组装",
-      `①深挖/②推进 AI · ③挂起固定「${fixedSuspendLine(archetype)}」`
-    );
-    return merged;
+    return buildHybridOptions(archetype, duo);
   }
 
   async function callCombinedOnce({ systemPrompt, apiMessages, isClose, signal }) {
@@ -538,11 +533,6 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       ...turn,
       plotSummary: session.plotSummary,
     });
-    window.PomDebug?.logLocal(
-      "API 路径",
-      "串行 · ①reply → ②选项（摘要在 app 中 ①② 完成后执行）"
-    );
-
     const reply = await requestReplyOnly({
       systemPrompt,
       apiMessages,

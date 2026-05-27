@@ -16,8 +16,7 @@
     { id: "apiOtherIn", label: "AI回·其它", tag: "api-other-in" },
     { id: "user", label: "用户操作", tag: "user" },
     { id: "summary", label: "摘要·触发/状态(灰)", tag: "summary" },
-    { id: "summaryUi", label: "摘要·入模全文(灰)", tag: "summary-in" },
-    { id: "summaryUiOut", label: "摘要·写入全文(灰)", tag: "summary-out" },
+    { id: "summaryUiOut", label: "摘要·写入结果(灰)", tag: "summary-out" },
     { id: "summarySkip", label: "摘要·跳过说明", tag: "summary-skip" },
     { id: "ui", label: "程序状态", tag: "ui" },
     { id: "uiWarn", label: "程序·警告", tag: "ui-warn" },
@@ -104,7 +103,7 @@
         { title: "用户", ids: ["user"] },
         {
           title: "摘要(灰)",
-          ids: ["summaryUi", "summaryUiOut", "summarySkip", "summary"],
+          ids: ["summary", "summaryUiOut", "summarySkip"],
         },
         { title: "程序", ids: ["ui", "uiWarn", "uiError"] },
       ];

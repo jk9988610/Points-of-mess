@@ -47,7 +47,7 @@
     } else if (/选项|②/.test(s)) {
       tags.push("api-options");
       tags.push(direction === "out" ? "api-options-out" : "api-options-in");
-    } else if (/摘要/.test(s)) {
+    } else if (/摘要|③/.test(s)) {
       tags.push("api-summary");
       tags.push(direction === "out" ? "api-summary-out" : "api-summary-in");
     } else if (/输入框/.test(s)) {
