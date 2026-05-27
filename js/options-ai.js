@@ -2,7 +2,7 @@
   const OPTION_SCHEMA = [
     { id: 1, intent: "keypoint", label: "深挖" },
     { id: 2, intent: "followup", label: "推进" },
-    { id: 3, intent: "close", label: "收束" },
+    { id: 3, intent: "pause", label: "待会" },
   ];
 
   /** Phase A+：优先 [待核实] 行；兼容旧【未解问题】段 */
@@ -68,9 +68,11 @@
     return OPTION_SCHEMA.map((o) => `- ${o.intent}（${o.label}）`).join("\n");
   }
 
-  function fixedCloseLine(archetype) {
-    const preset = archetype.options?.find((o) => o.intent === "close")?.line;
-    return String(archetype.closeLine || preset || "行。我就当成你没参与。").trim();
+  function fixedPauseLine(archetype) {
+    const preset = archetype.options?.find(
+      (o) => o.intent === "pause" || o.intent === "close"
+    )?.line;
+    return String(archetype.pauseLine || preset || "待会再来找你。").trim();
   }
 
   function optionRow(meta, line) {
@@ -83,7 +85,7 @@
   }
 
   function buildHybridOptions(archetype, duo) {
-    const closeLine = fixedCloseLine(archetype);
+    const pauseLine = fixedPauseLine(archetype);
 
     return OPTION_SCHEMA.map((meta) => {
       if (meta.intent === "keypoint") {
@@ -92,7 +94,7 @@
       if (meta.intent === "followup") {
         return optionRow(meta, duo.followup);
       }
-      return optionRow(meta, closeLine);
+      return optionRow(meta, pauseLine);
     });
   }
 
@@ -496,7 +498,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     const merged = buildHybridOptions(archetype, duo);
     window.PomDebug?.logLocal(
       "选项组装",
-      `①深挖/②推进 AI · ③收束固定「${fixedCloseLine(archetype)}」`
+      `①深挖/②推进 AI · ③待会固定「${fixedPauseLine(archetype)}」`
     );
     return merged;
   }

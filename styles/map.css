@@ -636,13 +636,54 @@ body.login-locked .memory-input-bar {
   transition: background 120ms ease, border-color 120ms ease;
 }
 
+.option-btn--pause,
 .option-btn--close {
-  border-color: rgba(248, 113, 113, 0.35);
-  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.1);
 }
 
+.option-btn--pause .option-line,
 .option-btn--close .option-line {
-  color: rgba(254, 226, 226, 0.92);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.debug-prefs-dialog {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 0;
+  max-width: min(320px, 92vw);
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+.debug-prefs-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.debug-prefs-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.debug-prefs-title {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.debug-prefs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+
+.debug-prefs-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .option-line {

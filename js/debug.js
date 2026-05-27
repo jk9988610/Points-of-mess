@@ -200,8 +200,22 @@
       document.body.removeChild(ta);
       return Promise.resolve();
     },
+    filteredEntries(allEntries) {
+      const prefs = window.PomDebugCopyPrefs?.loadPrefs?.() || {};
+      return window.PomDebugCopyPrefs?.filterEntries?.(allEntries, prefs) ?? allEntries;
+    },
+    buildCopyText(entryList, header) {
+      const filtered = this.filteredEntries(entryList);
+      const body = window.PomDebugCopyPrefs?.entriesToPlain?.(filtered) ?? "";
+      if (!body.trim()) {
+        return `${header}\n（当前偏好下无匹配条目）`;
+      }
+      return `${header}\n${body}`;
+    },
     copyAll() {
-      return this.copyText(plainLines.join("\n"));
+      const version = window.POM_VERSION || "?";
+      const header = `版本：v${version}\n（按复制偏好筛选）`;
+      return this.copyText(this.buildCopyText(entries, header));
     },
     /** 从最近一次「玩家选择」起复制到末尾（报 bug 用） */
     copyCurrentTurn() {
@@ -213,9 +227,9 @@
           break;
         }
       }
-      const slice = plainLines.slice(start);
-      const header = `版本：v${version}\n（以下为最近一轮起）\n`;
-      return this.copyText(header + slice.join("\n"));
+      const slice = entries.slice(start);
+      const header = `版本：v${version}\n（最近一轮起 · 按偏好筛选）`;
+      return this.copyText(this.buildCopyText(slice, header));
     },
   };
 })();

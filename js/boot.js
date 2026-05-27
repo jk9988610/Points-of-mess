@@ -8,6 +8,7 @@
     "config.js",
     "auth.js",
     "config-check.js",
+    "debug-copy-prefs.js",
     "debug.js",
     "presets.js",
     "dialogue.js",

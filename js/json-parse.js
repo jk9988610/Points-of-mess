@@ -9,21 +9,29 @@
 
   function sliceJsonObject(text) {
     const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start === -1 || end <= start) {
+    if (start === -1) {
       return null;
     }
-    return text.slice(start, end + 1);
+    const end = text.lastIndexOf("}");
+    if (end > start) {
+      return text.slice(start, end + 1);
+    }
+    return text.slice(start);
   }
 
   function repairJsonString(json) {
     let s = json;
     s = s.replace(/[\u201c\u201d\u2018\u2019]/g, '"');
     s = s.replace(/,\s*([}\]])/g, "$1");
-    const opens = (s.match(/{/g) || []).length;
-    const closes = (s.match(/}/g) || []).length;
-    if (opens > closes) {
-      s += "}".repeat(opens - closes);
+    const openBrace = (s.match(/{/g) || []).length;
+    const closeBrace = (s.match(/}/g) || []).length;
+    if (openBrace > closeBrace) {
+      s += "}".repeat(openBrace - closeBrace);
+    }
+    const openBracket = (s.match(/\[/g) || []).length;
+    const closeBracket = (s.match(/]/g) || []).length;
+    if (openBracket > closeBracket) {
+      s += "]".repeat(openBracket - closeBracket);
     }
     return s;
   }
@@ -36,7 +44,8 @@
       : "";
 
     const options = [];
-    const intentRe = /"intent"\s*:\s*"(keypoint|followup|close)"\s*,\s*"line"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+    const intentRe =
+      /"intent"\s*:\s*"(keypoint|followup|close|pause)"\s*,\s*"line"\s*:\s*"((?:\\.|[^"\\])*)"/g;
     let m;
     while ((m = intentRe.exec(text)) !== null) {
       options.push({
@@ -64,9 +73,14 @@
 
     const attempts = [slice, repairJsonString(slice)];
     let lastError = null;
-    for (const candidate of attempts) {
+    for (let i = 0; i < attempts.length; i++) {
+      const candidate = attempts[i];
       try {
-        return JSON.parse(candidate);
+        const parsed = JSON.parse(candidate);
+        if (i > 0) {
+          window.PomDebug?.logLocalWarn("JSON 自动修复", "已补全缺失 } 或 ] 后解析成功");
+        }
+        return parsed;
       } catch (e) {
         lastError = e;
       }
@@ -80,5 +94,5 @@
     throw lastError || new Error("JSON 解析失败");
   }
 
-  window.PomJson = { parseJsonObject, stripCodeFence, extractLooseObject };
+  window.PomJson = { parseJsonObject, stripCodeFence, extractLooseObject, repairJsonString };
 })();

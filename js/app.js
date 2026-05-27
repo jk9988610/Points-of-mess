@@ -34,6 +34,7 @@
   const state = createInitialState();
   state.currentOptions = null;
   state.optionsLoading = false;
+  state.optionsPaused = false;
   state.playerBubbleText = "";
 
   let abortController = null;
@@ -73,10 +74,25 @@
     return { width, height };
   }
 
+  function getUiBlockerTop() {
+    let top = window.innerHeight;
+    for (const el of [memoryInputBar, optionsBar]) {
+      if (!el || el.classList.contains("hidden")) {
+        continue;
+      }
+      const rect = el.getBoundingClientRect();
+      if (rect.top > 0) {
+        top = Math.min(top, rect.top);
+      }
+    }
+    return top;
+  }
+
   function clampBubblePosition(left, top, width, height) {
     const margin = 8;
     const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const uiTop = getUiBlockerTop();
+    const maxBottom = uiTop - margin;
     let x = left;
     let y = top;
     if (x < margin) {
@@ -88,8 +104,8 @@
     if (y < margin) {
       y = margin;
     }
-    if (y + height > vh - margin) {
-      y = vh - height - margin;
+    if (y + height > maxBottom) {
+      y = Math.max(margin, maxBottom - height);
     }
     return { left: x, top: y };
   }
@@ -257,6 +273,7 @@
   const INTENT_ARIA = {
     keypoint: "深挖",
     followup: "推进",
+    pause: "待会再来",
     close: "结束对话",
   };
 
@@ -281,7 +298,10 @@
             : lineText
         );
       }
-      btn.classList.toggle("option-btn--close", opt?.intent === "close");
+      btn.classList.toggle(
+        "option-btn--pause",
+        opt?.intent === "pause" || opt?.intent === "close"
+      );
       btn.disabled = disabled || !opt?.line || loading;
     }
   }
@@ -334,6 +354,7 @@
     state.talkingId = null;
     state.currentOptions = null;
     state.optionsLoading = false;
+    state.optionsPaused = false;
     state.playerBubbleText = "";
     state.bubbleText = "";
     setBubble("");
@@ -374,6 +395,7 @@
 
     state.talkingId = characterId;
     state.playerBubbleText = "";
+    state.optionsPaused = false;
     const session = getSession(state, characterId);
     setStatus("", false);
     window.PomDebug?.logLocal("开始对话", {
@@ -410,6 +432,46 @@
     stopButtonEl.disabled = true;
     state.optionsLoading = false;
     renderOptionButtons(state.currentOptions, false);
+    renderMap();
+    syncSpeechBubbles(false);
+  }
+
+  function resumeTalkOptions() {
+    if (!state.talkingId || state.isStreaming) {
+      return;
+    }
+    state.optionsPaused = false;
+    setOptionsVisible(true);
+    setMemoryInputVisible(true);
+    renderOptionButtons(state.currentOptions, false);
+    setStatus("", false);
+    window.PomDebug?.logLocal("继续对话", "已恢复选项栏");
+  }
+
+  async function handlePauseOption(pick, character, archetype, session) {
+    session.messages.push({
+      id: createId(),
+      role: "user",
+      content: pick.line,
+      intent: pick.intent,
+      createdAt: Date.now(),
+      status: "done",
+    });
+    const ack = String(archetype.pauseReply || "嗯。到时候再说。").trim();
+    session.messages.push({
+      id: createId(),
+      role: "assistant",
+      content: ack,
+      createdAt: Date.now(),
+      status: "done",
+    });
+    persist(state);
+    setPlayerBubble(pick.line);
+    setBubble(ack, false);
+    state.optionsPaused = true;
+    setOptionsVisible(false);
+    setMemoryInputVisible(false);
+    window.PomDebug?.logLocal("待会", "选项已隐藏；会话与摘要保留，再点锋利可继续");
     renderMap();
     syncSpeechBubbles(false);
   }
@@ -549,6 +611,11 @@
       line: pick.line,
     });
 
+    if (pick.intent === "pause") {
+      await handlePauseOption(pick, character, archetype, session);
+      return;
+    }
+
     session.messages.push({
       id: createId(),
       role: "user",
@@ -675,6 +742,9 @@
 
     if (hit && isNearPlayer(state.player, hit)) {
       if (state.talkingId === hit.id) {
+        if (state.optionsPaused) {
+          resumeTalkOptions();
+        }
         return;
       }
       startTalking(hit.id);
@@ -806,7 +876,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②深挖/推进(AI)+③收束(固定)。"
+      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②深挖/推进(AI)+③待会(固定)。"
     );
   }
   requestAnimationFrame(gameLoop);

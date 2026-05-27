@@ -52,8 +52,14 @@
         </span>
         <button type="button" class="debug-btn" id="copyTurnDebugBtn" title="从最近一次玩家选选项起复制">复制本轮</button>
         <button type="button" class="debug-btn" id="copyDebugBtn">复制全部</button>
+        <button type="button" class="debug-btn" id="debugCopyPrefsBtn" title="勾选要复制的调试类型">偏好</button>
         <button type="button" class="debug-btn" id="clearDebugBtn">清空</button>
       </div>
+      <dialog class="debug-prefs-dialog" id="debugCopyPrefsDialog">
+        <form id="debugCopyPrefsForm" method="dialog" class="debug-prefs-form">
+          <p class="debug-prefs-title">复制时包含的调试类型</p>
+        </form>
+      </dialog>
       <div class="debug-log" id="debugLog" role="log" aria-live="polite"></div>
     </section>
 
@@ -146,8 +152,8 @@
       <button type="button" class="option-btn" data-option-id="2" data-intent="followup">
         <span class="option-line">生成中…</span>
       </button>
-      <button type="button" class="option-btn option-btn--close" data-option-id="3" data-intent="close">
-        <span class="option-line">行。我就当成你没参与。</span>
+      <button type="button" class="option-btn option-btn--pause" data-option-id="3" data-intent="pause">
+        <span class="option-line">待会再来找你。</span>
       </button>
     </nav>
   </div>

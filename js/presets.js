@@ -4,7 +4,7 @@
 回复：仅 1～2 句，总字数不超过 40 字。不要列表、不要 markdown。
 - 深挖（keypoint）：针对玩家追问的具体点，给出可核对的信息、明确否认或承认；禁止连续用「你先说清楚」搪塞。
 - 推进（followup）：不纠缠细枝；换核心质问或催促（账本、内鬼、名字等）。
-- 收束（close）：简短落款，不要再抛新问题。
+- 待会（pause）：玩家暂时离开；简短放行，不要再抛新问题。
 不要提及选项、按钮、AI。`;
 
   const archetypes = {
@@ -13,6 +13,7 @@
       name: "锋利",
       system: SHARP_SYSTEM,
       opening: "阻拦你的人，是谁派的？",
+      pauseReply: "嗯。到时候再说。",
       options: [
         {
           id: 1,
@@ -30,14 +31,13 @@
         },
         {
           id: 3,
-          intent: "close",
-          label: "收束",
-          line: "行。我就当成你没参与。",
-          send: "[intent:close] 行。我就当成你没参与。",
+          intent: "pause",
+          label: "待会",
+          line: "待会再来找你。",
+          send: "[intent:pause] 待会再来找你。",
         },
       ],
-      /** 每轮第 3 条收束，始终不变 */
-      closeLine: "行。我就当成你没参与。",
+      pauseLine: "待会再来找你。",
     },
   };
 
