@@ -1,21 +1,26 @@
 (function () {
-  const STORAGE_KEY = "pom_debug_copy_prefs";
+  const STORAGE_KEY = "pom_debug_copy_prefs_v2";
 
   const GROUPS = [
-    { id: "aiOut", label: "发AI", match: (e) => e.audience === "ai-out" },
-    { id: "aiIn", label: "AI回", match: (e) => e.audience === "ai-in" },
-    { id: "local", label: "本地", match: (e) => e.audience === "local" },
-    { id: "localWarn", label: "本地·警", match: (e) => e.audience === "local-warn" },
-    { id: "localError", label: "本地·错", match: (e) => e.audience === "local-error" },
+    { id: "apiReplyOut", label: "发AI·角色回复", tag: "api-reply-out" },
+    { id: "apiReplyIn", label: "AI回·角色回复", tag: "api-reply-in" },
+    { id: "apiOptionsOut", label: "发AI·选项", tag: "api-options-out" },
+    { id: "apiOptionsIn", label: "AI回·选项", tag: "api-options-in" },
+    { id: "apiSummaryOut", label: "发AI·摘要压缩", tag: "api-summary-out" },
+    { id: "apiSummaryIn", label: "AI回·摘要压缩", tag: "api-summary-in" },
+    { id: "apiCombinedOut", label: "发AI·合并(备用)", tag: "api-combined-out" },
+    { id: "apiCombinedIn", label: "AI回·合并(备用)", tag: "api-combined-in" },
+    { id: "apiFreeformOut", label: "发AI·输入框(隐藏)", tag: "api-freeform-out" },
+    { id: "apiFreeformIn", label: "AI回·输入框(隐藏)", tag: "api-freeform-in" },
+    { id: "apiOtherOut", label: "发AI·其它", tag: "api-other-out" },
+    { id: "apiOtherIn", label: "AI回·其它", tag: "api-other-in" },
+    { id: "user", label: "用户操作", tag: "user" },
+    { id: "ui", label: "程序状态", tag: "ui" },
+    { id: "uiWarn", label: "程序·警告", tag: "ui-warn" },
+    { id: "uiError", label: "程序·错误", tag: "ui-error" },
   ];
 
-  const DEFAULT_PREFS = {
-    aiOut: true,
-    aiIn: true,
-    local: true,
-    localWarn: true,
-    localError: true,
-  };
+  const DEFAULT_PREFS = Object.fromEntries(GROUPS.map((g) => [g.id, true]));
 
   function loadPrefs() {
     try {
@@ -38,11 +43,22 @@
   }
 
   function entryAllowed(entry, prefs) {
-    const group = GROUPS.find((g) => g.match(entry));
-    if (!group) {
-      return true;
+    const tags = entry.tags || [];
+    for (const g of GROUPS) {
+      if (prefs[g.id] === false && tags.includes(g.tag)) {
+        return false;
+      }
     }
-    return prefs[group.id] !== false;
+    if (tags.length === 0) {
+      return prefs.ui !== false;
+    }
+    return tags.some((t) => {
+      const group = GROUPS.find((g) => g.tag === t);
+      if (!group) {
+        return prefs.ui !== false;
+      }
+      return prefs[group.id] !== false;
+    });
   }
 
   function filterEntries(entries, prefs) {
@@ -66,7 +82,7 @@
           ? `[${e.time}] [${tag}] ${e.title}`
           : `[${e.time}] [${tag}] ${e.title}\n${e.body}`;
       })
-      .join("\n");
+      .join("\n\n");
   }
 
   function bindDialog() {
@@ -79,17 +95,32 @@
 
     function renderForm() {
       const prefs = loadPrefs();
-      form.innerHTML = GROUPS.map(
-        (g) =>
-          `<label class="debug-prefs-row"><input type="checkbox" name="${g.id}" ${
+      const sections = [
+        { title: "API", ids: GROUPS.filter((g) => g.id.startsWith("api")).map((g) => g.id) },
+        { title: "用户", ids: ["user"] },
+        { title: "程序", ids: ["ui", "uiWarn", "uiError"] },
+      ];
+      let html = "";
+      for (const sec of sections) {
+        html += `<p class="debug-prefs-section">${sec.title}</p>`;
+        for (const id of sec.ids) {
+          const g = GROUPS.find((x) => x.id === id);
+          if (!g) {
+            continue;
+          }
+          html += `<label class="debug-prefs-row"><input type="checkbox" name="${g.id}" ${
             prefs[g.id] ? "checked" : ""
-          } /> ${g.label}</label>`
-      ).join("");
-      form.innerHTML +=
+          } /> ${g.label}</label>`;
+        }
+      }
+      html +=
         '<div class="debug-prefs-actions">' +
+        '<button type="button" class="debug-btn" data-prefs-all>全选</button>' +
+        '<button type="button" class="debug-btn" data-prefs-api>仅API</button>' +
         '<button type="submit" class="debug-btn">保存</button>' +
         '<button type="button" class="debug-btn" data-prefs-cancel>取消</button>' +
         "</div>";
+      form.innerHTML = html;
     }
 
     openBtn?.addEventListener("click", () => {
@@ -98,6 +129,24 @@
         dialog.showModal();
       } else {
         dialog.setAttribute("open", "open");
+      }
+    });
+
+    form.addEventListener("click", (e) => {
+      if (e.target.matches("[data-prefs-all]")) {
+        form.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+          el.checked = true;
+        });
+      }
+      if (e.target.matches("[data-prefs-api]")) {
+        form.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+          const g = GROUPS.find((x) => x.id === el.name);
+          el.checked = Boolean(g?.id.startsWith("api"));
+        });
+      }
+      if (e.target.matches("[data-prefs-cancel]")) {
+        dialog.close?.();
+        dialog.removeAttribute("open");
       }
     });
 
@@ -111,14 +160,7 @@
       savePrefs(prefs);
       dialog.close?.();
       dialog.removeAttribute("open");
-      window.PomDebug?.logLocal("调试复制偏好已保存", prefs);
-    });
-
-    form.addEventListener("click", (e) => {
-      if (e.target.matches("[data-prefs-cancel]")) {
-        dialog.close?.();
-        dialog.removeAttribute("open");
-      }
+      window.PomDebug?.logLocal("调试复制偏好已保存", prefs, ["ui"]);
     });
   }
 

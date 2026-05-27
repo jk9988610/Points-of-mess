@@ -3,6 +3,8 @@
   const DIALOGUE_ZONE_RADIUS = 0.24;
   const INTERACT_RADIUS = DIALOGUE_ZONE_RADIUS;
   const TALK_ZONE_RADIUS = DIALOGUE_ZONE_RADIUS;
+  /** 仅点中角色圆点才算点到角色（橙圈内空地可移动） */
+  const HIT_CHARACTER_RADIUS = 0.045;
   const PLAYER_RADIUS = 0.018;
   const CHAR_RADIUS = 0.022;
   const MOVE_SPEED = 0.42;
@@ -27,6 +29,7 @@
 
   window.GameMap = {
     DIALOGUE_ZONE_RADIUS,
+    HIT_CHARACTER_RADIUS,
     INTERACT_RADIUS,
     TALK_ZONE_RADIUS,
     PLAYER_RADIUS,
@@ -166,9 +169,9 @@
         y: player.y + (moveTarget.y - player.y) * t,
       };
     },
-    hitCharacter(characters, worldPoint) {
+    hitCharacter(characters, worldPoint, radius = HIT_CHARACTER_RADIUS) {
       let best = null;
-      let bestD = INTERACT_RADIUS;
+      let bestD = radius;
       for (const ch of characters) {
         const d = dist(worldPoint, ch);
         if (d < bestD) {

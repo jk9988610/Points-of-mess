@@ -336,9 +336,15 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
         ];
 
     let lastError = null;
+    const debugLabel = params.debugLabel || "选项 JSON";
     for (const attempt of attempts) {
       try {
-        const raw = await window.ChatApi.completeChat({ ...params, ...attempt.extra });
+        const raw = await window.ChatApi.completeChat({
+          ...params,
+          ...attempt.extra,
+          debugLabel,
+          debugAttempt: attempt.label !== "普通" ? attempt.label : undefined,
+        });
         if (String(raw || "").trim()) {
           return raw;
         }
@@ -371,7 +377,13 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     return `\n【剧情摘要】（长程记忆；事实以此为准。reply 接最近一轮对白，勿重复摘要已写明的内容。）\n${text}\n`;
   }
 
-  async function requestReplyOnly({ systemPrompt, apiMessages, signal, plotSummary }) {
+  async function requestReplyOnly({
+    systemPrompt,
+    apiMessages,
+    signal,
+    plotSummary,
+    debugLabel,
+  }) {
     const replySystem = `${roleStyleFromSystem(systemPrompt)}${plotSummaryBlock(plotSummary)}
 只输出角色的一句台词：1～2 句中文，≤40 字。不要 JSON、不要 markdown、不要解释。`;
 
@@ -381,6 +393,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       temperature: 0.45,
       max_tokens: tokenLimit("REPLY_ONLY", 768),
       signal,
+      debugLabel: debugLabel || "拆分·①reply",
     });
 
     const reply = replyFromRaw(raw);
@@ -397,11 +410,6 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     signal,
     logTag,
   }) {
-    window.PomDebug?.logRequest(`→ ${logTag}`, {
-      system: systemPrompt.slice(0, 80) + "…",
-      user: userContent,
-    });
-
     const raw = await completeChatJson(
       {
         systemPrompt,
@@ -409,11 +417,10 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
         temperature,
         max_tokens: tokenLimit("OPTIONS", 1280),
         signal,
+        debugLabel: logTag,
       },
       { preferPlain: true }
     );
-
-    window.PomDebug?.logResponse(`← ${logTag}`, raw);
     return raw;
   }
 
@@ -513,6 +520,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
           ? tokenLimit("COMBINED_CLOSE", 768)
           : tokenLimit("COMBINED", 2048),
         signal,
+        debugLabel: isClose ? "角色收束" : "角色回复+选项（合并）",
       },
       { preferPlain: true }
     );
@@ -533,18 +541,13 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     });
     window.PomDebug?.logLocal("API 路径", "拆分优先 · ①reply → ②深挖/推进(AI)+③收束(固定)");
 
-    window.PomDebug?.logRequest("→ 拆分·①reply", {
-      messages: apiMessages,
-      plotSummary: session.plotSummary || null,
-    });
-
     const reply = await requestReplyOnly({
       systemPrompt,
       apiMessages,
       signal,
       plotSummary: session.plotSummary,
+      debugLabel: "拆分·①reply",
     });
-    window.PomDebug?.logResponse("← 拆分·①reply", reply);
 
     const sessionWithReply = {
       messages: [
@@ -581,14 +584,13 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     if (window.PomTokens?.USE_SPLIT_FIRST) {
       if (isClose) {
         window.PomDebug?.logLocal("API 路径", "收束 · 仅 拆分·①reply");
-        window.PomDebug?.logRequest("→ 拆分·①reply（收束）", { messages: apiMessages });
         const reply = await requestReplyOnly({
           systemPrompt,
           apiMessages,
           signal,
           plotSummary: session.plotSummary,
+          debugLabel: "拆分·①reply（收束）",
         });
-        window.PomDebug?.logResponse("← 拆分·①reply（收束）", reply);
         return { reply, options: null };
       }
       return requestSplitTurn({
@@ -600,11 +602,6 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
         signal,
       });
     }
-
-    window.PomDebug?.logRequest(isClose ? "角色收束" : "角色回复+选项（合并）", {
-      system: systemPrompt.slice(0, 80) + "…",
-      messages: apiMessages,
-    });
 
     let raw = "";
     let parsed = null;
@@ -623,8 +620,6 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       raw = second.raw;
       parsed = second.parsed;
     }
-
-    window.PomDebug?.logResponse(isClose ? "角色收束" : "角色回复+选项", raw);
 
     if (isClose) {
       return parsed;
@@ -664,6 +659,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
           apiMessages,
           signal,
           plotSummary: session.plotSummary,
+          debugLabel: "备用·①reply",
         });
       } catch {
         /* use empty */

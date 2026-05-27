@@ -1,5 +1,5 @@
 (function () {
-  const MAX_ENTRIES = 120;
+  const MAX_ENTRIES = 200;
   const entries = [];
   const plainLines = [];
 
@@ -68,7 +68,7 @@
     return "本地";
   }
 
-  function appendEntry(audience, title, body) {
+  function appendEntry(audience, title, body, tags) {
     const time = ts();
     const tag = audienceLabel(audience);
     const plain =
@@ -81,6 +81,7 @@
       audience,
       title,
       body: body === undefined ? "" : String(body),
+      tags: Array.isArray(tags) ? tags : [],
     });
     if (entries.length > MAX_ENTRIES) {
       entries.shift();
@@ -120,8 +121,11 @@
           "padding:6px 8px",
           "border-radius:6px",
           "white-space:pre-wrap",
+          "word-break:break-word",
           "color:" + t.text,
           "background:" + t.bodyBg,
+          "max-height:40vh",
+          "overflow:auto",
         ].join(";");
         const bodyBlock = e.body
           ? `<pre style="${bodyStyle}">${escapeHtml(e.body)}</pre>`
@@ -140,45 +144,53 @@
   }
 
   window.PomDebug = {
-    logLocal(title, detail) {
+    getEntries() {
+      return entries;
+    },
+    logLocal(title, detail, tags) {
+      const tagList = ["ui", ...(tags || [])];
       if (detail === undefined) {
-        appendEntry("local", String(title));
+        appendEntry("local", String(title), undefined, tagList);
         return;
       }
       const body =
         typeof detail === "string" ? detail : JSON.stringify(detail, null, 2);
-      appendEntry("local", String(title), body);
+      appendEntry("local", String(title), body, tagList);
     },
-    logLocalWarn(title, detail) {
+    logUser(title, detail) {
+      this.logLocal(title, detail, ["user"]);
+    },
+    logLocalWarn(title, detail, tags) {
       const body =
         detail === undefined
           ? undefined
           : typeof detail === "string"
             ? detail
             : JSON.stringify(detail, null, 2);
-      appendEntry("local-warn", String(title), body);
+      appendEntry("local-warn", String(title), body, ["ui-warn", ...(tags || [])]);
     },
-    logLocalError(title, detail) {
+    logLocalError(title, detail, tags) {
       const body =
         detail === undefined
           ? undefined
           : typeof detail === "string"
             ? detail
             : JSON.stringify(detail, null, 2);
-      appendEntry("local-error", String(title), body);
+      appendEntry("local-error", String(title), body, ["ui-error", ...(tags || [])]);
     },
     log(title, detail) {
       this.logLocal(title, detail);
     },
-    logRequest(label, payload) {
+    logRequest(label, payload, tags) {
       appendEntry(
         "ai-out",
         `→ ${label}`,
-        typeof payload === "string" ? payload : JSON.stringify(payload, null, 2)
+        typeof payload === "string" ? payload : JSON.stringify(payload, null, 2),
+        tags || ["api", "api-out"]
       );
     },
-    logResponse(label, text) {
-      appendEntry("ai-in", `← ${label}`, String(text ?? ""));
+    logResponse(label, text, tags) {
+      appendEntry("ai-in", `← ${label}`, String(text ?? ""), tags || ["api", "api-in"]);
     },
     clear() {
       entries.length = 0;
@@ -217,12 +229,14 @@
       const header = `版本：v${version}\n（按复制偏好筛选）`;
       return this.copyText(this.buildCopyText(entries, header));
     },
-    /** 从最近一次「玩家选择」起复制到末尾（报 bug 用） */
     copyCurrentTurn() {
       const version = window.POM_VERSION || "?";
-      let start = Math.max(0, entries.length - 28);
+      let start = Math.max(0, entries.length - 40);
       for (let i = entries.length - 1; i >= 0; i--) {
-        if (String(entries[i].title).includes("玩家选择")) {
+        if (
+          entries[i].tags?.includes("user") &&
+          String(entries[i].title).includes("玩家选择")
+        ) {
           start = i;
           break;
         }

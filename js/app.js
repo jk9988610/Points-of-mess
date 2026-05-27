@@ -11,9 +11,14 @@
     hitCharacter,
     isNearPlayer,
     isInTalkZone,
+    clampPointToTalkZone,
+    HIT_CHARACTER_RADIUS,
     INTERACT_RADIUS,
     TALK_ZONE_RADIUS,
   } = window.GameMap;
+
+  /** 记忆测试输入框（暂隐藏，保留代码便于恢复） */
+  const MEMORY_INPUT_ENABLED = false;
 
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
@@ -40,6 +45,7 @@
   let abortController = null;
   let lastFrame = performance.now();
   let highlightId = null;
+  let lastInZone = null;
 
   function isInTalkZoneNow() {
     const ch = state.talkingId ? getCharacter(state.talkingId) : null;
@@ -252,12 +258,13 @@
   }
 
   function setMemoryInputVisible(visible) {
-    memoryInputBar?.classList.toggle("hidden", !visible);
+    const show = MEMORY_INPUT_ENABLED && visible;
+    memoryInputBar?.classList.toggle("hidden", !show);
     if (memoryInputEl) {
-      memoryInputEl.disabled = !visible;
+      memoryInputEl.disabled = !show;
     }
     if (memoryInputSendEl) {
-      memoryInputSendEl.disabled = !visible || state.isStreaming;
+      memoryInputSendEl.disabled = !show || state.isStreaming;
     }
   }
 
@@ -398,7 +405,7 @@
     state.optionsPaused = false;
     const session = getSession(state, characterId);
     setStatus("", false);
-    window.PomDebug?.logLocal("开始对话", {
+    window.PomDebug?.logUser("开始对话", {
       character: character.name,
       historyTurns: window.GameDialogue.HISTORY_TURNS,
       messageCount: session.messages.length,
@@ -471,7 +478,7 @@
     state.optionsPaused = true;
     setOptionsVisible(false);
     setMemoryInputVisible(false);
-    window.PomDebug?.logLocal("待会", "选项已隐藏；会话与摘要保留，再点锋利可继续");
+    window.PomDebug?.logUser("待会", "选项已隐藏；会话与摘要保留，再点锋利可继续");
     renderMap();
     syncSpeechBubbles(false);
   }
@@ -497,11 +504,7 @@
     const session = getSession(state, state.talkingId);
     const apiMessages = [{ role: "user", content: text }];
 
-    window.PomDebug?.logLocal("输入框原文", text);
-    window.PomDebug?.logRequest(
-      "输入框→AI（仅 messages）",
-      JSON.stringify({ messages: apiMessages }, null, 2)
-    );
+    window.PomDebug?.logUser("输入框原文", text);
 
     session.messages.push({
       id: createId(),
@@ -532,6 +535,7 @@
         temperature: 0.5,
         max_tokens: window.PomTokens?.FREEFORM ?? 512,
         signal: abortController.signal,
+        debugLabel: "输入框→AI",
         onDelta(chunk) {
           reply += chunk;
           setBubble(reply, true);
@@ -549,7 +553,6 @@
       persist(state);
       setBubble(reply, false);
       setStatus("", false);
-      window.PomDebug?.logResponse("输入框←AI", reply);
       window.PomDebug?.logLocal(
         "本地会话（未发给 AI，仅备忘）",
         window.GameMemoryChat.formatLocalTranscript(session.messages)
@@ -606,7 +609,7 @@
     const optionsSnapshot = state.currentOptions.map((o) => ({ ...o }));
     const isClose = pick.intent === "close";
 
-    window.PomDebug?.logLocal("玩家选择（界面）", {
+    window.PomDebug?.logUser("玩家选择", {
       intent: pick.intent,
       line: pick.line,
     });
@@ -737,41 +740,63 @@
     const world = canvasToWorld(canvas, clientX, clientY);
     const docHit = window.GameDesktop?.hitDesktopDoc?.(world, state.player);
     if (docHit && !state.talkingId) {
+      window.PomDebug?.logUser("地图点击", { action: "打开文档", title: docHit.title });
       window.GameDesktop.openDoc(docHit);
       return;
     }
 
-    const hit = hitCharacter(characters, world);
+    const hit = hitCharacter(characters, world, HIT_CHARACTER_RADIUS);
 
-    if (hit && isNearPlayer(state.player, hit)) {
-      if (state.talkingId === hit.id) {
+    if (state.talkingId) {
+      const talking = getCharacter(state.talkingId);
+      if (hit?.id === state.talkingId) {
+        window.PomDebug?.logUser("地图点击", {
+          action: "点角色",
+          character: talking?.name,
+          optionsPaused: state.optionsPaused,
+        });
         if (state.optionsPaused) {
           resumeTalkOptions();
         }
         return;
       }
-      startTalking(hit.id);
-      return;
-    }
-
-    if (state.talkingId) {
       if (hit && hit.id !== state.talkingId) {
         return;
       }
-      state.moveTarget = clampWorldToMap(world);
+      const rawTarget = talking ? clampPointToTalkZone(world, talking) : world;
+      const target = clampWorldToMap(rawTarget);
+      state.moveTarget = target;
+      window.PomDebug?.logUser("地图点击", {
+        action: "圈内移动",
+        target,
+        inZone: talking ? isInTalkZone(state.player, talking) : false,
+      });
       setStatus("", false);
       persist(state);
       renderMap();
       return;
     }
 
+    if (hit && isNearPlayer(state.player, hit)) {
+      window.PomDebug?.logUser("地图点击", { action: "开始交谈", character: hit.name });
+      startTalking(hit.id);
+      return;
+    }
+
     if (hit && !isNearPlayer(state.player, hit)) {
       state.moveTarget = { x: hit.x, y: hit.y - INTERACT_RADIUS * 0.85 };
+      window.PomDebug?.logUser("地图点击", {
+        action: "靠近角色",
+        character: hit.name,
+        moveTarget: state.moveTarget,
+      });
       setStatus(`靠近「${hit.name}」后再点击`, false);
       return;
     }
 
-    state.moveTarget = clampWorldToMap(world);
+    const target = clampWorldToMap(world);
+    state.moveTarget = target;
+    window.PomDebug?.logUser("地图点击", { action: "移动", target });
     setStatus("", false);
   }
 
@@ -802,6 +827,22 @@
       syncSpeechBubbles(state.isStreaming, {
         thinking: state.isStreaming && state.optionsLoading,
       });
+    }
+
+    if (state.talkingId) {
+      const ch = getCharacter(state.talkingId);
+      if (ch) {
+        const inZone = isInTalkZone(state.player, ch);
+        if (lastInZone !== null && lastInZone !== inZone) {
+          window.PomDebug?.logUser(inZone ? "进入对话圈" : "离开对话圈", {
+            character: ch.name,
+            distance: window.GameMap.dist(state.player, ch).toFixed(3),
+          });
+        }
+        lastInZone = inZone;
+      }
+    } else {
+      lastInZone = null;
     }
 
     requestAnimationFrame(gameLoop);

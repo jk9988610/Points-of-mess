@@ -107,20 +107,14 @@
       `第 ${optionTurns} 轮选项后 · ${toSummarize.length} 条对白入模 · 上限 ${SUMMARY_MAX_CHARS} 字`
     );
 
-    window.PomDebug?.logRequest("→ 压缩剧情摘要", {
-      system: `${SUMMARY_SYSTEM.slice(0, 120)}…`,
-      user: userContent,
-    });
-
     const summary = await window.ChatApi.completeChat({
       systemPrompt: SUMMARY_SYSTEM,
       messages: [{ role: "user", content: userContent }],
       temperature: 0.3,
       max_tokens: window.PomTokens?.SUMMARY ?? 2048,
       signal,
+      debugLabel: "压缩剧情摘要",
     });
-
-    window.PomDebug?.logResponse("← 压缩剧情摘要", summary);
 
     let text = String(summary || "").trim();
     if (text.length > SUMMARY_MAX_CHARS) {
@@ -136,8 +130,8 @@
     session.plotSummary = text;
     session.lastSummaryAtOptionTurn = optionTurns;
     window.PomDebug?.logLocal(
-      "剧情摘要已更新（A++）",
-      `${session.plotSummary.length} 字\n${session.plotSummary}`
+      "剧情摘要已写入 session",
+      `${session.plotSummary.length} 字（上方绿条为 AI 原文）`
     );
     return true;
   }

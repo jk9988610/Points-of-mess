@@ -38,6 +38,47 @@
     return [...messages];
   }
 
+  function inferApiTags(label, direction) {
+    const s = String(label || "");
+    const tags = [direction === "out" ? "api-out" : "api-in"];
+    if (/reply|①|角色回复|收束/.test(s)) {
+      tags.push("api-reply");
+      tags.push(direction === "out" ? "api-reply-out" : "api-reply-in");
+    } else if (/选项|②/.test(s)) {
+      tags.push("api-options");
+      tags.push(direction === "out" ? "api-options-out" : "api-options-in");
+    } else if (/摘要/.test(s)) {
+      tags.push("api-summary");
+      tags.push(direction === "out" ? "api-summary-out" : "api-summary-in");
+    } else if (/输入框/.test(s)) {
+      tags.push("api-freeform");
+      tags.push(direction === "out" ? "api-freeform-out" : "api-freeform-in");
+    } else if (/合并/.test(s)) {
+      tags.push("api-combined");
+      tags.push(direction === "out" ? "api-combined-out" : "api-combined-in");
+    } else {
+      tags.push("api-other");
+      tags.push(direction === "out" ? "api-other-out" : "api-other-in");
+    }
+    return tags;
+  }
+
+  function formatRequestLog(cfg, messageList, extra) {
+    return JSON.stringify(
+      {
+        model: cfg.model,
+        apiUrl: cfg.apiUrl,
+        stream: extra.stream ?? false,
+        temperature: extra.temperature,
+        max_tokens: extra.max_tokens,
+        response_format: extra.response_format ?? null,
+        messages: messageList,
+      },
+      null,
+      2
+    );
+  }
+
   async function streamChat({
     systemPrompt,
     messages,
@@ -46,11 +87,26 @@
     signal,
     temperature,
     max_tokens,
+    debugLabel = "输入框→AI",
+    debugAttempt,
   }) {
     const cfg = getConfig();
     const messageList = messagesOnly
       ? [...messages]
       : buildMessageList(systemPrompt, messages);
+    const temp = temperature ?? cfg.temperature ?? 0.6;
+    const maxTok = max_tokens ?? cfg.maxTokens ?? 80;
+    const logTitle = debugAttempt ? `${debugLabel} · ${debugAttempt}` : debugLabel;
+
+    window.PomDebug?.logRequest(
+      logTitle,
+      formatRequestLog(cfg, messageList, {
+        stream: true,
+        temperature: temp,
+        max_tokens: maxTok,
+      }),
+      inferApiTags(debugLabel, "out")
+    );
 
     const response = await fetch(cfg.apiUrl, {
       method: "POST",
@@ -62,8 +118,8 @@
         model: cfg.model,
         messages: messageList,
         stream: true,
-        temperature: temperature ?? cfg.temperature ?? 0.6,
-        max_tokens: max_tokens ?? cfg.maxTokens ?? 80,
+        temperature: temp,
+        max_tokens: maxTok,
       }),
       signal,
     });
@@ -76,12 +132,14 @@
       } catch {
         /* non-json */
       }
+      window.PomDebug?.logLocalWarn(`API 失败 · ${logTitle}`, message, ["ui-warn", "api"]);
       raiseApiError(response.status, message);
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let fullText = "";
 
     while (true) {
       const { done, value } = await reader.read();
@@ -100,12 +158,18 @@
         }
         const data = trimmed.slice(5).trim();
         if (data === "[DONE]") {
+          window.PomDebug?.logResponse(
+            logTitle,
+            fullText,
+            inferApiTags(debugLabel, "in")
+          );
           return;
         }
         try {
           const parsed = JSON.parse(data);
           const delta = parsed.choices?.[0]?.delta?.content;
           if (delta) {
+            fullText += delta;
             onDelta(delta);
           }
         } catch {
@@ -113,6 +177,8 @@
         }
       }
     }
+
+    window.PomDebug?.logResponse(logTitle, fullText, inferApiTags(debugLabel, "in"));
   }
 
   async function completeChat({
@@ -122,15 +188,32 @@
     temperature,
     max_tokens,
     response_format,
+    debugLabel = "API",
+    debugAttempt,
   }) {
     const cfg = getConfig();
+    const messageList = buildMessageList(systemPrompt, messages);
+    const temp = temperature ?? cfg.temperature ?? 0.6;
+    const maxTok = max_tokens ?? cfg.maxTokens ?? 80;
+    const logTitle = debugAttempt ? `${debugLabel} · ${debugAttempt}` : debugLabel;
+
+    window.PomDebug?.logRequest(
+      logTitle,
+      formatRequestLog(cfg, messageList, {
+        stream: false,
+        temperature: temp,
+        max_tokens: maxTok,
+        response_format: response_format || null,
+      }),
+      inferApiTags(debugLabel, "out")
+    );
 
     const body = {
       model: cfg.model,
-      messages: buildMessageList(systemPrompt, messages),
+      messages: messageList,
       stream: false,
-      temperature: temperature ?? cfg.temperature ?? 0.6,
-      max_tokens: max_tokens ?? cfg.maxTokens ?? 80,
+      temperature: temp,
+      max_tokens: maxTok,
     };
     if (response_format) {
       body.response_format = response_format;
@@ -154,6 +237,7 @@
       } catch {
         /* non-json */
       }
+      window.PomDebug?.logLocalWarn(`API 失败 · ${logTitle}`, message, ["ui-warn", "api"]);
       raiseApiError(response.status, message);
     }
 
@@ -162,10 +246,17 @@
     const content = String(choice?.message?.content ?? "").trim();
     if (!content) {
       const reason = choice?.finish_reason || "unknown";
-      throw new Error(`API 返回为空 (finish_reason=${reason})`);
+      const err = new Error(`API 返回为空 (finish_reason=${reason})`);
+      window.PomDebug?.logLocalWarn(`API 空返回 · ${logTitle}`, err.message, [
+        "ui-warn",
+        "api",
+      ]);
+      throw err;
     }
+
+    window.PomDebug?.logResponse(logTitle, content, inferApiTags(debugLabel, "in"));
     return content;
   }
 
-  window.ChatApi = { streamChat, completeChat };
+  window.ChatApi = { streamChat, completeChat, inferApiTags };
 })();
