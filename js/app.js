@@ -629,7 +629,10 @@
 
     const apiMessages = getHistoryForApi(session.messages);
     if (session.plotSummary) {
-      window.PomDebug?.logLocal("剧情摘要（在 system，不占 messages）", session.plotSummary);
+      window.PomDebug?.logLocal(
+        "剧情摘要（缓存，随 reply/选项 system 注入）",
+        session.plotSummary
+      );
     }
     window.PomDebug?.logLocal("本轮 messages 字数", String(
       apiMessages.reduce((n, m) => n + m.content.length, 0)
