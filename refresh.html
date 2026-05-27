@@ -24,34 +24,74 @@
     a { color: #818cf8; }
     code { color: #fde68a; }
     .ver { font-weight: 700; color: #86efac; }
+    .err { color: #fca5a5; }
   </style>
-  <script src="js/version.js"></script>
 </head>
 <body>
   <div>
-    <p>正在拉取最新版 <span class="ver" id="verLabel">…</span>（绕过 Chrome 旧缓存）…</p>
-    <p id="hint">若未自动跳转，请点：<a id="link" href="#">进入游戏</a></p>
-    <p style="font-size:0.85rem;color:#94a3b8">与 Edge 不同，Chrome 可能长期缓存旧 <code>index.html</code>，请收藏本页以便日后更新。</p>
+    <p id="status">正在从服务器读取最新版本号（不读本地缓存）…</p>
+    <p class="ver" id="verLabel"></p>
+    <p id="hint" hidden>若未自动跳转，请点：<a id="link" href="#">进入游戏</a></p>
+    <p style="font-size:0.85rem;color:#94a3b8">
+      仍无效时：Chrome → 设置 → 隐私 → 清除浏览数据 → 仅勾选「缓存的图片和文件」→ 时间范围选「过去 1 小时」→ 针对
+      <code>jk9988610.github.io</code>
+    </p>
   </div>
   <script>
     (function () {
-      var v = window.POM_VERSION || "0";
+      var status = document.getElementById("status");
       var label = document.getElementById("verLabel");
-      if (label) {
-        label.textContent = "v" + v;
-      }
-      var target = "index.html?fresh=" + Date.now() + "&from=refresh&v=" + encodeURIComponent(v);
+      var hint = document.getElementById("hint");
       var link = document.getElementById("link");
-      link.href = target;
-      try {
-        sessionStorage.removeItem("pom_fresh_redirect");
-        Object.keys(sessionStorage).forEach(function (k) {
-          if (k.indexOf("pom_auto_refresh_") === 0) {
-            sessionStorage.removeItem(k);
+
+      function go(live) {
+        var v = live || String(Date.now());
+        if (label) {
+          label.textContent = "v" + v;
+        }
+        var target =
+          "index.html?fresh=" + Date.now() + "&v=" + encodeURIComponent(v) + "&from=refresh";
+        if (link) {
+          link.href = target;
+        }
+        try {
+          sessionStorage.removeItem("pom_fresh_redirect");
+          Object.keys(sessionStorage).forEach(function (k) {
+            if (k.indexOf("pom_auto_refresh_") === 0) {
+              sessionStorage.removeItem(k);
+            }
+          });
+        } catch (e) {}
+        location.replace(target);
+      }
+
+      fetch("js/version.js?probe=" + Date.now(), { cache: "no-store" })
+        .then(function (res) {
+          return res.text();
+        })
+        .then(function (text) {
+          var match = text.match(/POM_VERSION\s*=\s*"([^"]+)"/);
+          var live = match && match[1];
+          if (!live) {
+            throw new Error("无法解析版本号");
           }
+          if (status) {
+            status.textContent = "已获取线上版本，正在跳转…";
+          }
+          go(live);
+        })
+        .catch(function (err) {
+          if (status) {
+            status.innerHTML =
+              '<span class="err">拉取 version.js 失败</span>（' +
+              (err.message || err) +
+              "）";
+          }
+          if (hint) {
+            hint.hidden = false;
+          }
+          go(String(Date.now()));
         });
-      } catch (e) {}
-      location.replace(target);
     })();
   </script>
 </body>

@@ -17,7 +17,19 @@
       location.replace(path + "?" + q + location.hash);
     })();
   </script>
-  <script src="js/version.js"></script>
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var bust = params.get("v") || params.get("fresh") || String(Date.now());
+      window.__POM_CACHE_BUST = bust;
+      document.write(
+        '<script src="js/version.js?v=' + encodeURIComponent(bust) + '"><\/script>'
+      );
+      document.write(
+        '<script src="js/boot.js?v=' + encodeURIComponent(bust) + '"><\/script>'
+      );
+    })();
+  </script>
   <script>
     (function () {
       var v = window.POM_VERSION || "";
@@ -158,6 +170,5 @@
     </nav>
   </div>
 
-  <script src="js/boot.js"></script>
 </body>
 </html>

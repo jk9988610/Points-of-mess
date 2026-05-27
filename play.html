@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>进入 Points-of-mess</title>
+</head>
+<body>
+  <p style="font-family:system-ui,sans-serif">正在获取最新版本并进入游戏…</p>
+  <script>
+    fetch("js/version.js?probe=" + Date.now(), { cache: "no-store" })
+      .then(function (r) {
+        return r.text();
+      })
+      .then(function (text) {
+        var m = text.match(/POM_VERSION\s*=\s*"([^"]+)"/);
+        var v = (m && m[1]) || String(Date.now());
+        location.replace(
+          "index.html?fresh=" + Date.now() + "&v=" + encodeURIComponent(v) + "&from=play"
+        );
+      })
+      .catch(function () {
+        location.replace("index.html?fresh=" + Date.now());
+      });
+  </script>
+</body>
+</html>
