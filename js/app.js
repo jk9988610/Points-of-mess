@@ -660,16 +660,40 @@
 
     abortController = new AbortController();
 
+    const signal = abortController.signal;
+    const runSummaryParallel =
+      !isClose && window.GameSummary?.shouldRefreshPlotSummary?.(session);
+    if (runSummaryParallel) {
+      window.PomDebug?.logLocal(
+        "API 路径",
+        "①reply → ②选项 与 压缩剧情摘要 并行（摘要不阻塞气泡/选项）"
+      );
+    }
+
+    const summaryPromise = runSummaryParallel
+      ? window.GameSummary.maybeRefreshPlotSummary(session, signal, {
+          parallel: true,
+        }).catch((e) => {
+          if (e.name !== "AbortError") {
+            window.PomDebug?.logLocalWarn("剧情摘要失败（并行）", e.message);
+          }
+          return false;
+        })
+      : Promise.resolve(false);
+
     try {
-      const { reply, options } = await requestCombinedTurn({
-        character,
-        archetype,
-        session,
-        apiMessages,
-        turn: { character, options: optionsSnapshot, pick, isClose },
-        isClose,
-        signal: abortController.signal,
-      });
+      const [{ reply, options }, summaryOk] = await Promise.all([
+        requestCombinedTurn({
+          character,
+          archetype,
+          session,
+          apiMessages,
+          turn: { character, options: optionsSnapshot, pick, isClose },
+          isClose,
+          signal,
+        }),
+        summaryPromise,
+      ]);
 
       session.messages.push({
         id: createId(),
@@ -692,15 +716,8 @@
         window.PomDebug?.logLocal("选项已更新（界面展示）", options.map((o) => o.line));
       }
 
-      if (!isClose) {
-        try {
-          await window.GameSummary?.maybeRefreshPlotSummary(session, abortController?.signal);
-          persist(state);
-        } catch (e) {
-          if (e.name !== "AbortError") {
-            window.PomDebug?.logLocalWarn("剧情摘要失败", e.message);
-          }
-        }
+      if (summaryOk) {
+        persist(state);
       }
     } catch (error) {
       if (error.name === "AbortError") {
@@ -926,7 +943,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "测试模式",
-      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①reply→②深挖/推进(AI)+③挂起(仅程序)。"
+      "灰=本地 · 黄=发AI · 绿=AI回。每轮：①② 串行；第4/8…轮摘要与①②并行。"
     );
   }
   requestAnimationFrame(gameLoop);

@@ -75,7 +75,7 @@
     }
   }
 
-  async function maybeRefreshPlotSummary(session, signal) {
+  function shouldRefreshPlotSummary(session) {
     const optionTurns = countOptionTurns(session.messages);
     if (optionTurns < SUMMARY_EVERY_OPTION_TURNS) {
       return false;
@@ -86,25 +86,58 @@
     if (session.lastSummaryAtOptionTurn === optionTurns) {
       return false;
     }
-
     const done = window.GameDialogue.getDoneMessages(session.messages);
     const keepRecent = window.GameDialogue.HISTORY_TURNS * 2;
     const toSummarize = done.slice(0, Math.max(0, done.length - keepRecent));
-    if (toSummarize.length === 0) {
+    return toSummarize.length > 0;
+  }
+
+  function buildSummaryPayload(session, opts = {}) {
+    const optionTurns = countOptionTurns(session.messages);
+    let done = window.GameDialogue.getDoneMessages(session.messages);
+    const keepRecent = window.GameDialogue.HISTORY_TURNS * 2;
+    const parallel = Boolean(opts.parallel);
+    const last = done[done.length - 1];
+    const inFlightUser =
+      parallel &&
+      last?.role === "user" &&
+      last.intent &&
+      last.intent !== "freeform";
+    if (inFlightUser) {
+      done = done.slice(0, -1);
+    }
+    const toSummarize = done.slice(0, Math.max(0, done.length - keepRecent));
+    return {
+      optionTurns,
+      toSummarize,
+      inFlightUser,
+      pendingUserLine: inFlightUser ? last.content : "",
+    };
+  }
+
+  async function maybeRefreshPlotSummary(session, signal, opts = {}) {
+    if (!shouldRefreshPlotSummary(session)) {
       return false;
     }
+
+    const { optionTurns, toSummarize, inFlightUser, pendingUserLine } =
+      buildSummaryPayload(session, opts);
 
     const block = toSummarize
       .map((m) => `${m.role === "assistant" ? "锋利" : "玩家"}: ${m.content}`)
       .join("\n");
+    const pendingNote = inFlightUser
+      ? `\n\n【本轮玩家已选（锋利回复尚未生成，勿写入 [已确认]）】\n玩家: ${pendingUserLine}`
+      : "";
     const body = session.plotSummary
-      ? `【已有摘要】\n${session.plotSummary}\n\n【新增对话】\n${block}`
-      : `【新增对话】\n${block}`;
+      ? `【已有摘要】\n${session.plotSummary}\n\n【新增对话】\n${block}${pendingNote}`
+      : `【新增对话】\n${block}${pendingNote}`;
     const userContent = SUMMARY_USER_CHECKLIST + body;
 
+    const modeLabel = opts.parallel ? "并行 · 与 ①② 同时进行" : "串行 · ①② 完成后";
     window.PomDebug?.logLocal(
       "触发剧情摘要压缩",
-      `第 ${optionTurns} 轮选项后 · ${toSummarize.length} 条对白入模 · 上限 ${SUMMARY_MAX_CHARS} 字`
+      `${modeLabel} · 第 ${optionTurns} 轮选项 · ${toSummarize.length} 条对白入模 · 上限 ${SUMMARY_MAX_CHARS} 字`
     );
 
     const summary = await window.ChatApi.completeChat({
@@ -139,6 +172,7 @@
   window.GameSummary = {
     SUMMARY_EVERY_OPTION_TURNS,
     SUMMARY_MAX_CHARS,
+    shouldRefreshPlotSummary,
     maybeRefreshPlotSummary,
   };
 })();
