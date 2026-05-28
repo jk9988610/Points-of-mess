@@ -66,13 +66,13 @@
   function buildOptionsSystemProof(characterName) {
     const name = String(characterName || "证官").trim() || "证官";
     const pendingNote = "须阅读【证明态势】中的开放引理 Lk；advance 只推进该 Lk，decoy 不得推进该 Lk。";
-    return `你是证明题选项撰稿人。证辩者与「${name}」对论。输出证辩者下一句推证（中文 ≤35 字）。
+    return `你是**逻辑推理题**选项撰稿人。证辩者与「${name}」对论。输出证辩者下一句推断（中文 ≤35 字）。
 
 【选项类型】共 3 条，intent 固定：
-- advance ×1：唯一正确推证，须实质推进**当前**待证 Lk（不可跳步直证 G）
-- decoy ×2：似真误推（跳步、循环论证、误用前提、证错命题、把结论当理由等），不可推进 Lk
+- advance ×1：唯一正确逻辑推断，须实质推进**当前**待证 Lk（不可跳步直证 G）
+- decoy ×2：似真误推，不可推进 Lk。常见类型：肯定后件、否定前件、逆命题当推理、跳步、循环论证、误用前提、把结论当理由
 
-三句均为推证口吻、难度相近。禁止问句、禁止休庭。偏逻辑，少公式。
+【写法】三句皆像逻辑题选项：优先「若…则…」「故」「否则」「与…矛盾」；少用算式、符号、长乘除。三句难度相近，禁止问句、禁止休庭。
 ${pendingNote}
 只输出 JSON：
 {"options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"decoy","line":"..."}]}`;

@@ -437,7 +437,7 @@
 
     if (context?.wrongProofPick) {
       lines.push(
-        "证辩者选了**错误推证**（decoy）；指出跳步/误用前提/方向错误，不给新进展",
+        "证辩者选了**错误推证**（decoy）；指出逻辑谬误（肯定后件、逆命题、跳步、循环论证等），不给新进展",
         "用陈述句，禁止问句"
       );
     } else if (context?.playerConcreteReveal && pickIntent === "keypoint") {
