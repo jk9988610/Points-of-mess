@@ -34,12 +34,7 @@
     },
   ];
 
-  const HIT_RADIUS = 0.065;
   let openDocId = null;
-
-  function dist(a, b) {
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  }
 
   function mdToHtml(md) {
     const lines = String(md || "").split("\n");
@@ -83,76 +78,15 @@
       .replace(/>/g, "&gt;");
   }
 
-  function drawDesktopDocs(ctx, canvas, { player, highlightDocId, talkingId }) {
-    if (talkingId) {
-      return;
-    }
-    const w = canvas.clientWidth || canvas.width;
-    const h = canvas.clientHeight || canvas.height;
+  /** 桌面文档图标已下线，保留 API 供日后复用 */
+  function drawDesktopDocs() {}
 
-    for (const doc of DESKTOP_DOCS) {
-      const cx = doc.x * w;
-      const cy = doc.y * h;
-      const near = highlightDocId === doc.id;
-      const iw = Math.min(72, w * 0.16);
-      const ih = iw * 0.85;
-
-      ctx.fillStyle = near ? doc.color : `${doc.color}cc`;
-      ctx.strokeStyle = near ? "#fff" : "rgba(255,255,255,0.35)";
-      ctx.lineWidth = near ? 2 : 1;
-      roundRect(ctx, cx - iw / 2, cy - ih / 2, iw, ih, 6);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.font = `bold ${Math.max(10, w * 0.022)}px Arial,sans-serif`;
-      ctx.textAlign = "center";
-      ctx.fillText("📄", cx, cy + 4);
-      ctx.font = `${Math.max(9, w * 0.02)}px Arial,sans-serif`;
-      ctx.fillText(doc.title, cx, cy + ih / 2 + 14);
-    }
+  function hitDesktopDoc() {
+    return null;
   }
 
-  function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
-
-  function hitDesktopDoc(worldPoint, player) {
-    if (!player) {
-      return null;
-    }
-    let best = null;
-    let bestD = HIT_RADIUS;
-    for (const doc of DESKTOP_DOCS) {
-      const d = dist(worldPoint, doc);
-      if (d < bestD && dist(player, doc) < window.GameMap.INTERACT_RADIUS) {
-        bestD = d;
-        best = doc;
-      }
-    }
-    return best;
-  }
-
-  function findNearDoc(player) {
-    if (!player) {
-      return null;
-    }
-    let best = null;
-    let bestD = window.GameMap.INTERACT_RADIUS;
-    for (const doc of DESKTOP_DOCS) {
-      const d = dist(player, doc);
-      if (d < bestD) {
-        bestD = d;
-        best = doc;
-      }
-    }
-    return best;
+  function findNearDoc() {
+    return null;
   }
 
   async function openDoc(doc) {

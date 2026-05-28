@@ -268,7 +268,14 @@
           state.optionsLoading ||
           !state.talkingId;
       }
-      renderOptionButtons(state.currentOptions, state.optionsLoading);
+      if (!state.optionsLoading) {
+        setOptionsVisible(shouldShowOptionsBar());
+        if (shouldShowOptionsBar()) {
+          renderOptionButtons(state.currentOptions, false);
+        }
+      } else {
+        setOptionsVisible(false);
+      }
     }
 
     syncProofBlackboard();
@@ -335,6 +342,24 @@
     optionsBar.classList.toggle("hidden", !visible);
   }
 
+  function shouldShowOptionsBar() {
+    if (!state.talkingId || !isDialogueUiActive()) {
+      return false;
+    }
+    if (state.optionsLoading) {
+      return false;
+    }
+    const opts = state.currentOptions;
+    return Array.isArray(opts) && opts.length > 0;
+  }
+
+  function refreshOptionsBar() {
+    setOptionsVisible(shouldShowOptionsBar());
+    if (shouldShowOptionsBar()) {
+      renderOptionButtons(state.currentOptions, false);
+    }
+  }
+
   function setMemoryInputVisible(visible) {
     const show = MEMORY_INPUT_ENABLED && visible;
     memoryInputBar?.classList.toggle("hidden", !show);
@@ -383,7 +408,7 @@
       const id = Number(btn.dataset.optionId);
       const opt = options?.find((o) => o.id === id);
       const lineEl = btn.querySelector(".option-line");
-      const lineText = loading ? "生成中…" : opt?.line || "—";
+      const lineText = loading ? "生成中…" : opt?.line || "";
       if (lineEl) {
         lineEl.textContent = lineText;
       }
@@ -415,7 +440,7 @@
     }
     optionsBar.classList.toggle(
       "options-bar--ending",
-      options?.some((o) => ["continue", "close", "reargue"].includes(o?.intent))
+      options?.some((o) => ["continue", "reargue"].includes(o?.intent))
     );
   }
 
@@ -433,14 +458,13 @@
 
   function renderMap() {
     const near = characters.find((c) => isNearPlayer(state.player, c));
-    const nearDoc = window.GameDesktop?.findNearDoc?.(state.player);
     highlightId = near?.id || null;
     draw(ctx, canvas, {
       player: state.player,
       characters,
       talkingId: state.talkingId,
       highlightId,
-      highlightDocId: nearDoc?.id || null,
+      highlightDocId: null,
     });
     if (state.talkingId) {
       hintEl.textContent = "";
@@ -449,9 +473,7 @@
       hintEl.classList.remove("map-hint--hidden");
       hintEl.textContent = near
         ? `点击「${near.name}」交谈`
-        : nearDoc
-          ? `点击「${nearDoc.title}」打开文档`
-          : "点击空地移动 · 靠近📄或证官";
+        : "点击空地移动 · 靠近证官";
     }
   }
 
@@ -541,7 +563,7 @@
       session.keypointTurnCount = 0;
     }
 
-    setOptionsVisible(true);
+    setOptionsVisible(false);
     setMemoryInputVisible(true);
     stopButtonEl.disabled = true;
     renderMap();
@@ -557,8 +579,8 @@
         return;
       }
       state.optionsLoading = true;
-      state.currentOptions = placeholderProofOptions();
-      renderOptionButtons(state.currentOptions, true);
+      state.currentOptions = null;
+      setOptionsVisible(false);
       setStatus("证官准备论题…", false);
       setBubble("", false);
 
@@ -611,7 +633,7 @@
       messageCount: session.messages.length,
     });
 
-    renderOptionButtons(state.currentOptions, false);
+    refreshOptionsBar();
   }
 
   function resumeDialogueUi(reason) {
@@ -628,9 +650,8 @@
       return;
     }
     state.dialogueHungUp = false;
-    setOptionsVisible(true);
     setMemoryInputVisible(true);
-    renderOptionButtons(state.currentOptions, false);
+    refreshOptionsBar();
     setStatus("", false);
     window.PomDebug?.logUser("恢复对话 UI", reason || "回到橙圈内");
     renderMap();
@@ -754,8 +775,8 @@
     }
     state.isStreaming = true;
     state.optionsLoading = true;
-    state.currentOptions = placeholderProofOptions();
-    renderOptionButtons(state.currentOptions, true);
+    state.currentOptions = null;
+    setOptionsVisible(false);
     setStatus("同一论题重开论证…", false);
     setBubble("", false);
 
@@ -783,7 +804,7 @@
     } finally {
       state.isStreaming = false;
       state.optionsLoading = false;
-      renderOptionButtons(state.currentOptions, false);
+      refreshOptionsBar();
       setStatus("", false);
       renderMap();
       syncSpeechBubbles(false);
@@ -837,7 +858,7 @@
 
     state.isStreaming = true;
     setMemoryInputBusy(true);
-    renderOptionButtons(state.currentOptions, true);
+    setOptionsVisible(false);
     stopButtonEl.disabled = false;
     setBubble("", true);
     setStatus("等待回复…", false);
@@ -896,7 +917,7 @@
       abortController = null;
       stopButtonEl.disabled = true;
       if (state.talkingId) {
-        renderOptionButtons(state.currentOptions, false);
+        refreshOptionsBar();
       }
       renderMap();
       syncSpeechBubbles(false);
@@ -923,7 +944,6 @@
 
     const session = getSession(state, state.talkingId);
     const optionsSnapshot = state.currentOptions.map((o) => ({ ...o }));
-    const isClose = pick.intent === "close";
     const character = resolveProver(getCharacter(state.talkingId), session);
     const archetype = resolveArchetype(getArchetype(character.archetypeId), session);
     const seed = getSessionSeed(session, archetype);
@@ -948,7 +968,7 @@
       setPlayerBubble(pick.line);
       setStatus("论题已证毕，可继续补论；靠近证官选推证或输入框发言。", false);
       state.currentOptions = null;
-      renderOptionButtons(state.currentOptions, false);
+      refreshOptionsBar();
       return;
     }
 
@@ -969,26 +989,6 @@
       persist(state);
       setPlayerBubble(pick.line);
       await restartProofOnSameTopic(character, archetype, session);
-      return;
-    }
-
-    if (session.inEndingCloseChoices && isClose) {
-      window.PomDebug?.logUser("证辩者选择", {
-        intent: "close",
-        line: pick.line,
-        phase: "结局离场",
-      });
-      session.messages.push({
-        id: createId(),
-        role: "user",
-        content: pick.line,
-        intent: pick.intent,
-        createdAt: Date.now(),
-        status: "done",
-      });
-      persist(state);
-      setPlayerBubble(pick.line);
-      await finishEpisodeAfterClose();
       return;
     }
 
@@ -1073,7 +1073,7 @@
       state.isStreaming = true;
       state.optionsLoading = true;
       setMemoryInputBusy(true);
-      renderOptionButtons(state.currentOptions, true);
+      setOptionsVisible(false);
       stopButtonEl.disabled = false;
       setBubble(
         [...session.messages]
@@ -1121,7 +1121,7 @@
     state.isStreaming = true;
     state.optionsLoading = true;
     setMemoryInputBusy(true);
-    renderOptionButtons(state.currentOptions, true);
+    setOptionsVisible(false);
     stopButtonEl.disabled = false;
     const thinkingBubble =
       [...session.messages]
@@ -1298,7 +1298,7 @@
         setBubble(`${reply}\n\n${ending.reply}`, false, { thinking: false });
         state.currentOptions = ending.options;
         session.inEndingCloseChoices = true;
-        setStatus("目标已达成，选一句离场结束本局。", false);
+        setStatus("目标已达成，选继续补论或重证论题。", false);
       }
 
       const stall = window.GameOnion?.updateStallCounters?.(session, session.plotSummary);
@@ -1375,7 +1375,7 @@
           });
           state.currentOptions = ending.options;
           session.inEndingCloseChoices = true;
-          setStatus("僵局破局后论证闭合，选一句离场。", false);
+          setStatus("僵局破局后论证闭合，选继续补论或重证论题。", false);
         }
       }
       const neglect = window.GameOnion?.resetNeglectAfterPlotProgress?.(
@@ -1432,7 +1432,7 @@
       abortController = null;
       stopButtonEl.disabled = true;
       if (state.talkingId) {
-        renderOptionButtons(state.currentOptions, false);
+        refreshOptionsBar();
       }
       renderMap();
       syncSpeechBubbles(false);
@@ -1452,13 +1452,6 @@
     }
 
     const world = canvasToWorld(canvas, clientX, clientY);
-    const docHit = window.GameDesktop?.hitDesktopDoc?.(world, state.player);
-    if (docHit && !state.talkingId) {
-      window.PomDebug?.logUser("地图点击", { action: "打开文档", title: docHit.title });
-      window.GameDesktop.openDoc(docHit);
-      return;
-    }
-
     const hit = hitCharacter(characters, world, HIT_CHARACTER_RADIUS);
 
     if (state.talkingId) {

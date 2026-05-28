@@ -141,18 +141,16 @@ ${pendingNote}
     };
   }
 
-  function buildEndingFinalOptions(trio) {
-    const continueLine = String(trio?.continueLine || "").trim();
-    const closeLine = String(trio?.closeLine || "").trim();
-    const reargueLine = String(trio?.reargueLine || "").trim();
+  function buildEndingFinalOptions(pair) {
+    const continueLine = String(pair?.continueLine || "").trim();
+    const reargueLine = String(pair?.reargueLine || "").trim();
     return [
       { id: 1, intent: "continue", line: continueLine, send: continueLine },
-      { id: 2, intent: "close", line: closeLine, send: closeLine },
-      { id: 3, intent: "reargue", line: reargueLine, send: reargueLine },
+      { id: 2, intent: "reargue", line: reargueLine, send: reargueLine },
     ];
   }
 
-  function parseEndingTrioFromRaw(raw) {
+  function parseEndingPairFromRaw(raw) {
     const obj = extractJsonObject(raw);
     const list = Array.isArray(obj.options) ? obj.options : [];
     const byIntent = {};
@@ -163,22 +161,20 @@ ${pendingNote}
         byIntent[intent] = line.replace(/^「+/, "").replace(/」+$/, "");
       }
     }
-    if (byIntent.continue && byIntent.close && byIntent.reargue) {
+    if (byIntent.continue && byIntent.reargue) {
       return {
         continueLine: byIntent.continue,
-        closeLine: byIntent.close,
         reargueLine: byIntent.reargue,
       };
     }
     const lines = list.map((item) => lineFromOptionItem(item)).filter(Boolean);
-    if (lines.length >= 3) {
+    if (lines.length >= 2) {
       return {
         continueLine: lines[0].replace(/^「+/, "").replace(/」+$/, ""),
-        closeLine: lines[1].replace(/^「+/, "").replace(/」+$/, ""),
-        reargueLine: lines[2].replace(/^「+/, "").replace(/」+$/, ""),
+        reargueLine: lines[1].replace(/^「+/, "").replace(/」+$/, ""),
       };
     }
-    throw new Error("缺少 continue / close / reargue 三条结局选项");
+    throw new Error("缺少 continue / reargue 两条结局选项");
   }
 
   async function requestEndingReply({
@@ -237,16 +233,14 @@ ${pendingNote}
     const name = character.name;
     const fallback = archetype.closeOptionLines || {};
     const systemPrompt = `你是选项撰稿人。论题 G 已证毕：${goal}。证辩者与「${name}」对论已收束。
-输出证辩者**收束轮**三句不同台词（中文各一句 ≤35 字），intent 必须严格对应：
+输出证辩者**收束轮**两句不同台词（中文各一句 ≤35 字），intent 必须严格对应：
 
 - continue：还想就 G 或证明过程再补一句/追问（不离开）
-- close：告别离场、休庭收口
 - reargue：请求对**同一论题 G**从头再证一遍（换说法重开论证）
 
 只输出 JSON：
 {"options":[
   {"intent":"continue","line":"..."},
-  {"intent":"close","line":"..."},
   {"intent":"reargue","line":"..."}
 ]}`;
 
@@ -258,7 +252,7 @@ ${pendingNote}
       `角色名：${name}`,
       `论题 G：${goal}`,
       `证官刚宣布：${last}`,
-      "请输出 continue、close、reargue 各一条。",
+      "请输出 continue、reargue 各一条。",
     ].join("\n\n");
 
     try {
@@ -269,12 +263,11 @@ ${pendingNote}
         signal,
         logTag: "结局·②选项",
       });
-      return parseEndingTrioFromRaw(raw);
+      return parseEndingPairFromRaw(raw);
     } catch (e) {
       window.PomDebug?.logLocalWarn("结局选项失败，用预设", e.message);
       return {
         continueLine: fallback.continue || "我还想就这一步再确认一下。",
-        closeLine: fallback.close || fallback.a || "G 已证毕，我整理证明稿。",
         reargueLine: fallback.reargue || "请允许我对同一论题从头再证一遍。",
       };
     }
