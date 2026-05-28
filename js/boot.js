@@ -11,6 +11,7 @@
     "debug-copy-prefs.js",
     "debug.js",
     "presets.js",
+    "proof-pool.js",
     "onion.js",
     "dialogue.js",
     "memory-chat.js",

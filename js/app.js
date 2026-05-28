@@ -21,6 +21,41 @@
     TALK_ZONE_RADIUS,
   } = window.GameMap;
 
+  function getSessionSeed(session, archetype) {
+    return (
+      window.GameProofPool?.getSessionSeed?.(session, archetype) ||
+      archetype?.onionSeed ||
+      null
+    );
+  }
+
+  function resolveArchetype(archetype, session) {
+    const bundle = session?.proofBundle;
+    if (!bundle) {
+      return archetype;
+    }
+    return {
+      ...archetype,
+      system: bundle.system || archetype.system,
+      opening: bundle.opening || archetype.opening,
+      options: bundle.options || archetype.options,
+      suspendLine: bundle.suspendLine || archetype.suspendLine,
+      failureLine: bundle.failureLine || archetype.failureLine,
+      closeOptionLines: bundle.closeOptionLines || archetype.closeOptionLines,
+      displayTitle: bundle.displayTitle || archetype.displayTitle,
+      onionSeed: bundle.onionSeed || archetype.onionSeed,
+    };
+  }
+
+  function resolveProver(character, session) {
+    const name =
+      session?.proverDisplayName ||
+      session?.proofBundle?.proverName ||
+      character?.name ||
+      "证官";
+    return { ...character, name };
+  }
+
   /** 记忆测试输入框（暂隐藏，保留代码便于恢复） */
   const MEMORY_INPUT_ENABLED = false;
 
@@ -388,6 +423,7 @@
       session.endingOffered = false;
       session.inEndingCloseChoices = false;
       resetSessionProgressFlags(session);
+      window.GameProofPool?.clearSessionProof?.(session);
       persist(state);
     }
     state.talkingId = null;
@@ -426,7 +462,8 @@
     if (String(session.plotSummary || "").trim()) {
       return false;
     }
-    const seed = archetype?.onionSeed;
+    window.GameProofPool?.initSession?.(session, archetype);
+    const seed = getSessionSeed(session, archetype);
     if (!seed || !window.GameOnion?.buildSeedPlotSummary) {
       return false;
     }
@@ -449,6 +486,10 @@
     state.playerBubbleText = "";
     state.dialogueHungUp = false;
     const session = getSession(state, characterId);
+    window.GameProofPool?.initSession?.(session, archetype);
+    const liveArchetype = resolveArchetype(archetype, session);
+    const prover = resolveProver(character, session);
+    const seed = getSessionSeed(session, archetype);
     if (!Array.isArray(session.spentPlayerKnowledge)) {
       session.spentPlayerKnowledge = [];
     }
@@ -464,52 +505,56 @@
       const goal = window.GameOnion?.extractGoal?.(session.plotSummary) || "";
       window.PomDebug?.logLocal(
         "剧情·种子摘要已注入",
-        `${window.GameOnion.formatLayersDebug(session.plotSummary, archetype?.onionSeed)}${goal ? `\n目标：${goal}` : ""}`,
+        `${window.GameOnion.formatLayersDebug(session.plotSummary, seed)}${goal ? `\n目标：${goal}` : ""}${session.proofBundle?.theorem ? `\n题面：${session.proofBundle.theorem}` : ""}`,
         ["summary-out"]
       );
     }
     setStatus("", false);
     window.PomDebug?.logUser("开始对话", {
-      character: character.name,
+      character: prover.name,
+      problem: session.proofBundle?.problemId || "preset",
       dialogue: "本局对白全文入 API（不裁剪）",
       messageCount: session.messages.length,
     });
+
+    const openingLine =
+      window.GameProofPool?.getSessionOpening?.(session, archetype) ||
+      liveArchetype.opening;
 
     if (session.messages.length === 0) {
       session.messages.push({
         id: createId(),
         role: "assistant",
-        content: archetype.opening,
+        content: openingLine,
         createdAt: Date.now(),
         status: "done",
       });
       persist(state);
-      setBubble(archetype.opening, false);
+      setBubble(openingLine, false);
     } else {
       const last = [...session.messages]
         .reverse()
         .find((m) => m.role === "assistant" && m.status === "done");
-      setBubble(last?.content || archetype.opening, false);
+      setBubble(last?.content || openingLine, false);
     }
 
-    state.currentOptions = presetOptions(archetype);
+    state.currentOptions = presetOptions(liveArchetype);
     window.PomDebug?.logLocal(
       "首轮选项（预设·推进/询问，不发 API）",
       state.currentOptions.map((o) => o.line)
     );
 
     if (window.GameEvidence?.bootstrapPlayerEvidence) {
-      window.GameEvidence.bootstrapPlayerEvidence(session, archetype.onionSeed).then(
+      window.GameEvidence.bootstrapPlayerEvidence(session, seed).then(
         (granted) => {
           if (!granted || state.talkingId !== characterId || state.isStreaming) {
             return;
           }
-          const seed = archetype.onionSeed;
           const kp = window.GameOnion?.pickKeypointOfferLine?.(
             session,
             seed,
             session.plotSummary,
-            archetype.opening
+            openingLine
           );
           if (kp && state.currentOptions?.length) {
             state.currentOptions = state.currentOptions.map((o) =>
@@ -607,6 +652,7 @@
     session.inquireLineIndex = 0;
     session.lastPickIntent = "";
     session.keypointTurnCount = 0;
+    window.GameProofPool?.clearSessionProof?.(session);
   }
 
   function finishEpisodeAfterFailure() {
@@ -768,11 +814,12 @@
       return;
     }
 
-    const character = getCharacter(state.talkingId);
-    const archetype = getArchetype(character.archetypeId);
     const session = getSession(state, state.talkingId);
     const optionsSnapshot = state.currentOptions.map((o) => ({ ...o }));
     const isClose = pick.intent === "close";
+    const character = resolveProver(getCharacter(state.talkingId), session);
+    const archetype = resolveArchetype(getArchetype(character.archetypeId), session);
+    const seed = getSessionSeed(session, archetype);
 
     if (session.inEndingCloseChoices && isClose) {
       window.PomDebug?.logUser("玩家选择", {
@@ -809,7 +856,6 @@
     const playerNamesMastermind = Boolean(
       window.GameOnion?.detectPlayerNamesMastermind?.(apiLine)
     );
-    const seed = archetype.onionSeed;
     const playerConcreteReveal = Boolean(
       window.GameOnion?.isPlayerLineConcrete?.(apiLine, seed, session)
     );
@@ -833,7 +879,7 @@
         session,
         apiLine,
         plotBefore,
-        archetype.onionSeed,
+        seed,
         pick.intent
       ) || { shouldWarn: false, shouldFail: false };
 
@@ -864,7 +910,7 @@
     window.GameOnion?.markKnowledgeSpent?.(
       session,
       apiLine,
-      archetype.onionSeed
+      seed
     );
     persist(state);
     setPlayerBubble(rawLine);
@@ -951,7 +997,7 @@
     const willSummary = window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
 
     const apiSteps = willSummary
-      ? window.GameOnion?.usesDynamicPlayerEvidence?.(archetype.onionSeed)
+      ? window.GameOnion?.usesDynamicPlayerEvidence?.(seed)
         ? ["①reply", "②选项", "③摘要", "④证据"]
         : ["①reply", "②选项", "③摘要"]
       : ["①reply", "②选项"];
@@ -1001,7 +1047,7 @@
           const summaryOk = await window.GameSummary.maybeRefreshPlotSummary(
             session,
             signal,
-            archetype.onionSeed
+            seed
           );
           if (summaryOk) {
             persist(state);
@@ -1009,7 +1055,7 @@
               try {
                 const evOk = await window.GameEvidence.grantPlayerEvidence(
                   session,
-                  archetype.onionSeed,
+                  seed,
                   signal
                 );
                 if (evOk) {
@@ -1040,7 +1086,7 @@
         !session.inEndingCloseChoices &&
         window.GameOnion?.isReadyForEnding?.(
           session.plotSummary,
-          archetype.onionSeed,
+          seed,
           session
         )
       ) {
@@ -1079,7 +1125,7 @@
         plotBefore,
         session.plotSummary,
         apiLine,
-        archetype.onionSeed
+        seed
       );
       if (neglect?.shouldWarn) {
         window.PomDebug?.logLocalWarn(

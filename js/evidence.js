@@ -74,7 +74,8 @@
     if (isDuplicateEvidence(session, item)) {
       return false;
     }
-    const id = `ev-${turn}-${session.playerEvidence.length + 1}`;
+    const poolId = item.id && !String(item.id).startsWith("ev-") ? item.id : null;
+    const id = poolId || `ev-${turn}-${session.playerEvidence.length + 1}`;
     session.playerEvidence.push({
       id,
       text: item.text,
@@ -117,9 +118,65 @@
     return parts.join("\n\n");
   }
 
+  function usesPoolLemmaGrant(seed) {
+    return Boolean(seed?.poolLemmaGrant && (seed?.lemmaPool?.length || 0) > 0);
+  }
+
+  /** 从 proof-pool lemmaPool 按序授予引理（不调用 AI） */
+  function grantPoolLemma(session, seed, { bootstrap = false } = {}) {
+    const pool = seed?.lemmaPool || [];
+    if (!pool.length) {
+      return false;
+    }
+    const turn = countOptionTurns(session?.messages || []);
+    const grantKey = bootstrap ? "bootstrap" : turn;
+    if (session.lastEvidenceGrantKey === grantKey) {
+      return false;
+    }
+    const grantedIds = new Set((session?.playerEvidence || []).map((e) => e.id));
+    let next = null;
+    if (bootstrap) {
+      next = pool.find((l) => !grantedIds.has(l.id));
+    } else {
+      const idx = (session?.playerEvidence || []).length;
+      if (idx >= pool.length) {
+        session.lastEvidenceGrantKey = grantKey;
+        return false;
+      }
+      next = pool[idx];
+      if (next && grantedIds.has(next.id)) {
+        next = pool.find((l) => !grantedIds.has(l.id));
+      }
+    }
+    if (!next || grantedIds.has(next.id)) {
+      session.lastEvidenceGrantKey = grantKey;
+      return false;
+    }
+    const item = {
+      id: next.id,
+      text: next.text,
+      offerLine: next.offerLine,
+      match: next.match,
+    };
+    if (pushEvidence(session, item, turn)) {
+      session.lastEvidenceGrantKey = grantKey;
+      window.PomDebug?.logLocal(
+        bootstrap ? "④引理 · 池赋予（开局）" : "④引理 · 池赋予",
+        `${item.text} → 「${item.offerLine}」`,
+        ["evidence-out"]
+      );
+      return true;
+    }
+    session.lastEvidenceGrantKey = grantKey;
+    return false;
+  }
+
   async function grantPlayerEvidence(session, seed, signal, { bootstrap = false } = {}) {
     if (!session || !window.GameOnion?.usesDynamicPlayerEvidence?.(seed)) {
       return false;
+    }
+    if (usesPoolLemmaGrant(seed)) {
+      return grantPoolLemma(session, seed, { bootstrap });
     }
     const turn = countOptionTurns(session.messages);
     const grantKey = bootstrap ? "bootstrap" : turn;
@@ -181,6 +238,9 @@
     if ((session?.playerEvidence || []).length > 0) {
       return Promise.resolve(false);
     }
+    if (usesPoolLemmaGrant(seed)) {
+      return Promise.resolve(grantPoolLemma(session, seed, { bootstrap: true }));
+    }
     const ac = new AbortController();
     return grantPlayerEvidence(session, seed, ac.signal, { bootstrap: true }).catch(
       (e) => {
@@ -193,6 +253,8 @@
   window.GameEvidence = {
     grantPlayerEvidence,
     bootstrapPlayerEvidence,
+    grantPoolLemma,
+    usesPoolLemmaGrant,
     parseEvidenceGrant,
     buildEvidenceGrantSystem,
   };

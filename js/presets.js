@@ -1,148 +1,62 @@
 (function () {
-  const PROVER_SYSTEM = `你是「证官·理证」：形式逻辑研讨台上的证明论辩驳人，说话像严谨数学家——冷静、精确、带刃。
-场景：证辩者与你对论，目标是逐步闭合论题 G；证明席由程序维护。
-回复：仅 1～2 句，总 ≤40 字。不要列表、markdown、公式编号。
-【硬性】只陈述/否认/顶回，禁止问句（无 ？/?，不以吗/呢 发问）。
-【交换】证辩者 keypoint 出示【玩家证据】引理后，每轮只兑现**一条**可核对推导步：或授权者专名（2～4字），或数据集 Λ 现存放处，**勿同句两条**。
-禁止：你自己查公理表、别装、手册里都有、问太多无关、随你 等空泛推托。
-- followup 轮：可质询立场/动机，可不送新引理，仍禁止问句。
-勿提选项、按钮、AI。`;
+  const FALLBACK_SYSTEM = `你是证官：数学证明研讨席上的证官，说话严谨、精确。
+回复 1～2 句 ≤40 字；只陈述/否认/顶回，禁止问句。
+证辩者出示引理后，每轮兑现一条可核对推导步。`;
 
   const archetypes = {
     sharp: {
       id: "sharp",
       name: "证官",
-      displayTitle: "证官·理证",
-      system: PROVER_SYSTEM,
-      /** 数学证明题式开局（程序写入证明席） */
+      displayTitle: "证官",
+      useProofPool: true,
+      system: FALLBACK_SYSTEM,
+      /** 无随机池时的兜底（正常局由 GameProofPool 注入） */
       onionSeed: {
         proofTheme: true,
+        poolLemmaGrant: true,
         roleLabel: "证官",
         playerRoleLabel: "证辩者",
-        goal: "论题 G：证明谁主控本推理链（谁授权 α 拦截并掌控数据集 Λ 的流向）",
-        confirmed: [
-          "辩者提交的引理包曾被人否决拦截，授权拦截者身份未明",
-          "拦截执行者为 α（证辩者已知，可作观测引理）",
-          "数据集 Λ 最后经 β 转交保管（证辩者已知，可作观测引理）",
-        ],
-        pending: ["α 的授权者是谁（直指主控命题）"],
-        attitude: ["证官怀疑证辩者隶属主控方派别，语气严谨而戒备"],
+        goal: "证明：n 为正整数时 n(n+1) 为偶数",
+        confirmed: ["n 为正整数", "相邻整数必有一偶"],
+        pending: ["说明 n(n+1) 必含因子 2"],
+        dynamicPlayerEvidence: true,
         endingMinConfirmed: 3,
-        endingCoreKeywords: [
-          "主控",
-          "授权",
-          "公理源",
-          "主使",
-          "指使",
-          "幕后",
-          "Ω",
-          "赵爷",
-          "赵二爷",
-          "马奎",
-        ],
         endingMinKeypointTurns: 2,
         maxOpenClaims: 1,
-        argumentProfile: {
-          label: "3推1",
-          maxOpenClaims: 1,
-          minPremisesForEnding: 3,
-          minKeypointTurns: 2,
-        },
-        dynamicPlayerEvidence: true,
-        endingMinEvidenceSpent: 2,
-        evidenceSeedHints: [
-          "证辩者曾亲见 α 在东门否决辩者的引理提交",
-          "证辩者调查得知数据集 Λ 最后经 β 转交",
-        ],
-        endingSpendAllKnowledge: true,
-        endingEpilogueFallback: "主控链已闭合，数据集 Λ 归属已明，论题 G 证毕。",
-        neglectPrimaryWarnAt: 3,
-        neglectPrimaryFailAt: 5,
-        goalTracks: {
-          mastermind: {
-            keywords: [
-              "授权",
-              "主控",
-              "授权者",
-              "指使",
-              "主使",
-              "公理源",
-              "幕后",
-              "α",
-              "Ω",
-              "马奎",
-              "赵爷",
-              "赵二爷",
-              "老九",
-              "派我",
-              "听命",
-            ],
-          },
-          ledger: {
-            keywords: [
-              "数据集",
-              "Λ",
-              "引理包",
-              "推论链",
-              "经手",
-              "β",
-              "保管",
-              "存储",
-              "转移",
-              "下落",
-              "账本",
-            ],
-          },
-        },
-        playerKnowledge: [
+        argumentProfile: { maxOpenClaims: 1, minPremisesForEnding: 3, minKeypointTurns: 2 },
+        endingCoreKeywords: ["偶数", "因子 2"],
+        goalTracks: { core: { keywords: ["偶数", "因子"] } },
+        lemmaPool: [
           {
-            id: "blocker",
-            match: "α",
-            text: "观测引理：拦截执行者为 α",
-            offerLine: "α 否决过引理提交，换你说授权者是谁",
-          },
-          {
-            id: "ledger",
-            match: "β",
-            text: "观测引理：Λ 最后经 β 转交",
-            offerLine: "Λ 经 β 转交，换你说授权者是谁",
+            id: "d1",
+            match: "相邻",
+            text: "n 与 n+1 为相邻整数",
+            offerLine: "n 与 n+1 相邻，换你说其一的奇偶",
           },
         ],
-        inquireLines: [
-          "你来证辩，先说明你的公理基与立场。",
-          "你的论证动机是什么，找反例还是闭合 G？",
-          "别绕定义，先交代你与主控方的关系。",
-          "今日对论，是独立复核还是受人指派？",
-        ],
-        sharpReveals: [
-          { afterKnowledge: "blocker", line: "授权 α 的是公理源 Ω。" },
-          { afterKnowledge: "ledger", line: "Ω 主控，数据集 Λ 仍在 Ω 处。" },
-        ],
-        sharpStatementFallbacks: [
-          "复核 Λ 是我的职责，你别打断推导。",
-          "α 的事去问授权链，别找我空证。",
-        ],
+        inquireLines: ["你打算分 n 奇偶讨论吗？"],
+        sharpReveals: [{ afterKnowledge: "d1", line: "相邻整数中必有一偶，故 n(n+1) 为偶。" }],
       },
       failureLine: "你不出示引理，这证我收不了。",
       closeOptionLines: {
         a: "G 已证毕，我整理证明稿。",
-        b: "主控链闭合，休庭。",
+        b: "论证闭合，休庭。",
       },
-      opening: "α 否决过我的引理。你来证辩 G，别空口。",
+      opening: "今日论题 G 待证。请用引理逐步闭合。",
       options: [
         {
           id: 1,
           intent: "keypoint",
           label: "求证",
-          line: "我有观测引理，换你补一条推导步。",
-          send: "[intent:keypoint] 我有观测引理，换你补一条推导步。",
+          line: "我有引理，换你补一条推导步。",
+          send: "[intent:keypoint] 我有引理，换你补一条推导步。",
         },
         {
           id: 2,
           intent: "followup",
           label: "质询",
-          line: "你的论证立场是什么？",
-          send: "[intent:followup] 你的论证立场是什么？",
+          line: "你采用何种证法？",
+          send: "[intent:followup] 你采用何种证法？",
         },
         {
           id: 3,
