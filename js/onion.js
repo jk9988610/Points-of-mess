@@ -2,6 +2,43 @@
  * 剧情档案 · 程序侧（种子摘要、摘录、推进计数）。注入 API 的约束块由此生成。
  */
 (function () {
+  /** 从 seed 读取论证配置（兼容 argumentProfile 与旧字段） */
+  function getArgumentProfile(seed) {
+    const profile = seed?.argumentProfile || {};
+    return {
+      label: profile.label || "",
+      maxOpenClaims:
+        Number(profile.maxOpenClaims ?? seed?.maxOpenClaims) > 0
+          ? Number(profile.maxOpenClaims ?? seed?.maxOpenClaims)
+          : 1,
+      maxPremises:
+        Number(profile.maxPremises ?? seed?.maxArchiveConfirmed) > 0
+          ? Number(profile.maxPremises ?? seed?.maxArchiveConfirmed)
+          : 8,
+      minPremisesForEnding:
+        Number(profile.minPremisesForEnding ?? seed?.endingMinConfirmed) > 0
+          ? Number(profile.minPremisesForEnding ?? seed?.endingMinConfirmed)
+          : 2,
+      minKeypointTurns:
+        Number(profile.minKeypointTurns ?? seed?.endingMinKeypointTurns) > 0
+          ? Number(profile.minKeypointTurns ?? seed?.endingMinKeypointTurns)
+          : 0,
+    };
+  }
+
+  function getMaxOpenClaims(seed) {
+    return getArgumentProfile(seed).maxOpenClaims;
+  }
+
+  function getMinPremisesForEnding(seed) {
+    return getArgumentProfile(seed).minPremisesForEnding;
+  }
+
+  /** 开放论断 = [待核实] 行文本 */
+  function openClaims(plotSummary) {
+    return extractPendingLines(plotSummary);
+  }
+
   function buildSeedPlotSummary(seed) {
     const goal = String(seed?.goal || "").trim();
     const confirmed = (seed?.confirmed || []).map((s) => String(s).trim()).filter(Boolean);
@@ -149,7 +186,11 @@
       parts.push(`目标：${goal}`);
     }
     if (pending.length) {
-      parts.push(`仍待弄清：${pending[0]}`);
+      const pendingNote =
+        pending.length === 1
+          ? `仍待弄清：${pending[0]}`
+          : `仍待弄清：${pending.map((p, i) => `#${i + 1}${p}`).join("；")}`;
+      parts.push(pendingNote);
     }
     if (knowledge) {
       parts.push(knowledge);
@@ -544,6 +585,15 @@
   const DEFLECT_REPLY_RE =
     /你心里|心里清楚|别装|你该去问|去问陈四|问太多|反倒可疑|爱信不信|不护谁|疑心太重|随你|误事|少说|废话|挡话|栽我身上/;
 
+  /** followup 短拒白名单：≤20 字顶回，不算敷衍（A4） */
+  const FOLLOWUP_SHORT_ACCEPT_RE =
+    /谁都不保|谁都不护|不关我事|与你无关|查账本是我|别挡|少管|少兜|来意|套话|谈事|你自己的事|与我何干|爱咋咋|随你便/;
+
+  function isFollowupShortAccept(text) {
+    const t = String(text || "").trim();
+    return t.length >= 2 && t.length <= 20 && FOLLOWUP_SHORT_ACCEPT_RE.test(t);
+  }
+
   const MASTERMIND_NAMED_IN_ARCHIVE_RE =
     /(?:赵二爷|赵爷|老九|赵家|二爷).{0,16}(?:主使|指使|幕后|听命|指使者)|(?:主使|指使|指使者).{0,12}(?:赵二爷|赵爷|老九|二爷)|听命于(?:赵二爷|赵爷|老九)/;
 
@@ -586,8 +636,12 @@
     return false;
   }
 
-  function isDeflectReply(text) {
-    return DEFLECT_REPLY_RE.test(String(text || "").trim());
+  function isDeflectReply(text, pickIntent) {
+    const t = String(text || "").trim();
+    if (pickIntent === "followup" && isFollowupShortAccept(t)) {
+      return false;
+    }
+    return DEFLECT_REPLY_RE.test(t);
   }
 
   function extractMastermindLabel(plotSummary, lastSharp) {
@@ -684,18 +738,208 @@
     return blob.includes(name) && /指使|主使|指使者|供述/.test(blob);
   }
 
+  function shouldClearPendingLine(pendingText, plotSummary) {
+    const p = String(pendingText || "").trim();
+    if (!p || isVacuousPendingText(p)) {
+      return true;
+    }
+    if (pendingIsResolvedMeta(p, plotSummary)) {
+      return true;
+    }
+    if (pendingTargetAlreadyNamed(p, plotSummary)) {
+      return true;
+    }
+    const blob = archiveBlob(plotSummary);
+    if (/指使者|主使|幕后|谁派|指使/.test(p)) {
+      return (
+        mastermindTrackSatisfied(blob) || MASTERMIND_FINAL_CLAIM_RE.test(blob)
+      );
+    }
+    return false;
+  }
+
   function shouldClearPendingBlock(plotSummary) {
     const pending = extractPendingLines(plotSummary);
     if (!pending.length) {
       return false;
     }
+    return pending.every((p) => shouldClearPendingLine(p, plotSummary));
+  }
+
+  function isVacuousPendingText(text) {
+    const p = String(text || "").trim();
+    if (!p) {
+      return true;
+    }
+    return /^(?:[（(]?无[）)]?|暂无|未知|待填|待剧情推进后填写)$/.test(p);
+  }
+
+  function extractClaimName(line, slotId) {
+    const t = String(line || "");
+    if (slotId === "mastermind") {
+      const patterns = [
+        /指使者(?:是|乃|为)(?:账房总管)?([\u4e00-\u9fa5]{2,6})/,
+        /([\u4e00-\u9fa5]{2,6})(?:就是|乃是)?(?:唯一)?主使/,
+        /([\u4e00-\u9fa5]{2,6}).{0,8}(?:指使|派我)/,
+        /(赵二爷|赵爷|老九|赵德柱|[\u4e00-\u9fa5]{2,4}德柱)/,
+      ];
+      for (const re of patterns) {
+        const m = t.match(re);
+        if (m?.[1]) {
+          return m[1].trim();
+        }
+      }
+    }
+    if (slotId === "ledger") {
+      const patterns = [
+        /账本(?:在|于|还在)?([\u4e00-\u9fa5]{2,6})/,
+        /经手人(?:是|为)([\u4e00-\u9fa5]{2,6})/,
+        /([\u4e00-\u9fa5]{2,6})(?:手里|手上|保管)/,
+      ];
+      for (const re of patterns) {
+        const m = t.match(re);
+        if (m?.[1]) {
+          return m[1].trim();
+        }
+      }
+    }
+    return "";
+  }
+
+  function slotClosed(plotSummary, seed, slotId) {
+    const tracks = seed?.goalTracks;
+    if (!tracks?.[slotId]) {
+      return null;
+    }
+    if (slotId === "mastermind") {
+      return mastermindTrackSatisfied(archiveBlob(plotSummary));
+    }
+    const kws = tracks[slotId]?.keywords || [];
     const blob = archiveBlob(plotSummary);
-    return (
-      mastermindTrackSatisfied(blob) ||
-      MASTERMIND_FINAL_CLAIM_RE.test(blob) ||
-      pendingIsResolvedMeta(pending[0], plotSummary) ||
-      pendingTargetAlreadyNamed(pending[0], plotSummary)
+    return kws.some((k) => blob.includes(String(k).trim()));
+  }
+
+  /** 必填 slot 闭合情况（供 debug / 结局） */
+  function slotCoverage(plotSummary, seed) {
+    const tracks = seed?.goalTracks;
+    if (!tracks || typeof tracks !== "object") {
+      return {};
+    }
+    const out = {};
+    for (const slotId of Object.keys(tracks)) {
+      out[slotId] = slotClosed(plotSummary, seed, slotId) === true;
+    }
+    return out;
+  }
+
+  /** 槽位单真值：改口则标记 [已推翻]，删占位待核实（A2） */
+  function reconcileEvidenceSlots(text, seed) {
+    let result = String(text || "").trim();
+    if (!result) {
+      return result;
+    }
+    result = result.replace(
+      /\n- \[待核实#[^\]]*\]\s*[（(]?(?:无|暂无|待填|待剧情推进后填写)[）)]?[^\n]*/gi,
+      ""
     );
+    result = result.replace(/\n- \[待核实\]\s*[（(]?(?:无|暂无)[）)]?[^\n]*/gi, "");
+
+    const archiveMatch = result.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
+    if (!archiveMatch) {
+      return result.trim();
+    }
+    const head = archiveMatch[1].split("\n").slice(0, 1);
+    const bodyLines = archiveMatch[1].split("\n").slice(1);
+    const slotIds = Object.keys(seed?.goalTracks || { mastermind: {}, ledger: {} });
+
+    for (const slotId of slotIds) {
+      const kws = seed?.goalTracks?.[slotId]?.keywords || [];
+      if (!kws.length) {
+        continue;
+      }
+      const claims = [];
+      for (let i = 0; i < bodyLines.length; i++) {
+        const line = bodyLines[i];
+        if (!/\[已确认\]/.test(line) || /\[已推翻\]/.test(line)) {
+          continue;
+        }
+        if (!kws.some((k) => line.includes(String(k).trim()))) {
+          continue;
+        }
+        const name = extractClaimName(line, slotId);
+        if (name) {
+          claims.push({ i, name });
+        }
+      }
+      const uniqueNames = [...new Set(claims.map((c) => c.name))];
+      if (uniqueNames.length <= 1) {
+        continue;
+      }
+      const keep = claims[claims.length - 1];
+      for (const c of claims) {
+        if (c.i !== keep.i && !/\[已推翻\]/.test(bodyLines[c.i])) {
+          bodyLines[c.i] = bodyLines[c.i].replace(
+            /(\[已确认\])/,
+            "$1 [已推翻]"
+          );
+        }
+      }
+    }
+
+    const newArchive = [...head, ...bodyLines].join("\n");
+    result = result.replace(archiveMatch[1], newArchive);
+    return result.trim();
+  }
+
+  function stripClearablePendingLines(text) {
+    let result = String(text || "");
+    const pending = extractPendingLines(result);
+    if (!pending.length) {
+      return result;
+    }
+    for (const p of pending) {
+      if (shouldClearPendingLine(p, result)) {
+        const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        result = result.replace(
+          new RegExp(`\\n- \\[待核实#?\\d*\\]\\s*${escaped}`, "gi"),
+          ""
+        );
+      }
+    }
+    result = result.replace(/\n- \[待核实#[^\]]*\][^\n]*/gi, (line) => {
+      const m = line.match(/\[待核实[^\]]*\]\s*(.*)$/i);
+      return m && isVacuousPendingText(m[1]) ? "" : line;
+    });
+    return result;
+  }
+
+  /** 论证闭合：无未决开放论断 + 必填 slot 闭合 + 核心目标词（A3） */
+  function isArgumentClosed(plotSummary, seed) {
+    if (!extractGoal(plotSummary)) {
+      return false;
+    }
+    const claims = openClaims(plotSummary);
+    const maxOpen = getMaxOpenClaims(seed);
+    if (claims.length > maxOpen) {
+      return false;
+    }
+    const blocking = claims.filter((p) => !shouldClearPendingLine(p, plotSummary));
+    if (blocking.length > 0) {
+      return false;
+    }
+    if (!hasCoreGoalAchieved(plotSummary, seed)) {
+      return false;
+    }
+    const coverage = slotCoverage(plotSummary, seed);
+    const slotIds = Object.keys(coverage);
+    if (slotIds.length > 0 && slotIds.some((id) => !coverage[id])) {
+      return false;
+    }
+    const tracksOk = hasGoalTracksAchieved(plotSummary, seed);
+    if (tracksOk === false) {
+      return false;
+    }
+    return true;
   }
 
   /** 压摘要后：答清指使者则删 #1；裁剪档案膨胀 */
@@ -704,10 +948,8 @@
     if (!text) {
       return text;
     }
-    if (shouldClearPendingBlock(text)) {
-      text = text.replace(/\n- \[待核实#1\][^\n]*/gi, "");
-      text = text.replace(/\n- \[待核实\][^\n]*/gi, "");
-    }
+    text = reconcileEvidenceSlots(text, seed);
+    text = stripClearablePendingLines(text);
     text = text.replace(/\n- \[已确认\][^\n]*可能意在[^\n]*/gi, "");
     text = text.replace(/\n- \[已确认\][^\n]*存疑[^\n]*/gi, "");
     const archiveMatch = text.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
@@ -727,7 +969,7 @@
           other.push(line);
         }
       }
-      const maxConfirmed = Number(seed?.maxArchiveConfirmed) > 0 ? seed.maxArchiveConfirmed : 8;
+      const maxConfirmed = getArgumentProfile(seed).maxPremises;
       const trimmed = confirmed.slice(-maxConfirmed);
       const newArchive = [...head, ...trimmed, ...other].join("\n");
       text = text.replace(archiveMatch[1], newArchive);
@@ -980,9 +1222,25 @@
     };
   }
 
-  function formatLayersDebug(plotSummary) {
+  function formatLayersDebug(plotSummary, seed) {
     const { confirmed, pending, goal } = countLayers(plotSummary);
-    return `核心 [已确认]×${confirmed} · 中层 [待核实]×${pending}${goal ? " · 已设本局目标" : ""}`;
+    const parts = [
+      `核心 [已确认]×${confirmed}`,
+      `中层 [待核实]×${pending}`,
+    ];
+    if (goal) {
+      parts.push("已设本局目标");
+    }
+    if (seed?.goalTracks) {
+      const cov = slotCoverage(plotSummary, seed);
+      const slotNote = Object.entries(cov)
+        .map(([k, v]) => `${k}:${v ? "闭" : "开"}`)
+        .join("/");
+      if (slotNote) {
+        parts.push(`槽位 ${slotNote}`);
+      }
+    }
+    return parts.join(" · ");
   }
 
   function extractConfirmedLines(text) {
@@ -1038,26 +1296,14 @@
     return true;
   }
 
-  /** 3 推 1：待证清空 + 双轨齐备 + 局内推进次数/亮牌消耗 */
+  /** 论证闭合 + 最少前提条数（A3：优先看开放论断/slot，而非单纯数条） */
   function isPlotReadyForEnding(plotSummary, seed) {
-    const goal = extractGoal(plotSummary);
-    if (!goal) {
+    if (!isArgumentClosed(plotSummary, seed)) {
       return false;
     }
-    const pending = extractPendingLines(plotSummary);
-    if (pending.length > 0) {
-      return false;
-    }
-    const minConfirmed = Number(seed?.endingMinConfirmed) > 0 ? seed.endingMinConfirmed : 2;
+    const minPremises = getMinPremisesForEnding(seed);
     const { confirmed } = countLayers(plotSummary);
-    if (confirmed < minConfirmed) {
-      return false;
-    }
-    if (!hasCoreGoalAchieved(plotSummary, seed)) {
-      return false;
-    }
-    const tracksOk = hasGoalTracksAchieved(plotSummary, seed);
-    if (tracksOk === false) {
+    if (confirmed < minPremises) {
       return false;
     }
     return true;
@@ -1071,6 +1317,10 @@
   }
 
   window.GameOnion = {
+    getArgumentProfile,
+    getMaxOpenClaims,
+    getMinPremisesForEnding,
+    openClaims,
     buildSeedPlotSummary,
     extractGoal,
     extractPendingLines,
@@ -1081,6 +1331,10 @@
     formatLayersDebug,
     isReadyForEnding,
     isPlotReadyForEnding,
+    isArgumentClosed,
+    slotCoverage,
+    reconcileEvidenceSlots,
+    isFollowupShortAccept,
     hasSessionEndingProgress,
     extractMastermindLabel,
     hasCoreGoalAchieved,
@@ -1112,6 +1366,8 @@
     mastermindNamedInLine,
     mastermindTrackSatisfied,
     shouldClearPendingBlock,
+    shouldClearPendingLine,
+    isVacuousPendingText,
     isDeflectReply,
     countRecentFollowupStreak,
     formatExchangeContract,

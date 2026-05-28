@@ -6,12 +6,25 @@
   /** 摘要总字数上限（产品：尽量写满，专名只增不删） */
   const SUMMARY_MAX_CHARS = 1200;
 
-  const SUMMARY_SYSTEM = `你是剧情档案维护员。结构像论证题：**一个本局目标 + 已确认前提 + 仅一条待证**（三条件推一问；对局过程中 [已确认] 可增多，[待核实#1] 始终至多 1 条）。
+  function buildSummarySystem(seed) {
+    const maxOpen = window.GameOnion?.getMaxOpenClaims?.(seed) ?? 1;
+    const pendingLines =
+      maxOpen === 1
+        ? "- [待核实#1] …（全篇最多 1 条）"
+        : Array.from(
+            { length: maxOpen },
+            (_, i) => `- [待核实#${i + 1}] …`
+          ).join("\n") + `\n（全篇最多 ${maxOpen} 条）`;
+    const skeleton =
+      maxOpen === 1
+        ? "三条件推一问"
+        : `${maxOpen + 2} 条件推 ${maxOpen} 问`;
+    return `你是剧情档案维护员。结构像论证题：**一个本局目标 + 已确认前提 + 开放论断**（${skeleton}；对局过程中 [已确认] 可增多，[待核实] 始终至多 ${maxOpen} 条）。
 
 【输出】仅两段（不要输出【本局目标】，由程序保留）：
 【剧情档案】
 - [已确认] …
-- [待核实#1] …（全篇最多 1 条）
+${pendingLines}
 【关系与态度】
 - …
 
@@ -19,14 +32,18 @@
 1. 递进更新；[已确认] 专名只增不删；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown。
 2. [已确认] 最多 8 条；合并同义；禁止「可能/存疑/意在掩护」等猜测写入 [已确认]。
 3. 对话已说清的人名/去向 → [已确认]（可标「锋利供述：」）；玩家亮牌 → 仅写玩家原话中的可核对事实，勿写推断。
-4. 已解答的 [待核实#1] 须删除；锋利称「唯一主使/没有别人」或已供指使者姓名 → **不得**保留「是否还有更高层」类 #1。
-5. 仅旁询/态度、无新专名 → 勿增 #1；勿扩写关系段；勿写「供述矛盾需核实」占满 #1。
+4. 已解答的 [待核实] 须删除；锋利称「唯一主使/没有别人」或已供指使者姓名 → **不得**保留「是否还有更高层」类待核实。
+5. 仅旁询/态度、无新专名 → 勿增待核实；勿扩写关系段；禁止写「无」「待填」占待核实行。
 6. 【关系与态度】最多 2 条，每条 ≤45 字，只写当前信任/戒备。
 7. 只依据已有摘要与新增对话，禁止幻觉。`;
+  }
 
-  const SUMMARY_USER_PREFIX = `自检：说清的事实进 [已确认]；#1 至多 1 条且已答必删/收窄。只输出【剧情档案】【关系与态度】两段。
+  function buildSummaryUserPrefix(seed) {
+    const maxOpen = window.GameOnion?.getMaxOpenClaims?.(seed) ?? 1;
+    return `自检：说清的事实进 [已确认]；待核实至多 ${maxOpen} 条且已答必删/收窄。只输出【剧情档案】【关系与态度】两段。
 
 `;
+  }
 
   /** 压缩后保留种子里的【本局目标】段（模型不输出目标） */
   function preserveGoalBlock(previousSummary, newSummary) {
@@ -51,7 +68,7 @@
     ).length;
   }
 
-  function warnIfSummaryFormatUnexpected(text) {
+  function warnIfSummaryFormatUnexpected(text, seed) {
     const body = String(text || "").trim();
     if (!body) {
       return;
@@ -63,11 +80,12 @@
         ["summary"]
       );
     }
+    const maxOpen = window.GameOnion?.getMaxOpenClaims?.(seed) ?? 1;
     const pendingCount = (body.match(/\[待核实/gi) || []).length;
-    if (pendingCount > 1) {
+    if (pendingCount > maxOpen) {
       window.PomDebug?.logLocalWarn(
         "摘要格式",
-        `[待核实] 出现 ${pendingCount} 次，应为至多 1 条`,
+        `[待核实] 出现 ${pendingCount} 次，应为至多 ${maxOpen} 条`,
         ["summary"]
       );
     }
@@ -146,7 +164,7 @@
     const body = session.plotSummary
       ? `【已有摘要】\n${session.plotSummary}\n\n【新增对话】\n${block}`
       : `【新增对话】\n${block}`;
-    const userContent = SUMMARY_USER_PREFIX + body;
+    const userContent = buildSummaryUserPrefix(seed) + body;
 
     const scopeNote =
       mergedProtected > 0
@@ -159,7 +177,7 @@
     );
 
     const summary = await window.ChatApi.completeChat({
-      systemPrompt: SUMMARY_SYSTEM,
+      systemPrompt: buildSummarySystem(seed),
       messages: [{ role: "user", content: userContent }],
       temperature: window.PomTokens?.TEMP_SUMMARY ?? 0.2,
       max_tokens: window.PomTokens?.SUMMARY ?? 2048,
@@ -180,7 +198,7 @@
       text = text.slice(0, SUMMARY_MAX_CHARS);
     }
 
-    warnIfSummaryFormatUnexpected(text);
+    warnIfSummaryFormatUnexpected(text, seed);
 
     const beforeReconcile = text;
     if (window.GameOnion?.reconcilePlotSummary) {
@@ -195,7 +213,7 @@
 
     session.plotSummary = text;
     session.lastSummaryAtOptionTurn = optionTurns;
-    const onionNote = window.GameOnion?.formatLayersDebug?.(text) || "";
+    const onionNote = window.GameOnion?.formatLayersDebug?.(text, seed) || "";
     window.PomDebug?.logLocal(
       "③摘要 · 已写入 session",
       `${text.length} 字 · ${onionNote} · 正文见绿条 ←拆分·③摘要`,

@@ -461,7 +461,7 @@
       const goal = window.GameOnion?.extractGoal?.(session.plotSummary) || "";
       window.PomDebug?.logLocal(
         "剧情·种子摘要已注入",
-        `${window.GameOnion.formatLayersDebug(session.plotSummary)}${goal ? `\n目标：${goal}` : ""}`,
+        `${window.GameOnion.formatLayersDebug(session.plotSummary, archetype?.onionSeed)}${goal ? `\n目标：${goal}` : ""}`,
         ["summary-out"]
       );
     }

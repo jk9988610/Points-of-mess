@@ -409,7 +409,7 @@
     return t.replace(/[？?]/g, "。");
   }
 
-  function filterCharacterReply(reply) {
+  function filterCharacterReply(reply, context) {
     let t = sanitizeRhetoricalQuestion(String(reply || "").trim());
     if (!t || isWeakReply(t)) {
       return "";
@@ -418,7 +418,8 @@
       window.PomDebug?.logLocalWarn("角色问句已拒", t.slice(0, 80), ["reply"]);
       return "";
     }
-    if (window.GameOnion?.isDeflectReply?.(t)) {
+    const pickIntent = context?.pickIntent || "";
+    if (window.GameOnion?.isDeflectReply?.(t, pickIntent)) {
       window.PomDebug?.logLocalWarn("角色敷衍已拒", t.slice(0, 80), ["reply"]);
       return "";
     }
@@ -560,10 +561,10 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
     }
   }
 
-  function replyFromRaw(raw) {
+  function replyFromRaw(raw, context) {
     try {
       const obj = extractJsonObject(raw);
-      const reply = filterCharacterReply(String(obj.reply || "").trim());
+      const reply = filterCharacterReply(String(obj.reply || "").trim(), context);
       if (reply) {
         return reply;
       }
@@ -579,7 +580,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
     }
     const first = text.split("\n").find((l) => l.trim()) || text;
     const candidate = first.trim().slice(0, 120);
-    return filterCharacterReply(candidate);
+    return filterCharacterReply(candidate, context);
   }
 
   function lastUsableAssistantLine(session, archetype) {
@@ -693,7 +694,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
       debugLabel: debugLabel || "拆分·①reply",
     });
 
-    let reply = replyFromRaw(raw);
+    let reply = replyFromRaw(raw, replyContext);
     const seed = archetype?.onionSeed;
     if (!reply && session && seed) {
       reply =

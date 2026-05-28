@@ -73,4 +73,21 @@ if (extractPendingLines(plot).length !== 1) {
   console.error("extractPendingLines expects 1 pending");
   process.exit(1);
 }
+
+const twoClaimSeed = {
+  goal: "查明",
+  confirmed: ["甲", "乙"],
+  pending: ["论断A", "论断B"],
+  maxOpenClaims: 2,
+};
+const plot2 = buildSeedPlotSummary(twoClaimSeed);
+if (extractPendingLines(plot2).length !== 2) {
+  console.error("maxOpenClaims=2 seed expects 2 pending, got", extractPendingLines(plot2).length);
+  process.exit(1);
+}
+if (!plot2.includes("[待核实#2]")) {
+  console.error("missing [待核实#2]");
+  process.exit(1);
+}
+
 console.log("verify-onion-seed: ok");

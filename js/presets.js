@@ -28,6 +28,14 @@
         endingCoreKeywords: ["幕后", "指使", "操控", "主使", "赵爷", "赵二爷", "二爷"],
         /** 至少完成几轮「推进」后才允许结局（在当轮 reply+摘要之后判定） */
         endingMinKeypointTurns: 2,
+        /** 并行 [待核实] 上限（1=3推1，2=3推2） */
+        maxOpenClaims: 1,
+        argumentProfile: {
+          label: "3推1",
+          maxOpenClaims: 1,
+          minPremisesForEnding: 3,
+          minKeypointTurns: 2,
+        },
         /** 结局前须消耗全部【玩家可亮牌】 */
         endingSpendAllKnowledge: true,
         endingEpilogueFallback: "主使已明，账本在他手里，这场对峙到此为止。",
