@@ -309,11 +309,21 @@
     }
     const confirmed = countLayers(plotSummary).confirmed;
     const prev = session.lastConfirmedCount ?? 0;
+    const lastAssistant = [...(session.messages || [])]
+      .reverse()
+      .find((m) => m.role === "assistant" && m.status === "done");
+    if (assistantReplyAdvancesPlot(lastAssistant?.content, plotSummary)) {
+      session.stallTurns = 0;
+      session.lastConfirmedCount = confirmed;
+      return { stallTurns: 0, confirmed };
+    }
     if (session.lastPickIntent === "followup") {
       session.lastConfirmedCount = confirmed;
       return { stallTurns: session.stallTurns || 0, confirmed };
     }
     if (confirmed > prev) {
+      session.stallTurns = 0;
+    } else if (mastermindNamedInArchive(plotSummary) && extractPendingLines(plotSummary).length === 0) {
       session.stallTurns = 0;
     } else {
       session.stallTurns = (session.stallTurns || 0) + 1;
@@ -528,7 +538,10 @@
   }
 
   const DEFLECT_REPLY_RE =
-    /你心里|别装|你该去问|去问陈四|问太多|反倒可疑|爱信不信|不护谁|疑心太重|随你|误事|少说|废话|挡话|栽我身上/;
+    /你心里|心里清楚|别装|你该去问|去问陈四|问太多|反倒可疑|爱信不信|不护谁|疑心太重|随你|误事|少说|废话|挡话|栽我身上/;
+
+  const MASTERMIND_NAMED_IN_ARCHIVE_RE =
+    /(?:赵爷|老九|赵家).{0,16}(?:主使|指使|幕后|听命)|(?:主使|指使).{0,12}(?:赵爷|老九)|听命于(?:赵爷|老九)/;
 
   function isDeflectReply(text) {
     return DEFLECT_REPLY_RE.test(String(text || "").trim());
@@ -542,10 +555,102 @@
     }
     const blob = extractConfirmedLines(plotSummary).join("");
     const pending = extractPendingLines(plotSummary)[0] || "";
-    if (/指使者|幕后|主使/.test(pending) && !/老九|主使|指使.{0,8}是/.test(blob)) {
+    if (mastermindNamedInArchive(plotSummary)) {
+      return "赵爷主使、账本在他手里，你已说定。";
+    }
+    if (/指使者|幕后|主使/.test(pending) && !/老九|赵爷|主使|指使.{0,8}是/.test(blob)) {
       return "你已认了陈四，换你说他背后主使是谁。";
     }
     return "";
+  }
+
+  function pickProgramStatementFallback(seed) {
+    const pool = seed?.sharpStatementFallbacks;
+    if (!Array.isArray(pool) || !pool.length) {
+      return "查账本是我自己的事，你别挡。";
+    }
+    return String(pool[0]).trim();
+  }
+
+  function mastermindNamedInArchive(plotSummary) {
+    return MASTERMIND_NAMED_IN_ARCHIVE_RE.test(
+      extractConfirmedLines(plotSummary).join("\n")
+    );
+  }
+
+  function pendingIsResolvedMeta(pendingText, plotSummary) {
+    const p = String(pendingText || "");
+    if (!p) {
+      return false;
+    }
+    if (!mastermindNamedInArchive(plotSummary)) {
+      return false;
+    }
+    return /是否|需核实|矛盾|身份与|实际在/.test(p);
+  }
+
+  /** 压摘要后：答清指使者则删 #1；裁剪档案膨胀 */
+  function reconcilePlotSummary(plotSummary, seed) {
+    let text = String(plotSummary || "").trim();
+    if (!text) {
+      return text;
+    }
+    const pending = extractPendingLines(text);
+    if (
+      pending.length > 0 &&
+      (pendingIsResolvedMeta(pending[0], text) || mastermindNamedInArchive(text))
+    ) {
+      if (mastermindNamedInArchive(text)) {
+        text = text.replace(/\n- \[待核实#1\][^\n]*/gi, "");
+        text = text.replace(/\n- \[待核实\][^\n]*/gi, "");
+      }
+    }
+    const archiveMatch = text.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
+    if (archiveMatch) {
+      const head = archiveMatch[1].split("\n").slice(0, 1);
+      const bodyLines = archiveMatch[1].split("\n").slice(1);
+      const confirmed = [];
+      const other = [];
+      for (const line of bodyLines) {
+        const t = line.trim();
+        if (!t) {
+          continue;
+        }
+        if (/\[已确认\]/.test(t)) {
+          confirmed.push(line);
+        } else {
+          other.push(line);
+        }
+      }
+      const maxConfirmed = Number(seed?.maxArchiveConfirmed) > 0 ? seed.maxArchiveConfirmed : 8;
+      const trimmed = confirmed.slice(-maxConfirmed);
+      const newArchive = [...head, ...trimmed, ...other].join("\n");
+      text = text.replace(archiveMatch[1], newArchive);
+    }
+    const attMatch = text.match(/【关系与态度】([\s\S]*?)$/);
+    if (attMatch) {
+      const attLines = attMatch[1]
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith("-"));
+      if (attLines.length > 2) {
+        const shortAtt = ["【关系与态度】", ...attLines.slice(-2)].join("\n");
+        text = text.replace(/【关系与态度】[\s\S]*$/, shortAtt);
+      }
+    }
+    return text.trim();
+  }
+
+  function assistantReplyAdvancesPlot(assistantLine, plotSummary) {
+    const line = String(assistantLine || "").trim();
+    if (!line || isDeflectReply(line)) {
+      return false;
+    }
+    if (!MASTERMIND_NAMED_IN_ARCHIVE_RE.test(line)) {
+      return false;
+    }
+    const blob = extractConfirmedLines(plotSummary).join("");
+    return !MASTERMIND_NAMED_IN_ARCHIVE_RE.test(blob);
   }
 
   function pickProgramSharpReply(session, seed, replyContext) {
@@ -853,6 +958,9 @@
     pickProgramRevealLine,
     pickKeypointOfferLine,
     pickProgramSharpReply,
+    pickProgramStatementFallback,
+    reconcilePlotSummary,
+    mastermindNamedInArchive,
     isDeflectReply,
     countRecentFollowupStreak,
     formatExchangeContract,

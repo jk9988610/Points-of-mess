@@ -25,13 +25,13 @@
         attitude: ["锋利高度戒备，怀疑玩家是幕后一方的棋子"],
         endingMinConfirmed: 3,
         /** [已确认] 须含其一才允许结局（与「待核实清空」同时满足） */
-        endingCoreKeywords: ["幕后", "指使", "操控", "主使"],
+        endingCoreKeywords: ["幕后", "指使", "操控", "主使", "赵爷"],
         neglectPrimaryWarnAt: 3,
         neglectPrimaryFailAt: 5,
         /** 目标子轨：结局须两条轨在 [已确认] 中均有依据（不要求待核实清空） */
         goalTracks: {
           mastermind: {
-            keywords: ["指使", "幕后", "老九", "主使", "派我", "赵家"],
+            keywords: ["指使", "幕后", "老九", "赵爷", "主使", "派我", "赵家", "听命"],
           },
           ledger: {
             keywords: ["账本", "经手", "保管", "手里", "转移", "下落"],
@@ -61,8 +61,12 @@
         ],
         /** keypoint 亮牌后模型仍敷衍时，程序兜底供述（须含指使者专名） */
         sharpReveals: [
-          { afterKnowledge: "blocker", line: "指使陈四拦你的是老九。" },
-          { afterKnowledge: "ledger", line: "老九主使，账本还在他手上。" },
+          { afterKnowledge: "blocker", line: "指使陈四拦你的是赵爷。" },
+          { afterKnowledge: "ledger", line: "赵爷主使，账本还在他手上。" },
+        ],
+        sharpStatementFallbacks: [
+          "查账本是我自己的事，你别挡。",
+          "拦你的是陈四，别来找我。",
         ],
       },
       failureLine: "你不肯说指使者，我没时间了。",

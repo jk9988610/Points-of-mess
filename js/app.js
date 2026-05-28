@@ -976,7 +976,8 @@
         try {
           const summaryOk = await window.GameSummary.maybeRefreshPlotSummary(
             session,
-            signal
+            signal,
+            archetype.onionSeed
           );
           if (summaryOk) {
             persist(state);

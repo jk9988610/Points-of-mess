@@ -82,4 +82,11 @@ node scripts/verify-goal-driven.js
 # 新局：keypoint 亮陈四 → 锋利须含「老九」或走兜底；[待核实#1]  eventually 清除
 ```
 
+## 9. v0.5.38 补丁（赵爷已供仍卡 #1）
+
+- `reconcilePlotSummary`：档案已写明指使者姓名 → **程序删除** `[待核实#1]`，禁止「是否赵爷」元问题
+- `goalTracks` 增加 **赵爷**；兜底供述与种子一致
+- 敷衍拒收后 **followup 也有陈述兜底**，避免主路径报错
+- 锋利台词出现新指使者名 → 重置僵局计数
+
 *版本以 `js/version.js` 为准。*

@@ -663,14 +663,15 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
 
     let reply = replyFromRaw(raw);
     const seed = archetype?.onionSeed;
-    const needExchange =
-      replyContext?.pickIntent === "keypoint" &&
-      replyContext?.playerConcreteReveal;
-    if (!reply && needExchange && session && seed) {
-      reply = window.GameOnion?.pickProgramSharpReply?.(session, seed, {
-        ...replyContext,
-        deflectFallback: true,
-      });
+    if (!reply && session && seed) {
+      reply =
+        window.GameOnion?.pickProgramSharpReply?.(session, seed, {
+          ...replyContext,
+          deflectFallback: true,
+        }) || "";
+      if (!reply && replyContext?.pickIntent === "followup") {
+        reply = window.GameOnion?.pickProgramStatementFallback?.(seed) || "";
+      }
       if (reply) {
         window.PomDebug?.logLocal("程序兜底 reply", reply, ["reply-fallback"]);
       }
