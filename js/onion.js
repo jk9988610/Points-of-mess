@@ -554,6 +554,13 @@
     return extractConfirmedLines(plotSummary).join("\n");
   }
 
+  /** 排除开局种子「可作筹码」行，只算对局内新供述 */
+  function gameplayConfirmedBlob(plotSummary) {
+    return extractConfirmedLines(plotSummary)
+      .filter((line) => !/可作筹码/.test(line))
+      .join("\n");
+  }
+
   /** 档案中主使链已闭合（不绑死赵爷/老九，认模型供出的专名） */
   function mastermindTrackSatisfied(blob) {
     const text = String(blob || "");
@@ -662,15 +669,32 @@
     return /是否|需核实|矛盾|身份与|实际在|最终指使者|更高层|另有/.test(p);
   }
 
+  function pendingTargetAlreadyNamed(pendingText, plotSummary) {
+    const p = String(pendingText || "");
+    if (!/是否|需确认|最终|更高层|即为/.test(p)) {
+      return false;
+    }
+    const blob = gameplayConfirmedBlob(plotSummary);
+    const name =
+      p.match(/([\u4e00-\u9fa5]{2,6})(?:是否|即为)/)?.[1] ||
+      p.match(/(赵二爷|赵爷|老九|赵德柱)/)?.[1];
+    if (!name) {
+      return false;
+    }
+    return blob.includes(name) && /指使|主使|指使者|供述/.test(blob);
+  }
+
   function shouldClearPendingBlock(plotSummary) {
-    if (!extractPendingLines(plotSummary).length) {
+    const pending = extractPendingLines(plotSummary);
+    if (!pending.length) {
       return false;
     }
     const blob = archiveBlob(plotSummary);
     return (
       mastermindTrackSatisfied(blob) ||
       MASTERMIND_FINAL_CLAIM_RE.test(blob) ||
-      pendingIsResolvedMeta(extractPendingLines(plotSummary)[0], plotSummary)
+      pendingIsResolvedMeta(pending[0], plotSummary) ||
+      pendingTargetAlreadyNamed(pending[0], plotSummary)
     );
   }
 
@@ -998,13 +1022,15 @@
     }
     if (seed?.endingSpendAllKnowledge) {
       const spent = session.spentPlayerKnowledge || [];
-      const blob = archiveBlob(plotSummary);
+      const play = gameplayConfirmedBlob(plotSummary);
       const blockerOk =
         spent.includes("blocker") ||
-        (/陈四/.test(blob) && /指使|指使者|主使/.test(blob));
+        /锋利供述[^。\n]{0,48}陈四/.test(play) ||
+        /玩家供述[^。\n]{0,48}陈四/.test(play);
       const ledgerOk =
         spent.includes("ledger") ||
-        (/刘老三/.test(blob) && /账本|经手|藏/.test(blob));
+        /锋利供述[^。\n]{0,48}(?:刘老三|账本)/.test(play) ||
+        /玩家供述[^。\n]{0,48}(?:刘老三|账本)/.test(play);
       if (!blockerOk || !ledgerOk) {
         return false;
       }

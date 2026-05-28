@@ -46,10 +46,18 @@ function isReady(plot, seed, session) {
 }
 
 const seed = { endingMinKeypointTurns: 2, endingSpendAllKnowledge: true };
+const plotSeedOnly = `【剧情档案】
+- [已确认] 阻拦者为陈四（玩家已知，可作筹码）
+- [已确认] 账本最后经手人为刘老三（玩家已知，可作筹码）`;
+const s1 = { keypointTurnCount: 1, spentPlayerKnowledge: ["blocker"] };
+if (hasSessionProgress(s1, seed, plotSeedOnly)) {
+  console.error("seed lines alone must not satisfy ending chips");
+  process.exit(1);
+}
+
 const plot = `【剧情档案】
 - [已确认] 锋利供述：指使者是赵二爷，账本在他手里`;
 
-const s1 = { keypointTurnCount: 1, spentPlayerKnowledge: ["blocker"] };
 if (isReady(plot, seed, s1)) {
   console.error("1 keypoint should not end");
   process.exit(1);

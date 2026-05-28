@@ -182,8 +182,15 @@
 
     warnIfSummaryFormatUnexpected(text);
 
+    const beforeReconcile = text;
     if (window.GameOnion?.reconcilePlotSummary) {
       text = window.GameOnion.reconcilePlotSummary(text, seed);
+    }
+    if (
+      window.GameOnion?.extractPendingLines?.(beforeReconcile)?.length &&
+      !window.GameOnion?.extractPendingLines?.(text)?.length
+    ) {
+      window.PomDebug?.logLocal("③摘要 · reconcile", "已清除待核实#1", ["summary"]);
     }
 
     session.plotSummary = text;

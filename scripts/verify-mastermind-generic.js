@@ -29,9 +29,19 @@ function mastermindTrackSatisfied(blob) {
   return false;
 }
 
+function gameplayBlob(plot) {
+  return extractConfirmedLines(plot)
+    .filter((l) => !/可作筹码/.test(l))
+    .join("\n");
+}
+
 function shouldClear(plot) {
+  const pending = extractPendingLines(plot);
+  if (!pending.length) return false;
   const blob = extractConfirmedLines(plot).join("\n");
-  if (!extractPendingLines(plot).length) return false;
+  const play = gameplayBlob(plot);
+  const p = pending[0];
+  if (/是否/.test(p) && /赵二爷/.test(p) && play.includes("赵二爷")) return true;
   return mastermindTrackSatisfied(blob) || /唯一主使|没有别人/.test(blob);
 }
 
@@ -44,6 +54,15 @@ if (!mastermindTrackSatisfied(extractConfirmedLines(plot).join(""))) {
   console.error("should detect 赵德柱 mastermind");
   process.exit(1);
 }
+const plotMeta = `【剧情档案】
+- [已确认] 锋利供述：陈四背后指使者为赵二爷
+- [待核实#1] 赵二爷是否即为最终幕后操控者（需确认其与账本流向的关联）`;
+
+if (!shouldClear(plotMeta)) {
+  console.error("should clear 赵二爷 meta pending when named in 供述");
+  process.exit(1);
+}
+
 if (!shouldClear(plot)) {
   console.error("should clear meta pending");
   process.exit(1);
