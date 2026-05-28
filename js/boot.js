@@ -16,6 +16,7 @@
     "proof-bootstrap.js",
     "onion.js",
     "proof-board.js",
+    "dialogue-log.js",
     "dialogue.js",
     "memory-chat.js",
     "summary.js",

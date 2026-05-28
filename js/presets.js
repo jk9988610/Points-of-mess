@@ -35,8 +35,8 @@
       id: "sharp",
       name: "证官",
       archetypeId: "sharp",
-      x: 0.72,
-      y: 0.38,
+      x: 0.55,
+      y: 0.44,
       color: "#2563eb",
     },
   ];

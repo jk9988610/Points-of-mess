@@ -80,6 +80,8 @@
   const stopButtonEl = document.getElementById("stopGeneration");
   const hintEl = document.getElementById("mapHint");
   const proofBlackboardEl = document.getElementById("proofBlackboard");
+  const dialogueLogEl = document.getElementById("dialogueLog");
+  const dialogueLogScrollEl = document.getElementById("dialogueLogScroll");
 
   function syncProofBlackboard() {
     if (!proofBlackboardEl) {
@@ -95,9 +97,53 @@
       if (body) {
         body.innerHTML = "";
       }
+    } else {
+      window.GameProofBoard?.updateProofBoard?.(proofBlackboardEl, plot);
+    }
+    syncDialogueLog();
+  }
+
+  function syncDialogueLog() {
+    if (!dialogueLogEl || !dialogueLogScrollEl) {
       return;
     }
-    window.GameProofBoard?.updateProofBoard?.(proofBlackboardEl, plot);
+    if (!state.talkingId) {
+      dialogueLogEl.classList.add("hidden");
+      dialogueLogScrollEl.innerHTML = "";
+      return;
+    }
+    dialogueLogEl.classList.remove("hidden");
+    const session = getSession(state, state.talkingId);
+    const character = getCharacter(state.talkingId);
+    const archetype = resolveArchetype(getArchetype(character.archetypeId), session);
+    const prover = resolveProver(character, session);
+    const seed = getSessionSeed(session, archetype);
+    const playerLabel = seed?.playerRoleLabel || "证辩者";
+    const npcLabel = prover.name || seed?.roleLabel || "证官";
+    const messages = [...(session.messages || [])];
+    if (state.isStreaming && state.bubbleText) {
+      const last = messages[messages.length - 1];
+      if (last?.role === "assistant" && last.status !== "done") {
+        messages[messages.length - 1] = {
+          ...last,
+          content: state.bubbleText,
+          status: "streaming",
+        };
+      } else if (!last || last.role !== "assistant") {
+        messages.push({
+          id: "streaming-live",
+          role: "assistant",
+          content: state.bubbleText,
+          createdAt: Date.now(),
+          status: "streaming",
+        });
+      }
+    }
+    window.GameDialogueLog?.render(dialogueLogScrollEl, messages, {
+      playerLabel,
+      npcLabel,
+      emptyText: state.optionsLoading ? "证官准备论题…" : "尚无对白记录",
+    });
   }
 
   const CHAR_BUBBLE_GAP = 36;
@@ -634,6 +680,7 @@
     });
 
     refreshOptionsBar();
+    syncProofBlackboard();
   }
 
   function resumeDialogueUi(reason) {

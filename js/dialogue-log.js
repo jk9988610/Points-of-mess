@@ -1,0 +1,92 @@
+(function () {
+  function formatTime(timestamp) {
+    const t = Number(timestamp);
+    if (!t || Number.isNaN(t)) {
+      return "";
+    }
+    return new Date(t).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function render(container, messages, labels) {
+    if (!container) {
+      return;
+    }
+    const playerLabel = labels?.playerLabel || "证辩者";
+    const npcLabel = labels?.npcLabel || "证官";
+    const stickToBottom = labels?.stickToBottom !== false;
+    const wasAtBottom =
+      stickToBottom &&
+      container.scrollHeight - container.scrollTop - container.clientHeight < 48;
+
+    const list = Array.isArray(messages)
+      ? messages.filter(
+          (m) =>
+            (m.role === "user" || m.role === "assistant") &&
+            (m.content || m.status === "streaming")
+        )
+      : [];
+
+    container.innerHTML = "";
+
+    if (!list.length) {
+      const empty = document.createElement("p");
+      empty.className = "dialogue-log__empty";
+      empty.textContent = labels?.emptyText || "尚无对白记录";
+      container.appendChild(empty);
+      if (wasAtBottom || stickToBottom) {
+        container.scrollTop = container.scrollHeight;
+      }
+      return;
+    }
+
+    for (const message of list) {
+      const isUser = message.role === "user";
+      const row = document.createElement("article");
+      row.className = `dialogue-log__row dialogue-log__row--${isUser ? "user" : "npc"}`;
+      row.dataset.messageId = message.id || "";
+
+      const meta = document.createElement("div");
+      meta.className = "dialogue-log__meta";
+      const name = document.createElement("span");
+      name.className = "dialogue-log__name";
+      name.textContent = isUser ? playerLabel : npcLabel;
+      const time = document.createElement("time");
+      time.className = "dialogue-log__time";
+      time.dateTime = message.createdAt
+        ? new Date(message.createdAt).toISOString()
+        : "";
+      time.textContent = formatTime(message.createdAt);
+      meta.append(name, time);
+
+      const bubble = document.createElement("div");
+      bubble.className = "dialogue-log__bubble";
+      const text = document.createElement("p");
+      text.className = "dialogue-log__text";
+      text.textContent =
+        message.content || (message.status === "streaming" ? "…" : "");
+      bubble.appendChild(text);
+
+      if (message.status === "streaming") {
+        row.classList.add("dialogue-log__row--streaming");
+      }
+      if (message.status === "error") {
+        row.classList.add("dialogue-log__row--error");
+      }
+
+      row.append(meta, bubble);
+      container.appendChild(row);
+    }
+
+    if (wasAtBottom || stickToBottom) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }
+
+  window.GameDialogueLog = {
+    formatTime,
+    render,
+  };
+})();
