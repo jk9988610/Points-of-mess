@@ -29,9 +29,8 @@
     }
     const playerLabel = labels?.playerLabel || "证辩者";
     const npcLabel = labels?.npcLabel || "证官";
-    const stickToBottom = labels?.stickToBottom !== false;
+    const stickToBottom = labels?.stickToBottom === true;
     const wasAtBottom =
-      stickToBottom &&
       container.scrollHeight - container.scrollTop - container.clientHeight < 48;
 
     const list = Array.isArray(messages)
@@ -53,7 +52,7 @@
       empty.className = "dialogue-log__empty";
       empty.textContent = labels?.emptyText || "尚无对白记录";
       container.appendChild(empty);
-      if (wasAtBottom || stickToBottom) {
+      if (stickToBottom || wasAtBottom) {
         container.scrollTop = container.scrollHeight;
       }
       return;
@@ -100,8 +99,10 @@
       container.appendChild(row);
     }
 
-    if (wasAtBottom || stickToBottom) {
-      container.scrollTop = container.scrollHeight;
+    if (stickToBottom || wasAtBottom) {
+      requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
     }
   }
 

@@ -578,7 +578,10 @@ body.login-locked .memory-input-bar {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overflow-anchor: none;
   padding: 2px 0 6px;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
 }
 

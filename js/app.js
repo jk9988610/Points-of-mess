@@ -99,26 +99,30 @@
     } else {
       window.GameProofBoard?.updateProofBoard?.(proofBlackboardEl, plot);
     }
-    syncDialogueLog();
   }
 
-  function syncDialogueLog() {
-    if (!dialogueLogEl || !dialogueLogScrollEl) {
+  let dialogueLogStickBottom = true;
+  let dialogueLogScrollBound = false;
+  let dialogueLogSyncTimer = null;
+  let dialogueLogLastRenderKey = "";
+
+  function bindDialogueLogScroll() {
+    if (dialogueLogScrollBound || !dialogueLogScrollEl) {
       return;
     }
-    if (!state.talkingId) {
-      window.GameDialogueLog?.render(dialogueLogScrollEl, [], {
-        emptyText: "靠近证官开始对论后，对话记录显示于此。",
-      });
-      return;
-    }
-    const session = getSession(state, state.talkingId);
-    const character = getCharacter(state.talkingId);
-    const archetype = resolveArchetype(getArchetype(character.archetypeId), session);
-    const prover = resolveProver(character, session);
-    const seed = getSessionSeed(session, archetype);
-    const playerLabel = seed?.playerRoleLabel || "证辩者";
-    const npcLabel = prover.name || seed?.roleLabel || "证官";
+    dialogueLogScrollBound = true;
+    dialogueLogScrollEl.addEventListener(
+      "scroll",
+      () => {
+        const el = dialogueLogScrollEl;
+        dialogueLogStickBottom =
+          el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+      },
+      { passive: true }
+    );
+  }
+
+  function buildDialogueLogMessages(session) {
     const messages = (session.messages || []).map((m) => ({ ...m }));
     if (state.isStreaming && state.bubbleText) {
       const live = String(state.bubbleText).trim();
@@ -139,11 +143,66 @@
         });
       }
     }
+    return messages.sort(
+      (a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0)
+    );
+  }
+
+  function dialogueLogRenderKey(messages) {
+    return messages
+      .map(
+        (m) =>
+          `${m.id || ""}:${m.role}:${m.status}:${String(m.content || "").length}:${String(m.displayLine || "").length}`
+      )
+      .join("|");
+  }
+
+  function syncDialogueLog(opts = {}) {
+    bindDialogueLogScroll();
+    if (!dialogueLogEl || !dialogueLogScrollEl) {
+      return;
+    }
+    if (!state.talkingId) {
+      dialogueLogLastRenderKey = "";
+      window.GameDialogueLog?.render(dialogueLogScrollEl, [], {
+        emptyText: "靠近证官开始对论后，对话记录显示于此。",
+        stickToBottom: false,
+      });
+      return;
+    }
+    const session = getSession(state, state.talkingId);
+    const character = getCharacter(state.talkingId);
+    const archetype = resolveArchetype(getArchetype(character.archetypeId), session);
+    const prover = resolveProver(character, session);
+    const seed = getSessionSeed(session, archetype);
+    const playerLabel = seed?.playerRoleLabel || "证辩者";
+    const npcLabel = prover.name || seed?.roleLabel || "证官";
+    const messages = buildDialogueLogMessages(session);
+    const renderKey = dialogueLogRenderKey(messages);
+    if (!opts.force && renderKey === dialogueLogLastRenderKey) {
+      return;
+    }
+    dialogueLogLastRenderKey = renderKey;
+    const stickToBottom = opts.resetScroll ? true : dialogueLogStickBottom;
     window.GameDialogueLog?.render(dialogueLogScrollEl, messages, {
       playerLabel,
       npcLabel,
       emptyText: state.optionsLoading ? "证官准备论题…" : "尚无对白记录",
+      stickToBottom,
     });
+    if (opts.resetScroll) {
+      dialogueLogStickBottom = true;
+    }
+  }
+
+  function scheduleDialogueLogSync(delayMs = 80) {
+    if (dialogueLogSyncTimer) {
+      clearTimeout(dialogueLogSyncTimer);
+    }
+    dialogueLogSyncTimer = setTimeout(() => {
+      dialogueLogSyncTimer = null;
+      syncDialogueLog();
+    }, delayMs);
   }
 
   const CHAR_BUBBLE_GAP = 36;
@@ -363,11 +422,19 @@
       : "";
     state.bubbleText = text;
     syncSpeechBubbles(streaming, { thinking });
+    if (state.talkingId && streaming && !thinking) {
+      scheduleDialogueLogSync(100);
+    } else if (state.talkingId && !streaming && !thinking) {
+      syncDialogueLog();
+    }
   }
 
   function setPlayerBubble(text) {
     state.playerBubbleText = String(text || "").trim();
     syncSpeechBubbles(state.isStreaming, { thinking: false });
+    if (state.talkingId) {
+      syncDialogueLog();
+    }
   }
 
   function setStatus(text, isError) {
@@ -403,7 +470,7 @@
     const inEnding =
       Boolean(session?.inEndingCloseChoices) ||
       state.currentOptions?.some((o) =>
-        ["continue", "reargue"].includes(o.intent)
+        ["continue", "next", "reargue"].includes(o.intent)
       );
     const awaitingEnding =
       session &&
@@ -464,7 +531,8 @@
     keypoint: "推证",
     followup: "了解",
     close: "结束对话",
-    continue: "继续补论",
+    continue: "下一题",
+    next: "下一题",
     reargue: "重证论题",
   };
 
@@ -478,7 +546,7 @@
 
   function placeholderEndingOptions() {
     return [
-      { id: 1, intent: "continue", line: "", send: "" },
+      { id: 1, intent: "next", line: "", send: "" },
       { id: 2, intent: "reargue", line: "", send: "" },
     ];
   }
@@ -541,9 +609,10 @@
       );
       state.currentOptions = ending.options;
       session.inEndingCloseChoices = true;
+      syncDialogueLog({ force: true });
       window.PomDebug?.logLocal(
         "结局收束",
-        "证毕 · 已生成 continue / reargue 选项",
+        "证毕 · 已生成下一题 / 重证选项",
         ["ending"]
       );
       return true;
@@ -588,14 +657,16 @@
       btn.classList.toggle("option-btn--close", opt?.intent === "close");
       btn.classList.toggle(
         "option-btn--ending-extra",
-        opt?.intent === "continue" || opt?.intent === "reargue"
+        opt?.intent === "continue" ||
+          opt?.intent === "next" ||
+          opt?.intent === "reargue"
       );
       btn.disabled = disabled || !opt?.line || loading;
       btn.classList.toggle("hidden", !opt);
     }
     optionsBar.classList.toggle(
       "options-bar--ending",
-      options?.some((o) => ["continue", "reargue"].includes(o?.intent))
+      options?.some((o) => ["continue", "next", "reargue"].includes(o?.intent))
     );
   }
 
@@ -658,7 +729,9 @@
       memoryInputEl.value = "";
     }
     stopButtonEl.disabled = true;
+    dialogueLogLastRenderKey = "";
     syncProofBlackboard();
+    syncDialogueLog();
     renderMap();
     window.PomDebug?.logLocal("结束对话");
   }
@@ -789,6 +862,7 @@
 
     refreshOptionsBar();
     syncProofBlackboard();
+    syncDialogueLog({ resetScroll: true });
   }
 
   function resumeDialogueUi(reason) {
@@ -823,6 +897,8 @@
       resetSessionProgressFlags(session);
       persist(state);
     }
+    dialogueLogLastRenderKey = "";
+    dialogueLogStickBottom = true;
     state.currentOptions = null;
     state.optionsLoading = false;
     state.playerBubbleText = "";
@@ -1135,27 +1211,29 @@
       }
     }
 
-    if (session.inEndingCloseChoices && pick.intent === "continue") {
+    if (
+      session.inEndingCloseChoices &&
+      (pick.intent === "continue" || pick.intent === "next")
+    ) {
       window.PomDebug?.logUser("证辩者选择", {
-        intent: "continue",
+        intent: pick.intent,
         line: pick.line,
-        phase: "结局·继续补论",
+        phase: "结局·下一题",
       });
       session.inEndingCloseChoices = false;
-      session.endingContinued = true;
       session.messages.push({
         id: createId(),
         role: "user",
         content: pick.line,
-        intent: pick.intent,
+        displayLine: pick.line,
+        intent: "next",
         createdAt: Date.now(),
         status: "done",
       });
       persist(state);
       setPlayerBubble(pick.line);
-      setStatus("论题已证毕，可继续补论；靠近证官选推证或输入框发言。", false);
-      state.currentOptions = null;
-      refreshOptionsBar();
+      syncDialogueLog({ force: true });
+      await finishEpisodeAfterClose();
       return;
     }
 
@@ -1593,6 +1671,7 @@
       stopButtonEl.disabled = true;
       if (state.talkingId) {
         refreshOptionsBar();
+        syncDialogueLog();
       }
       renderMap();
       syncSpeechBubbles(false);
@@ -1788,6 +1867,7 @@
   resizeCanvas();
   refreshOptionsBar();
   syncProofBlackboard();
+  syncDialogueLog();
   setMemoryInputVisible(false);
   setBubble("");
   refreshAuthStatus();

@@ -142,10 +142,12 @@ ${pendingNote}
   }
 
   function buildEndingFinalOptions(pair) {
-    const continueLine = String(pair?.continueLine || "").trim();
+    const nextLine = String(
+      pair?.nextLine || pair?.continueLine || ""
+    ).trim();
     const reargueLine = String(pair?.reargueLine || "").trim();
     return [
-      { id: 1, intent: "continue", line: continueLine, send: continueLine },
+      { id: 1, intent: "next", line: nextLine, send: nextLine },
       { id: 2, intent: "reargue", line: reargueLine, send: reargueLine },
     ];
   }
@@ -161,20 +163,24 @@ ${pendingNote}
         byIntent[intent] = line.replace(/^「+/, "").replace(/」+$/, "");
       }
     }
-    if (byIntent.continue && byIntent.reargue) {
+    const nextLine = byIntent.next || byIntent.continue;
+    if (nextLine && byIntent.reargue) {
       return {
-        continueLine: byIntent.continue,
+        nextLine,
+        continueLine: nextLine,
         reargueLine: byIntent.reargue,
       };
     }
     const lines = list.map((item) => lineFromOptionItem(item)).filter(Boolean);
     if (lines.length >= 2) {
+      const first = lines[0].replace(/^「+/, "").replace(/」+$/, "");
       return {
-        continueLine: lines[0].replace(/^「+/, "").replace(/」+$/, ""),
+        nextLine: first,
+        continueLine: first,
         reargueLine: lines[1].replace(/^「+/, "").replace(/」+$/, ""),
       };
     }
-    throw new Error("缺少 continue / reargue 两条结局选项");
+    throw new Error("缺少 next（下一题）/ reargue 两条结局选项");
   }
 
   async function requestEndingReply({
@@ -235,12 +241,12 @@ ${pendingNote}
     const systemPrompt = `你是选项撰稿人。论题 G 已证毕：${goal}。证辩者与「${name}」对论已收束。
 输出证辩者**收束轮**两句不同台词（中文各一句 ≤35 字），intent 必须严格对应：
 
-- continue：还想就 G 或证明过程再补一句/追问（不离开）
+- next：换一道**新论题**继续（本局 G 已证毕，不再追问当前 G）
 - reargue：请求对**同一论题 G**从头再证一遍（换说法重开论证）
 
 只输出 JSON：
 {"options":[
-  {"intent":"continue","line":"..."},
+  {"intent":"next","line":"..."},
   {"intent":"reargue","line":"..."}
 ]}`;
 
@@ -252,7 +258,7 @@ ${pendingNote}
       `角色名：${name}`,
       `论题 G：${goal}`,
       `证官刚宣布：${last}`,
-      "请输出 continue、reargue 各一条。",
+      "请输出 next、reargue 各一条。",
     ].join("\n\n");
 
     try {
@@ -267,7 +273,8 @@ ${pendingNote}
     } catch (e) {
       window.PomDebug?.logLocalWarn("结局选项失败，用预设", e.message);
       return {
-        continueLine: fallback.continue || "我还想就这一步再确认一下。",
+        nextLine: fallback.next || fallback.continue || "G 已证毕，换一道新论题。",
+        continueLine: fallback.next || fallback.continue || "G 已证毕，换一道新论题。",
         reargueLine: fallback.reargue || "请允许我对同一论题从头再证一遍。",
       };
     }
