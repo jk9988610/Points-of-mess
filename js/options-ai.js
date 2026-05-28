@@ -173,7 +173,7 @@ ${pendingNote}
     const goal = window.GameOnion?.extractGoal?.(plotSummary) || "";
     const name = character.name;
     const epilogueSystem = `${roleStyleFromSystem(archetype.system)}${plotSummaryBlock(plotSummary)}
-【结局轮·宣布】本局目标已达成：${goal}
+【结局轮·宣布】论证目标已达成：${goal}
 你是「${name}」。用 1～2 句中文（≤40 字）向证辩者**点明证毕**（论题 G 已闭合、证明如何收束）。${CHARACTER_REPLY_RULE}
 只输出角色台词，不要 JSON。`;
 
@@ -380,7 +380,7 @@ ${pendingNote}
     return !t || /^[.…·\s]+$/.test(t) || t.length < 2;
   }
 
-  /** 角色 reply 不得向玩家发问 */
+  /** 证官 reply 不得向证辩者发问 */
   function isCharacterReplyQuestion(text) {
     const t = String(text || "").trim();
     if (!t) {
@@ -452,7 +452,7 @@ ${archetype.system}
     }
 
     const closeBlock = turn.isClose
-      ? "\n【收束轮】玩家 intent=close。只输出 {\"reply\":\"...\"}，不要 options。"
+      ? "\n【收束轮】证辩者 intent=close。只输出 {\"reply\":\"...\"}，不要 options。"
       : "";
 
     const summaryBlock = turn.plotSummary?.trim()

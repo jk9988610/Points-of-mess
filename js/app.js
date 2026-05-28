@@ -845,7 +845,7 @@
     const seed = getSessionSeed(session, archetype);
 
     if (session.inEndingCloseChoices && isClose) {
-      window.PomDebug?.logUser("玩家选择", {
+      window.PomDebug?.logUser("证辩者选择", {
         intent: "close",
         line: pick.line,
         phase: "结局离场",
@@ -914,7 +914,7 @@
       window.GameProofIntents?.isDecoyIntent?.(pick.intent) || pick.isCorrect === false
     );
 
-    window.PomDebug?.logUser("玩家选择", {
+    window.PomDebug?.logUser("证辩者选择", {
       intent: pick.intent,
       line: rawLine,
       apiLine: apiLine !== rawLine ? apiLine : undefined,
@@ -1026,7 +1026,7 @@
       ? seedForTurn?.aiDriven
         ? ["①reply", "②选项", "③摘要"]
         : window.GameOnion?.usesDynamicPlayerEvidence?.(seedForTurn)
-          ? ["①reply", "②选项", "③摘要", "④证据"]
+          ? ["①reply", "②选项", "③摘要", "④引理"]
           : ["①reply", "②选项", "③摘要"]
       : ["①reply", "②选项"];
     window.PomDebug?.logLocal(
@@ -1108,7 +1108,7 @@
                 }
               } catch (e) {
                 if (e.name !== "AbortError") {
-                  window.PomDebug?.logLocalWarn("④证据赋予失败", e.message, [
+                  window.PomDebug?.logLocalWarn("④引理赋予失败", e.message, [
                     "evidence",
                   ]);
                 }
@@ -1117,7 +1117,7 @@
           }
         } catch (e) {
           if (e.name !== "AbortError") {
-            window.PomDebug?.logLocalWarn("剧情摘要失败", e.message, ["summary"]);
+            window.PomDebug?.logLocalWarn("证明席摘要失败", e.message, ["summary"]);
           }
         }
       }
@@ -1160,8 +1160,8 @@
       const stall = window.GameOnion?.updateStallCounters?.(session, session.plotSummary);
       if (stall && stall.stallTurns >= 2) {
         window.PomDebug?.logLocalWarn(
-          "剧情·僵局",
-          `连续 ${stall.stallTurns} 轮 [已确认] 无增加 · 下轮 reply/选项已加强让步与破局提示`,
+          "论证·僵局",
+          `连续 ${stall.stallTurns} 轮 [已证] 无增加 · 下轮 reply/选项已加强让步与破局提示`,
           ["summary"]
         );
       }
@@ -1174,15 +1174,15 @@
       );
       if (neglect?.shouldWarn) {
         window.PomDebug?.logLocalWarn(
-          "剧情·回避指使者",
-          `已连续 ${neglect.neglectPrimaryRounds} 轮未推进指使者 · 下轮加压`,
+          "论证·回避 Lk",
+          `已连续 ${neglect.neglectPrimaryRounds} 轮未推进待证 Lk · 下轮加压`,
           ["summary"]
         );
       }
       if (redundantOffer) {
         window.PomDebug?.logLocalWarn(
           "信息价值",
-          "玩家复读【已确认】情报报价 · reply 应拒绝交易",
+          "证辩者复读【已证】前提报价 · reply 应拒绝交换",
           ["summary"]
         );
       }
@@ -1194,8 +1194,8 @@
         );
       } else if (hollowTradeOffer) {
         window.PomDebug?.logLocalWarn(
-          "交易·未亮牌",
-          "玩家空头交换 · reply 须拒先给线索",
+          "交换·未出示引理",
+          "证辩者空头交换 · reply 须拒先给推导步",
           ["summary"]
         );
       }
@@ -1429,7 +1429,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "调试说明",
-      "打印选择=过滤面板+复制。黄/绿=①②③ API。开局注入剧情种子摘要。详见 docs/DEBUG-API-SPLIT.md",
+      "打印选择=过滤面板+复制。黄/绿=①②③ API。开局注入证明席种子摘要。详见 docs/DEBUG-API-SPLIT.md",
       ["ui"]
     );
   }

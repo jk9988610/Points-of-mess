@@ -84,6 +84,9 @@
     s = s.replace(/【本局目标】/g, "【论证目标】");
     s = s.replace(/【剧情档案】/g, "【证明席】");
     s = s.replace(/\[已确认\]/g, "[已证]");
+    s = s.replace(/锋利供述/g, "证官供述");
+    s = s.replace(/玩家供述/g, "证辩者供述");
+    s = s.replace(/待剧情推进后填写/g, "待论证推进后填写");
     s = s.replace(/\[待核实#(\d+)\]/gi, "[待证#$1]");
     s = s.replace(/\[待核实\]/gi, "[待证#1]");
     s = s.replace(/【关系与态度】[\s\S]*$/g, "").trim();
@@ -408,7 +411,7 @@
     session.inquireLineIndex = (session.inquireLineIndex || 0) + 1;
   }
 
-  /** ① reply system：按玩家 intent + 僵局动态约束 */
+  /** ① reply system：按证辩者 intent + 僵局动态约束 */
   function formatReplyHint(plotSummary, context) {
     const goal = extractGoal(plotSummary);
     const pending = extractPendingLines(plotSummary);
@@ -634,7 +637,7 @@
     return false;
   }
 
-  /** 玩家提出交易但未给出可核对的具体信息（空头支票） */
+  /** 证辩者提出交换但未给出可核对的具体信息（空头交换） */
   function detectHollowTradeOffer(playerLine, seed) {
     const line = String(playerLine || "").trim();
     if (!line || !TRADE_OFFER_RE.test(line)) {
@@ -682,7 +685,7 @@
     for (const re of patterns) {
       const m = t.match(re);
       if (m?.[1]) {
-        return `${m[1]}就是指使者，账本下落也该说了。`;
+        return `你已承认「${m[1]}」，请补全对当前待证 Lk 的推导步。`;
       }
     }
     return "";
@@ -725,7 +728,7 @@
       .filter((k) => k.id && k.offerLine);
   }
 
-  /** 可亮牌证据：动态池优先，否则回退 seed.playerKnowledge */
+  /** 可出示引理：动态池优先，否则回退 seed.playerKnowledge */
   function getPlayerKnowledgeList(session, seed) {
     if (usesDynamicPlayerEvidence(seed)) {
       return getSessionEvidenceList(session);
@@ -747,7 +750,7 @@
     const lines = avail.map(
       (k, i) => `  ${i + 1}. ${k.text} → offer:「${k.offerLine}」`
     );
-    return `${label}（advance 须用 offer 原句亮牌）\n${lines.join("\n")}`;
+    return `${label}（advance 须用 offer 原句出示引理）\n${lines.join("\n")}`;
   }
 
   function pickProgramRevealLine(session, seed) {
@@ -842,15 +845,15 @@
   function formatMastermindConfirmLabel(name) {
     const n = String(name || "").trim();
     if (!n || n === "幕后主使" || n === "主控者") {
-      return "授权者你已说定，数据集 Λ 存放处也该说了。";
+      return "该步你已承认，请补全对当前 Lk 的推导步。";
     }
     if (/主使|指使|幕后|主控|授权/.test(n)) {
-      return `${n}、数据集 Λ 在你处，你已说定。`;
+      return `${n}已写入证明席，请据此推进 Lk。`;
     }
-    return `${n}就是授权者，数据集 Λ 在你处，你已说定。`;
+    return `${n}已确立，请据此补全对当前 Lk 的推导步。`;
   }
 
-  /** 推进选项：优先未消耗亮牌；指使者已供则确认句 */
+  /** 推进选项：优先未消耗引理；主链已闭合则确认句 */
   function pickKeypointOfferLine(session, seed, plotSummary, lastSharp) {
     const avail = getAvailableKnowledge(session, seed);
     if (avail[0]?.offerLine) {
@@ -958,7 +961,7 @@
     if (!p) {
       return true;
     }
-    return /^(?:[（(]?无[）)]?|暂无|未知|待填|待剧情推进后填写)$/.test(p);
+    return /^(?:[（(]?无[）)]?|暂无|未知|待填|待论证推进后填写|待剧情推进后填写)$/.test(p);
   }
 
   function extractClaimName(line, slotId) {
@@ -1063,11 +1066,11 @@
       return result;
     }
     result = result.replace(
-      /\n- \[待证#[^\]]*\]\s*[（(]?(?:无|暂无|待填|待剧情推进后填写)[）)]?[^\n]*/gi,
+      /\n- \[待证#[^\]]*\]\s*[（(]?(?:无|暂无|待填|待论证推进后填写|待剧情推进后填写)[）)]?[^\n]*/gi,
       ""
     );
     result = result.replace(
-      /\n- \[待核实#[^\]]*\]\s*[（(]?(?:无|暂无|待填|待剧情推进后填写)[）)]?[^\n]*/gi,
+      /\n- \[待核实#[^\]]*\]\s*[（(]?(?:无|暂无|待填|待论证推进后填写|待剧情推进后填写)[）)]?[^\n]*/gi,
       ""
     );
     result = result.replace(/\n- \[待证\]\s*[（(]?(?:无|暂无)[）)]?[^\n]*/gi, "");
@@ -1186,7 +1189,7 @@
     return true;
   }
 
-  /** 压摘要后：答清指使者则删 #1；裁剪档案膨胀 */
+  /** 压摘要后：待证 Lk 闭合则删 #1；裁剪档案膨胀 */
   function reconcilePlotSummary(plotSummary, seed) {
     let text = normalizeProofArchive(String(plotSummary || "").trim());
     if (!text) {
@@ -1336,8 +1339,8 @@
       "经手",
       "β",
       "保管",
-      "账本",
-      "刘老三",
+      "前提",
+      "符号",
     ];
     return kws.some((k) => line.includes(String(k).trim()));
   }
@@ -1363,7 +1366,7 @@
     return true;
   }
 
-  /** 回合初：根据玩家本轮台词更新回避 #1 计数（与摘要是否压缩无关） */
+  /** 回合初：根据证辩者本轮台词更新回避 #1 计数（与摘要是否压缩无关） */
   function bumpNeglectBeforeReply(session, playerLine, plotSummary, seed, pickIntent) {
     if (!session) {
       return getNeglectState(session, seed);
@@ -1544,14 +1547,14 @@
           spent.includes("blocker") ||
           /证官供述[^。\n]{0,48}α/.test(play) ||
           /证辩者[^。\n]{0,48}α/.test(play) ||
-          /锋利供述[^。\n]{0,48}陈四/.test(play) ||
-          /玩家供述[^。\n]{0,48}陈四/.test(play);
+          /(?:锋利|证官)供述[^。\n]{0,48}陈四/.test(play) ||
+          /(?:玩家|证辩者)供述[^。\n]{0,48}陈四/.test(play);
         const ledgerOk =
           spent.includes("ledger") ||
           /证官供述[^。\n]{0,48}(?:β|Λ|数据集)/.test(play) ||
           /证辩者[^。\n]{0,48}(?:β|Λ|数据集)/.test(play) ||
-          /锋利供述[^。\n]{0,48}(?:刘老三|账本)/.test(play) ||
-          /玩家供述[^。\n]{0,48}(?:刘老三|账本)/.test(play);
+          /(?:锋利|证官)供述[^。\n]{0,48}(?:刘老三|账本)/.test(play) ||
+          /(?:玩家|证辩者)供述[^。\n]{0,48}(?:刘老三|账本)/.test(play);
         if (!blockerOk || !ledgerOk) {
           return false;
         }

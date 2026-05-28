@@ -251,7 +251,7 @@
       for (let i = entries.length - 1; i >= 0; i--) {
         if (
           entries[i].tags?.includes("user") &&
-          String(entries[i].title).includes("玩家选择")
+          String(entries[i].title).includes("证辩者选择")
         ) {
           start = i;
           break;

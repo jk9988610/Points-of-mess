@@ -1,5 +1,5 @@
 (function () {
-  /** 每轮选项后赋予玩家一条可亮牌证据（AI 生成，比 seed 硬编码更灵活） */
+  /** 每轮选项后赋予证辩者一条可出示引理（AI 生成，比 seed 硬编码更灵活） */
 
   function countOptionTurns(messages) {
     return (messages || []).filter(
@@ -20,18 +20,18 @@
       .filter(Boolean)
       .slice(0, 4);
     const hintBlock = hints.length
-      ? `\n【背景线索（可改写为玩家视角，勿照抄）】\n${hints.map((h) => `- ${h}`).join("\n")}`
+      ? `\n【背景线索（可改写为证辩者视角，勿照抄）】\n${hints.map((h) => `- ${h}`).join("\n")}`
       : "";
-    return `你是证明席外的「引理授予官」。根据本局对话与证明席，赋予证辩者**恰好一条**新获得的、可核对观测引理（亲眼所见 / 亲耳所闻 / 调查所得）。
+    return `你是证明席外的「引理授予官」。根据本局对话与证明席，赋予证辩者**恰好一条**新获得的、可核对观测引理（来自对白、证明席或题设前提）。
 
 【论证目标】${goal || "闭合论题 G"}${hintBlock}
 
 【输出】只输出 JSON：
-{"text":"观测引理：…（≤40字）","offerLine":"…，换你说…（keypoint 出示原句，≤35字；格式：先亮引理，再换推导步）","match":"专名片段（2～6字）"}
+{"text":"观测引理：…（≤40字）","offerLine":"…，换你说…（advance 出示原句，≤35字；格式：先亮引理，再换推导步）","match":"专名片段（2～6字）"}
 
 【规则】
 1. 每轮仅一条；须含专名；offerLine 须指向当前待证引理 Lk。
-2. 勿重复【已有证据】（同 match 视为重复）；勿与【证明席】[已证] 矛盾。
+2. 勿重复【已有引理】（同 match 视为重复）；勿与【证明席】[已证] 矛盾。
 3. 若本轮无新事实，输出 {"skip":true}。`;
   }
 
@@ -109,7 +109,7 @@
     }
     const existing = existingEvidenceTexts(session);
     if (existing) {
-      parts.push(`【已有证据】\n${existing}`);
+      parts.push(`【已有引理】\n${existing}`);
     }
     const pending = window.GameOnion?.extractPendingLines?.(plot)?.[0];
     if (pending) {
@@ -190,8 +190,8 @@
     }
 
     window.PomDebug?.logLocal(
-      bootstrap ? "④证据 · 开局赋予" : "④证据 · 即将请求",
-      bootstrap ? "首条证据" : `第 ${turn} 轮 · 见黄条 →拆分·④证据`,
+      bootstrap ? "④引理 · 开局赋予" : "④引理 · 即将请求",
+      bootstrap ? "首条引理" : `第 ${turn} 轮 · 见黄条 →拆分·④引理`,
       ["evidence"]
     );
 
@@ -208,20 +208,20 @@
       temperature: window.PomTokens?.TEMP_EVIDENCE ?? 0.35,
       max_tokens: window.PomTokens?.EVIDENCE ?? 512,
       signal,
-      debugLabel: bootstrap ? "拆分·④证据·开局" : "拆分·④证据",
+      debugLabel: bootstrap ? "拆分·④引理·开局" : "拆分·④引理",
     });
 
     const item = parseEvidenceGrant(raw);
     if (!item || isDuplicateEvidence(session, item)) {
       session.lastEvidenceGrantKey = grantKey;
-      window.PomDebug?.logLocal("④证据 · 跳过", "无新证据或重复", ["evidence-skip"]);
+      window.PomDebug?.logLocal("④引理 · 跳过", "无新引理或重复", ["evidence-skip"]);
       return false;
     }
 
     if (pushEvidence(session, item, turn)) {
       session.lastEvidenceGrantKey = grantKey;
       window.PomDebug?.logLocal(
-        "④证据 · 已赋予",
+        "④引理 · 已赋予",
         `${item.text} → 「${item.offerLine}」`,
         ["evidence-out"]
       );
@@ -230,7 +230,7 @@
     return false;
   }
 
-  /** 新局开局：异步赋予首条证据（不阻塞 UI） */
+  /** 新局开局：异步赋予首条引理（不阻塞 UI） */
   function bootstrapPlayerEvidence(session, seed) {
     if (!window.GameOnion?.usesDynamicPlayerEvidence?.(seed)) {
       return Promise.resolve(false);
@@ -244,7 +244,7 @@
     const ac = new AbortController();
     return grantPlayerEvidence(session, seed, ac.signal, { bootstrap: true }).catch(
       (e) => {
-        window.PomDebug?.logLocalWarn("④证据 · 开局失败", e.message, ["evidence"]);
+        window.PomDebug?.logLocalWarn("④引理 · 开局失败", e.message, ["evidence"]);
         return false;
       }
     );
