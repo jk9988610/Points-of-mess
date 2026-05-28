@@ -10,6 +10,10 @@
     keypoint: "advance",
   };
 
+  /** decoy 禁止「跳过/提前证毕」类，须为与正确步同粒度的似真误推 */
+  const DECOY_JUMP_AHEAD_RE =
+    /跳步|提前|跳过|直证|不必证|无需证|先证\s*G|径直|可省略|一步到位|跨步|直接推出|直接得|先得\s*G|省略\s*L/i;
+
   const ENGINE_MAP = {
     advance: "keypoint",
     keypoint: "keypoint",
@@ -46,6 +50,10 @@
     return normalizeUiIntent(intent) === "decoy";
   }
 
+  function isJumpAheadDecoyLine(line) {
+    return DECOY_JUMP_AHEAD_RE.test(String(line || "").trim());
+  }
+
   function isProofStepIntent(intent) {
     const ui = normalizeUiIntent(intent);
     return ui === "advance" || ui === "decoy";
@@ -78,6 +86,14 @@
     const lines = list.map((o) => String(o?.line || "").trim()).filter(Boolean);
     if (new Set(lines).size < lines.length) {
       return { ok: false, reason: "选项句子重复" };
+    }
+    for (const o of list) {
+      if (normalizeUiIntent(o?.intent) === "decoy" && isJumpAheadDecoyLine(o?.line)) {
+        return {
+          ok: false,
+          reason: "decoy 不得使用跳跃/提前/跳过 Lk 直证 G 类表述",
+        };
+      }
     }
     return { ok: true };
   }
@@ -123,6 +139,7 @@
     ariaLabel,
     isAdvanceIntent,
     isDecoyIntent,
+    isJumpAheadDecoyLine,
     isProofStepIntent,
     isInquireIntent,
     validateProofOptions,

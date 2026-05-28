@@ -70,7 +70,8 @@
 
 【选项类型】共 3 条：
 - advance ×1：唯一正确逻辑推断，实质推进当前 Lk（不可跳步直证 G）
-- decoy ×2：似真误推（肯定后件、否定前件、逆命题、跳步、循环论证等），不可推进 Lk
+- decoy ×2：与 advance **同一步骤粒度**的似真误推（语气/结构相近），如肯定后件、否定前件、逆命题、误用前提、混淆充分必要、选言误用、循环论证等；不可推进 Lk
+- **禁止** decoy 写「跳过 Lk」「提前证 G」「这步可省略」「直接得 G」等不参与当前 Lk 的跳跃/提前类句子
 
 【写法】用「若…则…」「故」「否则」「矛盾」；禁止算式、符号链、心算。禁止问句。
 ${pendingNote}
@@ -386,7 +387,7 @@ ${pendingNote}
     return buildProofOptionsList(
       window.GameProofIntents?.attachOptionIds?.([
         { intent: "advance", line: duo.keypoint },
-        { intent: "decoy", line: "这步似可跳过 L1，直接证 G？" },
+        { intent: "decoy", line: "后件成立，故前件必真，L1 成立。" },
         { intent: "decoy", line: "由结论反推前提，故 L1 成立。" },
       ]) || []
     );
@@ -488,7 +489,7 @@ ${buildIntentHintsForApi()}
 
 【输出】
 ${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"decoy","line":"..."}]}。'}
-reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 advance + 2 decoy）；advance 只推进当前 Lk。${closeBlock}`;
+reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 advance + 2 decoy）；advance 只推进当前 Lk；decoy 须似真误推、与 advance 同步骤，禁止跳跃/提前证 G。${closeBlock}`;
   }
 
   function presetOptions(archetype) {
@@ -843,6 +844,19 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 ad
         temperature,
         signal,
         logTag: `${logTag}（去重）`,
+      });
+      options = parseMultiOptionsFromRaw(raw);
+    }
+
+    let decoyCheck = window.GameProofIntents?.validateProofOptions?.(options);
+    if (!decoyCheck?.ok && /decoy|跳跃|提前/.test(decoyCheck?.reason || "")) {
+      window.PomDebug?.logLocalWarn("选项 decoy 不合规", decoyCheck.reason, ["options-skip"]);
+      raw = await requestOptionsJson({
+        systemPrompt,
+        userContent: `${userContent}\n\n【纠错】上轮 decoy 含跳跃/提前证毕类表述。两条 decoy 须为与 advance 同步骤的似真误推（如肯定后件、逆命题、误用前提），禁止「跳过 Lk」「提前证 G」。`,
+        temperature,
+        signal,
+        logTag: `${logTag}（decoy纠错）`,
       });
       options = parseMultiOptionsFromRaw(raw);
     }

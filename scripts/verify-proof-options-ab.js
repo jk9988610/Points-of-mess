@@ -16,8 +16,18 @@ const I = ctx.window.GameProofIntents;
 const raw = [
   { intent: "advance", line: "设 n=2k+1，展开 n² 得 2m+1 形。" },
   { intent: "decoy", line: "奇数乘奇数得奇数，故 n² 奇。" },
-  { intent: "decoy", line: "直接断言 G 成立，跳过 L1。" },
+  { intent: "decoy", line: "后件成立，故前件必真，L1 成立。" },
 ];
+
+const jumpDecoy = I.validateProofOptions([
+  { intent: "advance", line: "P 假，故 Q 真。" },
+  { intent: "decoy", line: "跳过 L1，直接证 G。" },
+  { intent: "decoy", line: "逆命题成立，故 L1 真。" },
+]);
+if (jumpDecoy.ok) {
+  console.error("jump-ahead decoy should be rejected");
+  process.exit(1);
+}
 
 const check = I.validateProofOptions(raw);
 if (!check.ok) {
