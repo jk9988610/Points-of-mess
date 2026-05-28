@@ -43,7 +43,9 @@ ${lemmaBlock}
 8. 改口 → 旧 [已证] 标 [已推翻]；以最新供述为准（槽位单真值）。
 9. [已证] 须可核对专名；禁止「可能/存疑/空换」入 [已证]。
 10. 禁止用「无/待填」占 [待证]；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown；**禁止**【关系与态度】段。
-11. 证官明确指出跳步/错误的证辩者句**不得**入 [已证]；仅写入证官认可后的推导步。`;
+11. 证官明确指出跳步/错误的证辩者句**不得**入 [已证]；仅写入证官认可后的推导步。
+12. 【去重】新增 [已证]/[证毕#k] 前检查是否已有逻辑等价条目（同前提、同结论、同推理规则）；若有则**不新增**，仅在原条目的【依据】后追加轮次编号。
+13. 开局首轮（仅有前提与 [待证#k]、尚无证官认可推导）时**禁止**预写 [已证] 或 [证毕]。`;
   }
 
   function buildSummaryUserPrefix(seed) {
@@ -179,6 +181,19 @@ ${lemmaBlock}
     return { optionTurns, toSummarize, mergedProtected, keepRecent };
   }
 
+  /** 开局③摘要：不预写已证/证毕（仅保留前提与待证） */
+  function stripBootstrapPrematureProven(text) {
+    const lines = [];
+    for (const line of String(text || "").split("\n")) {
+      const t = line.trim();
+      if (/\[已证\]|\[证毕#?/i.test(t) || /\[已推翻\]/i.test(t)) {
+        continue;
+      }
+      lines.push(line);
+    }
+    return lines.join("\n").trim();
+  }
+
   function enforceOneLemmaProgressPerSummary(prev, next) {
     const prevText = String(prev || "").trim();
     let text = String(next || "").trim();
@@ -292,6 +307,18 @@ ${lemmaBlock}
           "③摘要 · 引理链",
           "已自动挂下一待证，论题 G 未闭合",
           ["lemma-chain"]
+        );
+      }
+    }
+
+    if (opts?.optionTurns === 0) {
+      const stripped = stripBootstrapPrematureProven(text);
+      if (stripped !== text) {
+        text = stripped;
+        window.PomDebug?.logLocal(
+          "开局·③摘要",
+          "已剥离预写的 [已证]/[证毕]",
+          ["bootstrap", "summary"]
         );
       }
     }

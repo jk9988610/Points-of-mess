@@ -179,7 +179,6 @@
         continue;
       }
       if (/\[已证\]|\[证毕/.test(t)) {
-        other.push(line);
         continue;
       }
       if (/^假设|^同理|^因此|^故至多/.test(t) && !/\[/.test(t)) {
@@ -478,14 +477,16 @@
       "",
       "【选项写法】",
       "共 3 条推证句：1 条 advance（正确，须实质推进当前 Lk）+ 2 条 decoy（似真误推，不可推进 Lk）。",
-      "decoy：与 advance 同步骤的似真误推（肯定后件、逆命题、误用前提、混淆充分必要等）；禁止跳跃/提前/跳过 Lk 直证 G。",
+      "decoy：与 advance 同步骤的似真误推；**建议**以谬误名称起首（如「肯定后件：…」「循环论证：…」）；禁止跳跃/提前/跳过 Lk 直证 G。",
       "三句难度相近；程序随机排列按钮位置。"
     );
     if (inquireStreak >= 2) {
       parts.push("连续多轮未选 advance：本轮 advance 须直指待证 Lk。");
     }
     if (stallTurns >= 2) {
-      parts.push("连续无进展：advance 须给出可核对推导步或引理交换。");
+      parts.push(
+        "僵局破局：共 3 条，**全部为 advance**（措辞可不同，逻辑须正确推进当前 Lk）；**禁止 decoy**。"
+      );
     }
     if (context?.emptyPromiseCount >= 2) {
       parts.push("空头交换过多：advance 仅确认已写入证明席的事实。");
@@ -554,8 +555,9 @@
 
     if (context?.wrongProofPick) {
       lines.push(
-        "证辩者选了**错误推证**（decoy）；指出跳步/误用前提/方向错误，不给新进展",
-        "用陈述句，禁止问句"
+        "证辩者选了**错误推证**（decoy）；回复**必须以**「错误：<谬误名称>。正确应使用<正确规则>。」起首",
+        "示例：错误：肯定后件。正确应使用否后律。",
+        "指出谬误后不给新 [已证] 进展；用陈述句，禁止问句"
       );
     } else if (context?.playerConcreteReveal && pickIntent === "keypoint") {
       lines.push(
@@ -586,9 +588,14 @@
       lines.push("终局：证辩者不肯出示引理，论证时限到，休庭");
     }
 
-    if (stallTurns >= 2) {
+    if (stallTurns >= 3) {
       lines.push(
-        "连续无进展：须给出一条可核对推导步，用陈述句",
+        "僵局终局：用陈述句给出**完整**正确推理并宣告 Lk/G 证毕（如「最终推理：由 P1、P2 依否后律得未下雨，L1 成立。论证结束。」）",
+        "禁止问句"
+      );
+    } else if (stallTurns >= 2) {
+      lines.push(
+        "连续无进展：须给出正确推理的**一半**（如「否后律：若 P1 则地湿，现地不湿，则未下雨。」），要求证辩者确认下一步",
         "禁止向证辩者发问；禁止空耗"
       );
     } else if (pickIntent === "keypoint" && !context?.playerConcreteReveal) {
@@ -1319,6 +1326,86 @@
   }
 
 
+  function normalizeDedupeConclusion(text) {
+    return String(text || "")
+      .replace(/\s+/g, "")
+      .replace(/[，,。；;：:]/g, "")
+      .toLowerCase();
+  }
+
+  /** 逻辑等价 [证毕#k] / [已证] 去重（保留首条，后续同结论跳过） */
+  function dedupeLogicalProofEntries(text) {
+    const seenQed = new Set();
+    const seenProven = new Set();
+    const out = [];
+    for (const line of String(text || "").split("\n")) {
+      const t = line.trim();
+      const qedM = t.match(/\[证毕#?(\d+)\]\s*(?:L\1\s*)?[：:]\s*(.+)$/i);
+      if (qedM) {
+        const key = `${qedM[1]}:${normalizeDedupeConclusion(qedM[2])}`;
+        if (seenQed.has(key)) {
+          continue;
+        }
+        seenQed.add(key);
+      }
+      const provM = t.match(/\[已证\]\s*S\d+[：:]\s*(.+)$/i);
+      if (provM) {
+        const key = normalizeDedupeConclusion(provM[1]);
+        if (seenProven.has(key)) {
+          continue;
+        }
+        seenProven.add(key);
+      }
+      out.push(line);
+    }
+    return out.join("\n").trim();
+  }
+
+  function applyStallForceQedToArchive(plotSummary, seed) {
+    let text = normalizeProofArchive(String(plotSummary || "").trim());
+    const qedSet = extractQedOrders(text);
+    let orderKey = "1";
+    let lemmaBody = "";
+    for (const line of text.split("\n")) {
+      const parsed = parsePendingFromLine(line.trim());
+      if (parsed && !qedSet.has(parsed.orderKey)) {
+        orderKey = parsed.orderKey || "1";
+        lemmaBody = String(parsed.text || "")
+          .replace(/^L\d+[：:]\s*/i, "")
+          .trim();
+        break;
+      }
+    }
+    if (!lemmaBody) {
+      const pending = extractPendingLines(text);
+      if (!pending.length) {
+        return text;
+      }
+      lemmaBody = pending[0].replace(/^L\d+[：:]\s*/i, "").trim();
+    }
+    const ruleHint =
+      /否后|逆否|modus/i.test(lemmaBody + text) ? "否后律" : "有效推理规则";
+    const provenLine = `- [已证] S${orderKey}：依${ruleHint}由前提推出（僵局破局·强制）`;
+    const qedLine = `- [证毕#${orderKey}] L${orderKey}：${lemmaBody || pending[0]}`;
+    const marker = "【证明进程】";
+    const idx = text.indexOf(marker);
+    const insert = `\n${provenLine}\n${qedLine}`;
+    if (idx >= 0) {
+      const insertAt = idx + marker.length;
+      text = `${text.slice(0, insertAt)}${insert}${text.slice(insertAt)}`;
+    } else {
+      text = `${text}\n\n${marker}${insert}`;
+    }
+    text = removePendingSupersededByQed(text);
+    return dedupeLogicalProofEntries(reconcilePlotSummary(text, seed));
+  }
+
+  function buildStallForceReply(plotSummary) {
+    const pending = extractPendingLines(plotSummary)[0] || "当前引理";
+    const label = pending.replace(/^L\d+[：:]\s*/i, "").trim() || pending;
+    return `最终推理：前提已足，依否后律得「${label.slice(0, 12)}」，L1 成立。论证结束。`;
+  }
+
   /** 已有 [证毕#k] 时删同号 [待证#k] 与紧随的 [依赖] */
   function removePendingSupersededByQed(text) {
     let result = String(text || "");
@@ -1353,6 +1440,7 @@
     }
     text = reconcileEvidenceSlots(text, seed);
     text = removePendingSupersededByQed(text);
+    text = dedupeLogicalProofEntries(text);
     text = stripClearablePendingLines(text);
     text = text.replace(/\n- \[已证\][^\n]*可能意在[^\n]*/gi, "");
     text = text.replace(/\n- \[已证\][^\n]*存疑[^\n]*/gi, "");
@@ -1878,6 +1966,9 @@
     pickProgramSharpReply,
     pickProgramStatementFallback,
     reconcilePlotSummary,
+    dedupeLogicalProofEntries,
+    applyStallForceQedToArchive,
+    buildStallForceReply,
     mastermindNamedInArchive,
     mastermindNamedInLine,
     mastermindTrackSatisfied,

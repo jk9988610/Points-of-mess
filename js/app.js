@@ -1277,6 +1277,75 @@
           ["summary"]
         );
       }
+      if (
+        stall &&
+        stall.stallTurns >= 3 &&
+        !session.endingOffered &&
+        !session.inEndingCloseChoices
+      ) {
+        const forcedReply =
+          window.GameOnion?.buildStallForceReply?.(session.plotSummary) ||
+          "最终推理：前提已足，依否后律得证。论证结束。";
+        session.plotSummary =
+          window.GameOnion?.applyStallForceQedToArchive?.(
+            session.plotSummary,
+            seedForTurn
+          ) || session.plotSummary;
+        const minKp =
+          Number(seedForTurn?.endingMinKeypointTurns) > 0
+            ? seedForTurn.endingMinKeypointTurns
+            : 2;
+        session.keypointTurnCount = Math.max(
+          session.keypointTurnCount || 0,
+          minKp
+        );
+        session.stallTurns = 0;
+        session.messages.push({
+          id: createId(),
+          role: "assistant",
+          content: forcedReply,
+          createdAt: Date.now(),
+          status: "done",
+        });
+        persist(state);
+        setBubble(`${reply}\n\n${forcedReply}`, false, { thinking: false });
+        state.currentOptions = null;
+        window.PomDebug?.logLocal(
+          "论证·僵局终局",
+          "连续无进展达阈值，已强制证毕并收束选项",
+          ["summary", "stall-force"]
+        );
+        if (
+          window.GameOnion?.isReadyForEnding?.(
+            session.plotSummary,
+            seedForTurn,
+            session
+          )
+        ) {
+          session.endingOffered = true;
+          const ending = await requestEndingSequence({
+            character,
+            archetype,
+            session,
+            apiMessages: getHistoryForApi(session.messages),
+            signal,
+          });
+          session.messages.push({
+            id: createId(),
+            role: "assistant",
+            content: ending.reply,
+            createdAt: Date.now(),
+            status: "done",
+          });
+          persist(state);
+          setBubble(`${reply}\n\n${forcedReply}\n\n${ending.reply}`, false, {
+            thinking: false,
+          });
+          state.currentOptions = ending.options;
+          session.inEndingCloseChoices = true;
+          setStatus("僵局破局后论证闭合，选一句离场。", false);
+        }
+      }
       const neglect = window.GameOnion?.resetNeglectAfterPlotProgress?.(
         session,
         plotBefore,

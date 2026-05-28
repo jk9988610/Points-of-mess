@@ -47,9 +47,10 @@ ${hint}
 场景：证辩者用命题结构（若…则…、故、否则、矛盾）逐步证毕论题 G。
 回复：仅 1～2 句，≤40 字。禁止列表、markdown、算式与符号堆砌。
 ${window.GameOnion?.compactPlotSummaryForApi?.(plotSummary) ? `\n【证明席·摘录】\n${window.GameOnion.compactPlotSummaryForApi(plotSummary)}\n` : ""}
-【本步】开局开场白：点出本案论证类型（如选言、否后、反证），**不要**复述整份档案。
-${goal ? `论题 G：${goal}` : ""}
-只输出 1～2 句中文开场白，陈述式，禁止问句。不要 JSON。`;
+【本步】开局引导：中性开场，**禁止**给出任何推理步、引理结论或「已证/证毕」表述。
+${goal ? `论题 G：${goal}（可一句点出，勿展开证明）` : ""}
+推荐句式：「本案前提已列明。请选择正确的推证方向。」
+只输出 1～2 句中文，陈述式，禁止问句。不要 JSON。`;
   }
 
   async function requestBootstrapArchive(blueprint, signal) {
@@ -122,8 +123,15 @@ ${goal ? `论题 G：${goal}` : ""}
     let opening = String(raw || "").trim();
     opening = opening.replace(/^([\u4e00-\u9fa5]{2,8})[：:]\s*/, "");
     opening = opening.replace(/[？?]/g, "。");
+    if (
+      /\[已证\]|\[证毕|否后|故.*未下|推出|得证|L1\s*成立|证明过程/i.test(
+        opening
+      )
+    ) {
+      opening = "本案前提已列明。请选择正确的推证方向。";
+    }
     if (!opening || opening.length < 4) {
-      throw new Error("无法解析开局开场白");
+      opening = "本案前提已列明。请选择正确的推证方向。";
     }
     return opening;
   }

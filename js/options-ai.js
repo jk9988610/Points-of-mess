@@ -79,6 +79,15 @@ ${pendingNote}
 {"options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"decoy","line":"..."}]}`;
   }
 
+  function buildOptionsSystemStall(characterName) {
+    const name = String(characterName || "证官").trim() || "证官";
+    return `你是**逻辑推理论证题**选项撰稿人。证辩者与「${name}」对论。本局处于**僵局破局**。
+输出 3 条 **advance**（均须为正确、可推进当前 Lk 的推断；措辞可不同，逻辑等价）。
+禁止 decoy。禁止问句。禁止算式链。
+只输出 JSON：
+{"options":[{"intent":"advance","line":"..."},{"intent":"advance","line":"..."},{"intent":"advance","line":"..."}]}`;
+  }
+
   const buildOptionsSystemDuo = buildOptionsSystemProof;
 
   function buildIntentHintsForApi() {
@@ -350,7 +359,7 @@ ${pendingNote}
     return { reply, options: buildEndingFinalOptions(trio) };
   }
 
-  function parseMultiOptionsFromRaw(raw) {
+  function parseMultiOptionsFromRaw(raw, stallMode) {
     const obj = extractJsonObject(raw);
     const list = Array.isArray(obj.options) ? obj.options : [];
     const parsed = [];
@@ -361,11 +370,15 @@ ${pendingNote}
         parsed.push({ intent, line: line.replace(/^「+/, "").replace(/」+$/, "") });
       }
     }
-    const checkRaw = window.GameProofIntents?.validateProofOptions?.(parsed);
+    const checkRaw = stallMode
+      ? window.GameProofIntents?.validateStallAdvanceOptions?.(parsed)
+      : window.GameProofIntents?.validateProofOptions?.(parsed);
     if (!checkRaw?.ok) {
       throw new Error(checkRaw?.reason || "选项格式无效");
     }
-    const options = window.GameProofIntents?.attachOptionIds?.(parsed) || [];
+    const options = stallMode
+      ? window.GameProofIntents?.attachStallAdvanceIds?.(parsed) || []
+      : window.GameProofIntents?.attachOptionIds?.(parsed) || [];
     return options;
   }
 
@@ -803,13 +816,18 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 ad
     const last =
       assistantLineForOptions(lastLine) || lastUsableAssistantLine(session, archetype);
 
-    const systemPrompt = buildOptionsSystemProof(character.name);
+    const stallTurns =
+      onionContext?.stallTurns ?? session?.stallTurns ?? 0;
+    const stallMode = stallTurns >= 2;
+    const systemPrompt = stallMode
+      ? buildOptionsSystemStall(character.name)
+      : buildOptionsSystemProof(character.name);
     const userContent = buildOptionsUserContent({
       character,
       last,
       priorText,
       plotSummary,
-      onionContext,
+      onionContext: { ...(onionContext || {}), stallTurns },
     });
 
     let raw = await requestOptionsJson({
@@ -822,7 +840,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 ad
 
     let options;
     try {
-      options = parseMultiOptionsFromRaw(raw);
+      options = parseMultiOptionsFromRaw(raw, stallMode);
     } catch (e) {
       window.PomDebug?.logLocalWarn("选项 JSON 解析失败，重试一次", e.message);
       raw = await requestOptionsJson({
@@ -832,7 +850,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 ad
         signal,
         logTag: `${logTag}（重试）`,
       });
-      options = parseMultiOptionsFromRaw(raw);
+      options = parseMultiOptionsFromRaw(raw, stallMode);
     }
 
     const lines = options.map((o) => o.line).filter(Boolean);
@@ -845,10 +863,12 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 ad
         signal,
         logTag: `${logTag}（去重）`,
       });
-      options = parseMultiOptionsFromRaw(raw);
+      options = parseMultiOptionsFromRaw(raw, stallMode);
     }
 
-    let decoyCheck = window.GameProofIntents?.validateProofOptions?.(options);
+    let decoyCheck = stallMode
+      ? { ok: true }
+      : window.GameProofIntents?.validateProofOptions?.(options);
     if (!decoyCheck?.ok && /decoy|跳跃|提前/.test(decoyCheck?.reason || "")) {
       window.PomDebug?.logLocalWarn("选项 decoy 不合规", decoyCheck.reason, ["options-skip"]);
       raw = await requestOptionsJson({
@@ -858,7 +878,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 ad
         signal,
         logTag: `${logTag}（decoy纠错）`,
       });
-      options = parseMultiOptionsFromRaw(raw);
+      options = parseMultiOptionsFromRaw(raw, stallMode);
     }
 
     const merged = applyGoalDrivenOptions(archetype, session, options, onionContext);
@@ -910,6 +930,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 ad
       seed: archetype?.onionSeed,
       plotSummary: session.plotSummary,
       lastAssistantLine: lastSharp,
+      stallMode: (session?.stallTurns ?? 0) >= 2,
     };
     const retry = window.PomApiRetry?.withApiRetries;
 

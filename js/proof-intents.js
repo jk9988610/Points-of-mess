@@ -98,6 +98,57 @@
     return { ok: true };
   }
 
+  /** 僵局：仅 3 条 advance（措辞可不同，逻辑均正确） */
+  function validateStallAdvanceOptions(options) {
+    const list = Array.isArray(options) ? options : [];
+    const advances = list
+      .map((o) => ({ ui: normalizeUiIntent(o?.intent), line: String(o?.line || "").trim() }))
+      .filter((o) => o.ui === "advance" && o.line);
+    if (advances.length !== 3) {
+      return {
+        ok: false,
+        reason: `僵局破局应为 3 条 advance，实际 ${advances.length}`,
+      };
+    }
+    const lines = advances.map((o) => o.line);
+    if (new Set(lines).size < lines.length) {
+      return { ok: false, reason: "僵局选项句子重复" };
+    }
+    return { ok: true };
+  }
+
+  function attachStallAdvanceIds(parsedList) {
+    const advanceLines = [];
+    for (const item of parsedList) {
+      const ui = normalizeUiIntent(item?.intent);
+      const line = String(item?.line || "").trim();
+      if (ui === "advance" && line) {
+        advanceLines.push(line);
+      }
+    }
+    while (advanceLines.length < 3) {
+      advanceLines.push(advanceLines[0] || "依前提推出当前引理。");
+    }
+    const triple = shuffleInPlace(
+      advanceLines.slice(0, 3).map((line) => ({
+        intent: "advance",
+        line,
+        isCorrect: true,
+      }))
+    );
+    return PROOF_OPTION_SPECS.map((spec, i) => {
+      const item = triple[i];
+      return {
+        id: spec.id,
+        intent: "advance",
+        label: "推证",
+        isCorrect: true,
+        line: item.line,
+        send: `[intent:advance] ${item.line}`,
+      };
+    });
+  }
+
   /** 绑定 id，并随机排列三枚推证钮（intent 随句迁移） */
   function attachOptionIds(parsedList) {
     let advanceLine = "";
@@ -143,6 +194,8 @@
     isProofStepIntent,
     isInquireIntent,
     validateProofOptions,
+    validateStallAdvanceOptions,
     attachOptionIds,
+    attachStallAdvanceIds,
   };
 })();
