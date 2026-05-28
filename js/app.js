@@ -389,18 +389,45 @@
 
   function refreshOptionsBar() {
     optionsBar.classList.remove("hidden");
+    const session = state.talkingId ? getSession(state, state.talkingId) : null;
+    const character = state.talkingId ? getCharacter(state.talkingId) : null;
+    const archetype =
+      character && session
+        ? resolveArchetype(getArchetype(character.archetypeId), session)
+        : null;
+    const seed =
+      session && archetype ? getSessionSeed(session, archetype) : null;
+    const lemmaDone =
+      session &&
+      window.GameOnion?.isLemmaStackComplete?.(session.plotSummary, seed);
+    const inEnding =
+      Boolean(session?.inEndingCloseChoices) ||
+      state.currentOptions?.some((o) =>
+        ["continue", "reargue"].includes(o.intent)
+      );
+    const awaitingEnding =
+      session &&
+      archetype &&
+      lemmaDone &&
+      !inEnding &&
+      shouldOfferEndingSequence(session, archetype);
+
     const canPick =
       state.talkingId &&
       isDialogueUiActive() &&
       !state.isStreaming &&
-      !state.optionsLoading;
-    const opts =
-      state.currentOptions?.length > 0
-        ? state.currentOptions
-        : state.talkingId
-          ? placeholderProofOptions()
-          : placeholderProofOptions();
-    renderOptionButtons(opts, state.optionsLoading);
+      !state.optionsLoading &&
+      !awaitingEnding;
+
+    let opts;
+    if (state.currentOptions?.length) {
+      opts = state.currentOptions;
+    } else if (inEnding || awaitingEnding) {
+      opts = placeholderEndingOptions();
+    } else {
+      opts = placeholderProofOptions();
+    }
+    renderOptionButtons(opts, state.optionsLoading || awaitingEnding);
     if (!canPick || !state.currentOptions?.length) {
       for (const btn of optionsBar.querySelectorAll(".option-btn")) {
         btn.disabled = true;
@@ -447,6 +474,86 @@
       line: "",
       send: "",
     }));
+  }
+
+  function placeholderEndingOptions() {
+    return [
+      { id: 1, intent: "continue", line: "", send: "" },
+      { id: 2, intent: "reargue", line: "", send: "" },
+    ];
+  }
+
+  function shouldOfferEndingSequence(session, archetype) {
+    if (!session || session.endingOffered || session.inEndingCloseChoices) {
+      return false;
+    }
+    const seed = getSessionSeed(session, archetype);
+    const plot = String(session.plotSummary || "").trim();
+    if (!plot) {
+      return false;
+    }
+    if (window.GameOnion?.isReadyForEnding?.(plot, seed, session)) {
+      return true;
+    }
+    if (
+      seed?.aiDriven &&
+      window.GameOnion?.isLemmaStackComplete?.(plot, seed) &&
+      (session.keypointTurnCount || 0) >= 1
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  async function tryOfferEndingSequence({
+    character,
+    archetype,
+    session,
+    signal,
+    baseReply = "",
+  }) {
+    if (!shouldOfferEndingSequence(session, archetype)) {
+      return false;
+    }
+    session.endingOffered = true;
+    try {
+      const ending = await requestEndingSequence({
+        character,
+        archetype,
+        session,
+        apiMessages: getHistoryForApi(session.messages),
+        signal,
+      });
+      session.messages.push({
+        id: createId(),
+        role: "assistant",
+        content: ending.reply,
+        createdAt: Date.now(),
+        status: "done",
+      });
+      persist(state);
+      const tail = String(baseReply || "").trim();
+      const epilogue = String(ending.reply || "").trim();
+      setBubble(
+        tail && epilogue ? `${tail}\n\n${epilogue}` : epilogue || tail,
+        false,
+        { thinking: false }
+      );
+      state.currentOptions = ending.options;
+      session.inEndingCloseChoices = true;
+      window.PomDebug?.logLocal(
+        "结局收束",
+        "证毕 · 已生成 continue / reargue 选项",
+        ["ending"]
+      );
+      return true;
+    } catch (e) {
+      session.endingOffered = false;
+      if (e.name !== "AbortError") {
+        window.PomDebug?.logLocalWarn("结局选项生成失败", e.message, ["ending"]);
+      }
+      throw e;
+    }
   }
 
   function renderOptionButtons(options, loading) {
@@ -994,6 +1101,40 @@
     const archetype = resolveArchetype(getArchetype(character.archetypeId), session);
     const seed = getSessionSeed(session, archetype);
 
+    if (
+      !session.inEndingCloseChoices &&
+      shouldOfferEndingSequence(session, archetype) &&
+      window.GameProofIntents?.isProofStepIntent?.(pick.intent)
+    ) {
+      const lastNpc = [...session.messages]
+        .reverse()
+        .find((m) => m.role === "assistant" && m.status === "done");
+      state.isStreaming = true;
+      state.optionsLoading = true;
+      refreshOptionsBar();
+      setBubble(lastNpc?.content || "", true, {
+        thinking: true,
+        thinkingHint: "证毕 · 生成结局选项…",
+      });
+      try {
+        const offered = await tryOfferEndingSequence({
+          character,
+          archetype,
+          session,
+          signal: undefined,
+          baseReply: lastNpc?.content || "",
+        });
+        if (offered) {
+          return;
+        }
+      } finally {
+        state.isStreaming = false;
+        state.optionsLoading = false;
+        refreshOptionsBar();
+        syncSpeechBubbles(false);
+      }
+    }
+
     if (session.inEndingCloseChoices && pick.intent === "continue") {
       window.PomDebug?.logUser("证辩者选择", {
         intent: "continue",
@@ -1267,10 +1408,23 @@
               state.currentOptions = null;
               window.PomDebug?.logLocal(
                 "选项清空",
-                lemmaDone ? "引理栈已证毕，等待结局判定" : "摘要后无开放引理",
+                lemmaDone ? "引理栈已证毕，进入结局收束" : "摘要后无开放引理",
                 ["options-skip"]
               );
+              if (lemmaDone && shouldOfferEndingSequence(session, archetype)) {
+                const lastNpc = [...session.messages]
+                  .reverse()
+                  .find((m) => m.role === "assistant" && m.status === "done");
+                await tryOfferEndingSequence({
+                  character,
+                  archetype,
+                  session,
+                  signal,
+                  baseReply: lastNpc?.content || reply || "",
+                });
+              }
             } else if (
+              !lemmaDone &&
               pendingAfter.length &&
               (!state.currentOptions || !state.currentOptions.length)
             ) {
@@ -1318,35 +1472,14 @@
         session.keypointTurnCount = (session.keypointTurnCount || 0) + 1;
       }
 
-      if (
-        !session.endingOffered &&
-        !session.inEndingCloseChoices &&
-        window.GameOnion?.isReadyForEnding?.(
-          session.plotSummary,
-          seed,
-          session
-        )
-      ) {
-        session.endingOffered = true;
-        const ending = await requestEndingSequence({
+      if (shouldOfferEndingSequence(session, archetype)) {
+        await tryOfferEndingSequence({
           character,
           archetype,
           session,
-          apiMessages: getHistoryForApi(session.messages),
           signal,
+          baseReply: reply,
         });
-        session.messages.push({
-          id: createId(),
-          role: "assistant",
-          content: ending.reply,
-          createdAt: Date.now(),
-          status: "done",
-        });
-        persist(state);
-        setBubble(`${reply}\n\n${ending.reply}`, false, { thinking: false });
-        state.currentOptions = ending.options;
-        session.inEndingCloseChoices = true;
-        setStatus("目标已达成，选继续补论或重证论题。", false);
       }
 
       const stall = window.GameOnion?.updateStallCounters?.(session, session.plotSummary);
@@ -1395,35 +1528,14 @@
           "连续无进展达阈值，已强制证毕并收束选项",
           ["summary", "stall-force"]
         );
-        if (
-          window.GameOnion?.isReadyForEnding?.(
-            session.plotSummary,
-            seedForTurn,
-            session
-          )
-        ) {
-          session.endingOffered = true;
-          const ending = await requestEndingSequence({
+        if (shouldOfferEndingSequence(session, archetype)) {
+          await tryOfferEndingSequence({
             character,
             archetype,
             session,
-            apiMessages: getHistoryForApi(session.messages),
             signal,
+            baseReply: `${reply}\n\n${forcedReply}`,
           });
-          session.messages.push({
-            id: createId(),
-            role: "assistant",
-            content: ending.reply,
-            createdAt: Date.now(),
-            status: "done",
-          });
-          persist(state);
-          setBubble(`${reply}\n\n${forcedReply}\n\n${ending.reply}`, false, {
-            thinking: false,
-          });
-          state.currentOptions = ending.options;
-          session.inEndingCloseChoices = true;
-          setStatus("僵局破局后论证闭合，选继续补论或重证论题。", false);
         }
       }
       const neglect = window.GameOnion?.resetNeglectAfterPlotProgress?.(

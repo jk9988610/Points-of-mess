@@ -1,5 +1,5 @@
 (function () {
-  window.POM_VERSION = "0.7.2";
+  window.POM_VERSION = "0.7.3";
 
 
   function applyVersionUi() {
