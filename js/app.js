@@ -342,6 +342,8 @@
     keypoint: "推证",
     followup: "了解",
     close: "结束对话",
+    continue: "继续补论",
+    reargue: "重证论题",
   };
 
   function placeholderProofOptions() {
@@ -382,9 +384,16 @@
           opt?.intent === "keypoint"
       );
       btn.classList.toggle("option-btn--close", opt?.intent === "close");
+      btn.classList.toggle(
+        "option-btn--ending-extra",
+        opt?.intent === "continue" || opt?.intent === "reargue"
+      );
       btn.disabled = disabled || !opt?.line || loading;
     }
-    optionsBar.classList.toggle("options-bar--ending", options?.length === 2);
+    optionsBar.classList.toggle(
+      "options-bar--ending",
+      options?.some((o) => ["continue", "close", "reargue"].includes(o?.intent))
+    );
   }
 
   function resizeCanvas() {
@@ -534,31 +543,23 @@
       setBubble("", false);
 
       try {
+        const proverForBoot = resolveProver(character, session);
+        const liveArchetypeForBoot = resolveArchetype(archetype, session);
         const boot = await window.GameProofBootstrap.bootstrapProofSession({
           session,
           blueprint: session.proofBundle,
           signal: undefined,
-        });
-        const live = resolveArchetype(archetype, session);
-        session.messages.push({
-          id: createId(),
-          role: "assistant",
-          content: boot.opening,
-          createdAt: Date.now(),
-          status: "done",
+          character: proverForBoot,
+          archetype: liveArchetypeForBoot,
         });
         persist(state);
         setBubble(boot.opening, false);
         state.currentOptions = boot.options;
         const goal = window.GameOnion?.extractGoal?.(session.plotSummary) || "";
         window.PomDebug?.logLocal(
-          "开局·AI 已写入",
+          "开局·流程完成",
           `${window.GameOnion.formatLayersDebug(session.plotSummary, boot.seed)}${goal ? `\n论题：${goal}` : ""}`,
           ["summary-out", "bootstrap"]
-        );
-        window.PomDebug?.logLocal(
-          "首轮选项（AI）",
-          state.currentOptions.map((o) => `${o.intent}: ${o.line}`)
         );
       } catch (e) {
         window.PomDebug?.logLocalError("开局生成失败", e.message || String(e));
@@ -696,6 +697,7 @@
     session.neglectPrimaryRounds = 0;
     session.endingOffered = false;
     session.inEndingCloseChoices = false;
+    session.endingContinued = false;
     session.emptyPromiseCount = 0;
     session.spentPlayerKnowledge = [];
     session.playerEvidence = [];
@@ -704,6 +706,68 @@
     session.lastPickIntent = "";
     session.keypointTurnCount = 0;
     window.GameProofPool?.clearSessionProof?.(session);
+  }
+
+  async function restartProofOnSameTopic(character, archetype, session) {
+    const bundle = session.proofBundle || {};
+    const keptBlueprint = {
+      problemId: bundle.problemId,
+      theorem: bundle.theorem,
+      mathematician: bundle.mathematician,
+      proverName: bundle.proverName,
+      displayTitle: bundle.displayTitle,
+      system: bundle.system,
+      topicHint: bundle.topicHint,
+      failureLine: bundle.failureLine,
+      closeOptionLines: bundle.closeOptionLines,
+    };
+    session.messages = [];
+    session.plotSummary = "";
+    session.lastSummaryAtOptionTurn = 0;
+    resetSessionProgressFlags(session);
+    session.proofBundle = { ...keptBlueprint, bootstrapped: false };
+    session.proverDisplayName = keptBlueprint.proverName;
+    persist(state);
+
+    if (!ensureApiConfig()) {
+      return;
+    }
+    state.isStreaming = true;
+    state.optionsLoading = true;
+    state.currentOptions = placeholderProofOptions();
+    renderOptionButtons(state.currentOptions, true);
+    setStatus("同一论题重开论证…", false);
+    setBubble("", false);
+
+    try {
+      const prover = resolveProver(character, session);
+      const liveArchetype = resolveArchetype(archetype, session);
+      const boot = await window.GameProofBootstrap.bootstrapProofSession({
+        session,
+        blueprint: session.proofBundle,
+        signal: undefined,
+        character: prover,
+        archetype: liveArchetype,
+      });
+      persist(state);
+      setBubble(boot.opening, false);
+      state.currentOptions = boot.options;
+      window.PomDebug?.logLocal("重证·开局完成", keptBlueprint.theorem || keptBlueprint.problemId, [
+        "bootstrap",
+      ]);
+    } catch (e) {
+      window.PomDebug?.logLocalError("重证开局失败", e.message || String(e));
+      setStatus(e.message || "重证失败，请再试", true);
+      endTalking();
+      return;
+    } finally {
+      state.isStreaming = false;
+      state.optionsLoading = false;
+      renderOptionButtons(state.currentOptions, false);
+      setStatus("", false);
+      renderMap();
+      syncSpeechBubbles(false);
+    }
   }
 
   function handleSuspendOption() {
@@ -843,6 +907,50 @@
     const character = resolveProver(getCharacter(state.talkingId), session);
     const archetype = resolveArchetype(getArchetype(character.archetypeId), session);
     const seed = getSessionSeed(session, archetype);
+
+    if (session.inEndingCloseChoices && pick.intent === "continue") {
+      window.PomDebug?.logUser("证辩者选择", {
+        intent: "continue",
+        line: pick.line,
+        phase: "结局·继续补论",
+      });
+      session.inEndingCloseChoices = false;
+      session.endingContinued = true;
+      session.messages.push({
+        id: createId(),
+        role: "user",
+        content: pick.line,
+        intent: pick.intent,
+        createdAt: Date.now(),
+        status: "done",
+      });
+      persist(state);
+      setPlayerBubble(pick.line);
+      setStatus("论题已证毕，可继续补论；靠近证官选推证或输入框发言。", false);
+      state.currentOptions = null;
+      renderOptionButtons(state.currentOptions, false);
+      return;
+    }
+
+    if (session.inEndingCloseChoices && pick.intent === "reargue") {
+      window.PomDebug?.logUser("证辩者选择", {
+        intent: "reargue",
+        line: pick.line,
+        phase: "结局·重证",
+      });
+      session.messages.push({
+        id: createId(),
+        role: "user",
+        content: pick.line,
+        intent: pick.intent,
+        createdAt: Date.now(),
+        status: "done",
+      });
+      persist(state);
+      setPlayerBubble(pick.line);
+      await restartProofOnSameTopic(character, archetype, session);
+      return;
+    }
 
     if (session.inEndingCloseChoices && isClose) {
       window.PomDebug?.logUser("证辩者选择", {

@@ -109,7 +109,18 @@ ${lemmaBlock}
     }
   }
 
-  function summarySkipReason(session) {
+  function summarySkipReason(session, opts) {
+    if (opts?.force) {
+      const last = session.messages[session.messages.length - 1];
+      if (!last || last.role !== "assistant" || last.status === "error") {
+        return "证官回复尚未写入 session（须在 ②选项 之后压摘要）";
+      }
+      const { toSummarize } = buildSummaryPayload(session, opts);
+      if (toSummarize.length === 0) {
+        return "无可压缩对白";
+      }
+      return "";
+    }
     const optionTurns = countOptionTurns(session.messages);
     if (optionTurns < SUMMARY_EVERY_OPTION_TURNS) {
       return `未满 ${SUMMARY_EVERY_OPTION_TURNS} 轮选项（当前 ${optionTurns}）`;
@@ -146,8 +157,11 @@ ${lemmaBlock}
     return !summarySkipReason(session);
   }
 
-  function buildSummaryPayload(session) {
-    const optionTurns = countOptionTurns(session.messages);
+  function buildSummaryPayload(session, opts) {
+    const optionTurns =
+      opts?.force && typeof opts.optionTurns === "number"
+        ? opts.optionTurns
+        : countOptionTurns(session.messages);
     const done = window.GameDialogue.getDoneMessages(session.messages);
     const keepRecent = SUMMARY_PROTECT_MESSAGES;
     let toSummarize = done.slice(0, Math.max(0, done.length - keepRecent));
@@ -199,15 +213,15 @@ ${lemmaBlock}
     return lines.join("\n").trim();
   }
 
-  async function maybeRefreshPlotSummary(session, signal, seed) {
-    const skip = summarySkipReason(session);
+  async function maybeRefreshPlotSummary(session, signal, seed, opts) {
+    const skip = summarySkipReason(session, opts);
     if (skip) {
       window.PomDebug?.logLocal("摘要未执行", skip, ["summary-skip"]);
       return false;
     }
 
     const { optionTurns, toSummarize, mergedProtected, keepRecent } =
-      buildSummaryPayload(session);
+      buildSummaryPayload(session, opts);
 
     const labels = window.GameOnion?.getRoleLabels?.(seed) || {
       prover: "证官",
@@ -228,9 +242,10 @@ ${lemmaBlock}
       mergedProtected > 0
         ? ` · 保护区 ${mergedProtected} 条`
         : "";
+    const summaryLabel = opts?.debugLabel || "拆分·③摘要";
     window.PomDebug?.logLocal(
       "③摘要 · 即将请求",
-      `第 ${optionTurns} 轮 · ${toSummarize.length} 条对白入模${scopeNote} · 全文见黄条 →拆分·③摘要`,
+      `第 ${optionTurns} 轮 · ${toSummarize.length} 条对白入模${scopeNote} · 全文见黄条 →${summaryLabel}`,
       ["summary"]
     );
 
@@ -240,7 +255,7 @@ ${lemmaBlock}
       temperature: window.PomTokens?.TEMP_SUMMARY ?? 0.2,
       max_tokens: window.PomTokens?.SUMMARY ?? 2048,
       signal,
-      debugLabel: "拆分·③摘要",
+      debugLabel: summaryLabel,
     });
 
     let text = preserveGoalBlock(
