@@ -1081,11 +1081,15 @@
             persist(state);
             const pendingAfter =
               window.GameOnion?.extractPendingLines?.(session.plotSummary) || [];
+            const lemmaDone = window.GameOnion?.isLemmaStackComplete?.(
+              session.plotSummary,
+              seedForTurn
+            );
             if (!pendingAfter.length) {
               state.currentOptions = null;
               window.PomDebug?.logLocal(
                 "选项清空",
-                "摘要后无开放引理",
+                lemmaDone ? "引理栈已证毕，等待结局判定" : "摘要后无开放引理",
                 ["options-skip"]
               );
             }

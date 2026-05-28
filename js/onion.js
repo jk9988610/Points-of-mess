@@ -225,6 +225,10 @@
     if (!block) {
       return "";
     }
+    const inline = block.match(/论题\s*G[：:]\s*(.+?)(?:\n|$)/);
+    if (inline?.[1]) {
+      return inline[1].trim().replace(/[。.]\s*$/, "");
+    }
     const items = [];
     for (const line of block.split("\n")) {
       const m = line.trim().match(/^[-*•]\s+(?:论题\s*G[：:]\s*)?(.+)$/);
@@ -340,10 +344,11 @@
       parts.push(goal.startsWith("论题") ? goal : `论题 G：${goal}`);
     }
     if (pending.length) {
+      const label = (t) => String(t || "").replace(/^L\d+[：:]\s*/i, "").trim();
       const pendingNote =
         pending.length === 1
-          ? `开放引理 L1：${pending[0]}`
-          : `开放引理：${pending.map((p, i) => `L${i + 1}·${p}`).join("；")}`;
+          ? `开放引理 L1：${label(pending[0])}`
+          : `开放引理：${pending.map((p, i) => `L${i + 1}·${label(p)}`).join("；")}`;
       parts.push(pendingNote);
     }
     if (deps.length) {
@@ -1191,6 +1196,7 @@
     text = stripClearablePendingLines(text);
     text = text.replace(/\n- \[已证\][^\n]*可能意在[^\n]*/gi, "");
     text = text.replace(/\n- \[已证\][^\n]*存疑[^\n]*/gi, "");
+    text = text.replace(/\n- \[已证\][^\n]*(?:指出跳步|跳步：|纠错|未认可|证官.*拒)[^\n]*/gi, "");
     text = text.replace(/\n- \[已确认\][^\n]*可能意在[^\n]*/gi, "");
     text = text.replace(/\n- \[已确认\][^\n]*存疑[^\n]*/gi, "");
     const archiveMatch =
@@ -1567,7 +1573,25 @@
     return true;
   }
 
+  /** 开放引理已全部证毕（无 [待证]，至少一条 [证毕#k]） */
+  function isLemmaStackComplete(plotSummary, seed) {
+    if (!extractGoal(plotSummary)) {
+      return false;
+    }
+    if (extractPendingLines(plotSummary).length > 0) {
+      return false;
+    }
+    return extractQedOrders(plotSummary).size > 0;
+  }
+
   function isReadyForEnding(plotSummary, seed, session) {
+    if (seed?.aiDriven && isLemmaStackComplete(plotSummary, seed)) {
+      const kp = session?.keypointTurnCount || 0;
+      const { confirmed } = countLayers(plotSummary);
+      if (kp >= 1 && confirmed >= 2) {
+        return true;
+      }
+    }
     return (
       isPlotReadyForEnding(plotSummary, seed) &&
       hasSessionEndingProgress(session, seed, plotSummary)
@@ -1600,7 +1624,7 @@
     isReadyForEnding,
     isPlotReadyForEnding,
     isArgumentClosed,
-    hasUnresolvedSlotContradiction,
+    isLemmaStackComplete,
     usesDynamicPlayerEvidence,
     getSessionEvidenceList,
     getSeedKnowledgeList,
