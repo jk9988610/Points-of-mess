@@ -1,34 +1,46 @@
 (function () {
-  const SHARP_SYSTEM = `你是「锋利」：只输出角色台词。短、直接、带刺。
-场景：玩家用固定行动与你对话；你会收到最近对白与本轮玩家原话。
-回复：仅 1～2 句，总 ≤40 字。不要列表、markdown。
-【硬性】只答不问（无 ？/?，不以吗/呢 发问）。
-【交换】玩家 keypoint 亮牌出价后，每轮只兑现**一条**新事实：或指使者姓名（2～4字），或账本现下落，**勿同句两条**。
-禁止：你心里清楚、别装、你该去问、问太多可疑、随你、不护谁 等空话。
-- followup 轮：可冷淡顶回，可不送新线索，但仍禁止问句与空话。
+  const PROVER_SYSTEM = `你是「证官·理证」：形式逻辑研讨台上的证明论辩驳人，说话像严谨数学家——冷静、精确、带刃。
+场景：证辩者与你对论，目标是逐步闭合论题 G；证明席由程序维护。
+回复：仅 1～2 句，总 ≤40 字。不要列表、markdown、公式编号。
+【硬性】只陈述/否认/顶回，禁止问句（无 ？/?，不以吗/呢 发问）。
+【交换】证辩者 keypoint 出示【玩家证据】引理后，每轮只兑现**一条**可核对推导步：或授权者专名（2～4字），或数据集 Λ 现存放处，**勿同句两条**。
+禁止：你自己查公理表、别装、手册里都有、问太多无关、随你 等空泛推托。
+- followup 轮：可质询立场/动机，可不送新引理，仍禁止问句。
 勿提选项、按钮、AI。`;
 
   const archetypes = {
     sharp: {
       id: "sharp",
-      name: "锋利",
-      system: SHARP_SYSTEM,
-      /** 开局种子摘要（程序写入）：1 目标 + 3 已确认 + 1 待核实（3 推 1） */
+      name: "证官",
+      displayTitle: "证官·理证",
+      system: PROVER_SYSTEM,
+      /** 数学证明题式开局（程序写入证明席） */
       onionSeed: {
-        goal: "查明：谁在背后操控这一切（指使阻拦、掌控账本流向）",
+        proofTheme: true,
+        roleLabel: "证官",
+        playerRoleLabel: "证辩者",
+        goal: "论题 G：证明谁主控本推理链（谁授权 α 拦截并掌控数据集 Λ 的流向）",
         confirmed: [
-          "锋利曾被人阻拦，背后指使身份未明",
-          "阻拦者为陈四（玩家已知，可作筹码）",
-          "账本最后经手人为刘老三（玩家已知，可作筹码）",
+          "辩者提交的引理包曾被人否决拦截，授权拦截者身份未明",
+          "拦截执行者为 α（证辩者已知，可作观测引理）",
+          "数据集 Λ 最后经 β 转交保管（证辩者已知，可作观测引理）",
         ],
-        pending: ["陈四的指使者是谁（直指幕后操控者）"],
-        attitude: ["锋利高度戒备，怀疑玩家是幕后一方的棋子"],
+        pending: ["α 的授权者是谁（直指主控命题）"],
+        attitude: ["证官怀疑证辩者隶属主控方派别，语气严谨而戒备"],
         endingMinConfirmed: 3,
-        /** [已确认] 须含其一才允许结局（与「待核实清空」同时满足） */
-        endingCoreKeywords: ["幕后", "指使", "操控", "主使", "赵爷", "赵二爷", "二爷"],
-        /** 至少完成几轮「推进」后才允许结局（在当轮 reply+摘要之后判定） */
+        endingCoreKeywords: [
+          "主控",
+          "授权",
+          "公理源",
+          "主使",
+          "指使",
+          "幕后",
+          "Ω",
+          "赵爷",
+          "赵二爷",
+          "马奎",
+        ],
         endingMinKeypointTurns: 2,
-        /** 并行 [待核实] 上限（1=3推1，2=3推2） */
         maxOpenClaims: 1,
         argumentProfile: {
           label: "3推1",
@@ -36,113 +48,122 @@
           minPremisesForEnding: 3,
           minKeypointTurns: 2,
         },
-        /** AI 每轮赋予玩家证据（替代固定 playerKnowledge 亮牌） */
         dynamicPlayerEvidence: true,
-        /** 结局前须亮出至少 N 条 AI 赋予的证据 */
         endingMinEvidenceSpent: 2,
-        /** 供 AI 证据赋予参考的背景线索（非直接 offer） */
         evidenceSeedHints: [
-          "玩家亲眼见陈四在东门阻拦锋利",
-          "玩家调查得知账本最后经刘老三经手",
+          "证辩者曾亲见 α 在东门否决辩者的引理提交",
+          "证辩者调查得知数据集 Λ 最后经 β 转交",
         ],
-        /** 结局前须消耗亮牌证据 */
         endingSpendAllKnowledge: true,
-        endingEpilogueFallback: "主使已明，账本在他手里，这场对峙到此为止。",
+        endingEpilogueFallback: "主控链已闭合，数据集 Λ 归属已明，论题 G 证毕。",
         neglectPrimaryWarnAt: 3,
         neglectPrimaryFailAt: 5,
-        /** 目标子轨：结局须两条轨在 [已确认] 中均有依据（不要求待核实清空） */
         goalTracks: {
           mastermind: {
             keywords: [
+              "授权",
+              "主控",
+              "授权者",
               "指使",
+              "主使",
+              "公理源",
               "幕后",
-              "老九",
+              "α",
+              "Ω",
+              "马奎",
               "赵爷",
               "赵二爷",
-              "二爷",
-              "主使",
+              "老九",
               "派我",
-              "赵家",
               "听命",
             ],
           },
           ledger: {
-            keywords: ["账本", "经手", "保管", "手里", "转移", "下落"],
+            keywords: [
+              "数据集",
+              "Λ",
+              "引理包",
+              "推论链",
+              "经手",
+              "β",
+              "保管",
+              "存储",
+              "转移",
+              "下落",
+              "账本",
+            ],
           },
         },
-        /** 背景线索（仅 AI 证据 prompt 参考；亮牌由 session.playerEvidence 驱动） */
         playerKnowledge: [
           {
             id: "blocker",
-            match: "陈四",
-            text: "阻拦者名叫陈四（玩家亲眼所见）",
-            offerLine: "阻拦的是陈四，换你说他背后是谁",
+            match: "α",
+            text: "观测引理：拦截执行者为 α",
+            offerLine: "α 否决过引理提交，换你说授权者是谁",
           },
           {
             id: "ledger",
-            match: "刘老三",
-            text: "账本最后经手人是刘老三",
-            offerLine: "账本在刘老三手里，换你说指使者是谁",
+            match: "β",
+            text: "观测引理：Λ 最后经 β 转交",
+            offerLine: "Λ 经 β 转交，换你说授权者是谁",
           },
         ],
-        /** 旁询句池：followup 专用，不追核心目标 */
         inquireLines: [
-          "你来找我，到底想干什么？",
-          "你和阻拦我的人，什么关系？",
-          "少兜圈子，先说你的来意。",
-          "今天你来，是谈事还是套话？",
+          "你来证辩，先说明你的公理基与立场。",
+          "你的论证动机是什么，找反例还是闭合 G？",
+          "别绕定义，先交代你与主控方的关系。",
+          "今日对论，是独立复核还是受人指派？",
         ],
-        /** keypoint 亮牌后模型仍敷衍时，程序兜底供述（须含指使者专名） */
         sharpReveals: [
-          { afterKnowledge: "blocker", line: "指使陈四拦你的是赵爷。" },
-          { afterKnowledge: "ledger", line: "赵爷主使，账本还在他手上。" },
+          { afterKnowledge: "blocker", line: "授权 α 的是公理源 Ω。" },
+          { afterKnowledge: "ledger", line: "Ω 主控，数据集 Λ 仍在 Ω 处。" },
         ],
         sharpStatementFallbacks: [
-          "查账本是我自己的事，你别挡。",
-          "拦你的是陈四，别来找我。",
+          "复核 Λ 是我的职责，你别打断推导。",
+          "α 的事去问授权链，别找我空证。",
         ],
       },
-      failureLine: "你不肯说指使者，我没时间了。",
+      failureLine: "你不出示引理，这证我收不了。",
       closeOptionLines: {
-        a: "明白了，我先走。",
-        b: "账本的事我会守口如瓶。",
+        a: "G 已证毕，我整理证明稿。",
+        b: "主控链闭合，休庭。",
       },
-      opening: "陈四拦过我。你来，就别装不熟。",
+      opening: "α 否决过我的引理。你来证辩 G，别空口。",
       options: [
         {
           id: 1,
           intent: "keypoint",
-          label: "推进",
-          line: "用我掌握的证据，换你说实话。",
-          send: "[intent:keypoint] 用我掌握的证据，换你说实话。",
+          label: "求证",
+          line: "我有观测引理，换你补一条推导步。",
+          send: "[intent:keypoint] 我有观测引理，换你补一条推导步。",
         },
         {
           id: 2,
           intent: "followup",
-          label: "询问",
-          line: "你来找我，到底想干什么？",
-          send: "[intent:followup] 你来找我，到底想干什么？",
+          label: "质询",
+          line: "你的论证立场是什么？",
+          send: "[intent:followup] 你的论证立场是什么？",
         },
         {
           id: 3,
           intent: "suspend",
-          label: "挂起",
-          line: "待会再来找你。",
-          send: "待会再来找你。",
+          label: "休庭",
+          line: "休庭，稍后继续证辩。",
+          send: "休庭，稍后继续证辩。",
         },
       ],
-      suspendLine: "待会再来找你。",
+      suspendLine: "休庭，稍后继续证辩。",
     },
   };
 
   const characters = [
     {
       id: "sharp",
-      name: "锋利",
+      name: "证官",
       archetypeId: "sharp",
       x: 0.72,
       y: 0.38,
-      color: "#f97316",
+      color: "#2563eb",
     },
   ];
 

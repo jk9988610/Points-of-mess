@@ -30,7 +30,7 @@
   }
 
   function formatDialogueLine(m, characterName) {
-    const label = m.role === "user" ? "玩家" : characterName;
+    const label = m.role === "user" ? "证辩者" : characterName;
     return `${label}: ${m.content}`;
   }
 
@@ -41,7 +41,7 @@
    * @param {string} [opts.characterName]
    */
   function formatRecentDialogueForOptions(sessionMessages, opts = {}) {
-    const characterName = opts.characterName ?? "锋利";
+    const characterName = opts.characterName ?? "证官";
     const history = getHistorySliceForOptions(sessionMessages);
     if (history.length === 0) {
       return { lastLine: "", priorText: "" };

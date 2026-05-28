@@ -1,5 +1,5 @@
 (function () {
-  /** 每轮选项后压摘要，避免锋利新事实长期不进 [已证] */
+  /** 每轮选项后压摘要，避免证官新事实长期不进 [已证] */
   const SUMMARY_EVERY_OPTION_TURNS = 1;
   const SUMMARY_PROTECT_MESSAGES = 4;
   const SUMMARY_MAX_CHARS = 1200;
@@ -25,7 +25,7 @@
 - [前提] P1：…（开局给定；专名只增不删）
 【证明进程】
 ${lemmaBlock}
-- [已证] S1：…（依据：锋利供述/玩家亮牌/对话，可注轮次）
+- [已证] S1：…（依据：证官供述/证辩者亮牌/对话，可注轮次）
 - [证毕#1] L1：…（L1 得证后写此行，并删除对应 [待证#1] 及其「若要证…」行）
 【关系与态度】
 - …
@@ -35,7 +35,7 @@ ${lemmaBlock}
 2. 每个 [待证#k] 必须紧跟一行「若要证 G，则需证 Lk：…」；拆分子引理时用「若要证 Lk，则需证 Lk.1：…」。
 3. 对话说定 → 写入 [已证] Sk；引理 Lk 被推导步充分确立 → 删 [待证#k] + 写 [证毕#k]。
 4. 改口 → 旧 [已证] 标 [已推翻]；以最新供述为准（槽位单真值）。
-5. [已证] 须可核对专名；禁止「可能/存疑/玩家重复空换」入 [已证]。
+5. [已证] 须可核对专名；禁止「可能/存疑/证辩者重复空换」入 [已证]。
 6. 禁止用「无/待填」占 [待证]；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown。
 7. 【关系与态度】最多 2 条，每条 ≤45 字。`;
   }
@@ -109,7 +109,7 @@ ${lemmaBlock}
     }
     const last = session.messages[session.messages.length - 1];
     if (!last || last.role !== "assistant" || last.status === "error") {
-      return "锋利回复尚未写入 session（须在 ①② 之后压摘要）";
+      return "证官回复尚未写入 session（须在 ①② 之后压摘要）";
     }
     const { toSummarize } = buildSummaryPayload(session);
     if (toSummarize.length === 0) {
@@ -162,8 +162,15 @@ ${lemmaBlock}
     const { optionTurns, toSummarize, mergedProtected, keepRecent } =
       buildSummaryPayload(session);
 
+    const labels = window.GameOnion?.getRoleLabels?.(seed) || {
+      prover: "证官",
+      player: "证辩者",
+    };
     const block = toSummarize
-      .map((m) => `${m.role === "assistant" ? "锋利" : "玩家"}: ${m.content}`)
+      .map(
+        (m) =>
+          `${m.role === "assistant" ? labels.prover : labels.player}: ${m.content}`
+      )
       .join("\n");
     const body = session.plotSummary
       ? `【已有证明席】\n${session.plotSummary}\n\n【新增对话】\n${block}`

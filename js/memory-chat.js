@@ -8,7 +8,7 @@
     }
     return done
       .map((m, i) => {
-        const who = m.role === "assistant" ? "锋利" : "玩家";
+        const who = m.role === "assistant" ? "证官" : "证辩者";
         const tag = m.intent === "freeform" ? " [自由输入]" : "";
         return `${i + 1}. ${who}${tag}: ${m.content}`;
       })

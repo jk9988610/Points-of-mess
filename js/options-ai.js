@@ -1,8 +1,8 @@
 (function () {
   const OPTION_SCHEMA = [
-    { id: 1, intent: "keypoint", label: "推进" },
-    { id: 2, intent: "followup", label: "询问" },
-    { id: 3, intent: "suspend", label: "挂起" },
+    { id: 1, intent: "keypoint", label: "求证" },
+    { id: 2, intent: "followup", label: "质询" },
+    { id: 3, intent: "suspend", label: "休庭" },
   ];
 
   /** Phase A+：优先 [待证] / [待核实] 行 */
@@ -59,12 +59,12 @@
   }
 
   function buildOptionsSystemDuo(characterName) {
-    const name = String(characterName || "锋利").trim() || "锋利";
-    return `你是选项撰稿人。玩家与「${name}」对峙。输出玩家下一句（中文 ≤35 字）。
+    const name = String(characterName || "证官").trim() || "证官";
+    return `你是选项撰稿人。证辩者与「${name}」对论。输出证辩者下一句（中文 ≤35 字）。
 
 【分工】
-- keypoint（推进）：唯一推进本局目标；须用【玩家证据】offer 原句，或核对锋利刚说的专名。
-- followup（询问）：来意/态度/关系；禁核心密语、亮牌交换、互怼逼供。
+- keypoint（求证）：唯一推进论题 G；须用【玩家证据】offer 原句出示引理，或核对证官刚说的专名推导步。
+- followup（质询）：公理基/动机/立场；禁主控链、数据集 Λ、引理交换。
 
 禁止两条同义。只输出 JSON：
 {"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."}]}`;
@@ -72,9 +72,9 @@
 
   /** 仅合并 API 备用路径；挂起按钮不进模型上下文 */
   function buildIntentHintsForApi() {
-    return `- keypoint（推进）
-- followup（询问）
-- 结束对话`;
+    return `- keypoint（求证）
+- followup（质询）
+- 结束证辩`;
   }
 
   function applyGoalDrivenOptions(archetype, session, duo, onionContext) {
@@ -124,7 +124,7 @@
 
   function fixedSuspendLine(archetype) {
     const preset = archetype.options?.find((o) => o.intent === "suspend")?.line;
-    return String(archetype.suspendLine || preset || "待会再来找你。").trim();
+    return String(archetype.suspendLine || preset || "休庭，稍后继续证辩。").trim();
   }
 
   function optionRow(meta, line) {
@@ -181,7 +181,7 @@
     const name = character.name;
     const epilogueSystem = `${roleStyleFromSystem(archetype.system)}${plotSummaryBlock(plotSummary)}
 【结局轮·宣布】本局目标已达成：${goal}
-你是「${name}」。用 1～2 句中文（≤40 字）向玩家**点明结局**（目标已实现、局势如何收束）。${CHARACTER_REPLY_RULE}
+你是「${name}」。用 1～2 句中文（≤40 字）向证辩者**点明证毕**（论题 G 已闭合、证明如何收束）。${CHARACTER_REPLY_RULE}
 只输出角色台词，不要 JSON。`;
 
     const raw = await window.ChatApi.completeChat({
@@ -228,8 +228,8 @@
       a: "明白了，我先走。",
       b: "就这样吧。",
     };
-    const systemPrompt = `你是选项撰稿人。本局目标已达成：${goal}。玩家与「${name}」对峙已收束。
-输出玩家**结束对话**的两句不同离场白（中文各一句 ≤35 字），都是告别/收口，不要继续追问。
+    const systemPrompt = `你是选项撰稿人。论题 G 已证毕：${goal}。证辩者与「${name}」对论已收束。
+输出证辩者**结束证辩**的两句不同离场白（中文各一句 ≤35 字），都是告别/收口，不要继续追问。
 
 只输出 JSON：
 {"options":[{"intent":"close","line":"..."},{"intent":"close","line":"..."}]}`;
@@ -241,7 +241,7 @@
     const userContent = [
       `角色名：${name}`,
       `角色刚宣布的结局台词：${last}`,
-      "请输出两条 intent 均为 close 的玩家离场句。",
+      "请输出两条 intent 均为 close 的证辩者离场句。",
     ].join("\n\n");
 
     let raw = "";
@@ -269,11 +269,11 @@
   }) {
     const name = character.name;
     const pending = window.GameOnion?.extractPendingLines?.(plotSummary) || [];
-    const p1 = pending[0] || "指使者是谁";
-    const failLine = String(archetype.failureLine || "你不肯说指使者，我没时间了。").trim();
+    const p1 = pending[0] || "α 的授权者是谁";
+    const failLine = String(archetype.failureLine || "你不出示引理，这证我收不了。").trim();
     const failSystem = `${roleStyleFromSystem(archetype.system)}${plotSummaryBlock(plotSummary)}
-【失败轮】玩家多轮回避 #1「${p1}」。你是「${name}」。
-用 1～2 句（≤40 字）结束对峙，参考语气：「${failLine}」。${CHARACTER_REPLY_RULE}
+【失败轮】证辩者多轮回避 #1「${p1}」。你是「${name}」。
+用 1～2 句（≤40 字）休庭收束，参考语气：「${failLine}」。${CHARACTER_REPLY_RULE}
 只输出角色台词，不要 JSON。`;
 
     const raw = await window.ChatApi.completeChat({
@@ -401,7 +401,7 @@
   }
 
   const CHARACTER_REPLY_RULE =
-    "角色 reply 只能陈述/供述/否认/顶回，**禁止问句**（无 ？/?，不以吗/呢 发问）。";
+    "证官 reply 只能陈述/否认/顶回，**禁止问句**（无 ？/?，不以吗/呢 发问）。";
 
   function sanitizeRhetoricalQuestion(text) {
     let t = String(text || "").trim();
@@ -435,11 +435,11 @@
   }
 
   function buildCombinedSystem(archetype, turn) {
-    const base = `你是文字冒险游戏的对话引擎：同时生成角色台词（reply）与下一轮玩家选项（options）。
+    const base = `你是数学证明对论游戏的对话引擎：同时生成证官台词（reply）与下一轮证辩者选项（options）。
 
 【messages 规则】
-messages 里只能是角色与玩家的对白原话（玩家句即其点击的台词），不要期待 [game]、[choices] 等标记出现在 messages 中。
-根据 messages 全文理解剧情；最后一条 user 是玩家本轮原话。
+messages 里只能是证官与证辩者的对白原话（证辩者句即其点击的台词），不要期待 [game]、[choices] 等标记出现在 messages 中。
+根据 messages 全文理解论证进程；最后一条 user 是证辩者本轮原话。
 
 【角色风格】（写入 reply 时遵守）
 ${archetype.system}
@@ -450,10 +450,10 @@ ${archetype.system}
       return `${base}
 
 非收束轮示例（options 必须是对象数组，禁止字符串数组）：
-{"reply":"嘴硬。等刀架脖子上再说。","options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."},{"intent":"close","line":"..."}]}
+{"reply":"没引理就别换步。","options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."},{"intent":"close","line":"..."}]}
 
 收束轮示例：
-{"reply":"慢走不送。"}`;
+{"reply":"G 已证毕，休庭。"}`;
     }
 
     const closeBlock = turn.isClose
@@ -468,8 +468,8 @@ ${archetype.system}
 ${summaryBlock}
 【本轮】
 角色：${turn.character.name}
-玩家本轮 intent：${turn.pick.intent}
-玩家本轮原话（应与 messages 最后一条 user 一致）：${turn.pick.line}
+证辩者本轮 intent：${turn.pick.intent}
+证辩者本轮原话（应与 messages 最后一条 user 一致）：${turn.pick.line}
 
 【行动类型 — 只作结构参考，勿把旧选项文字写进 reply】
 ${buildIntentHintsForApi()}
@@ -667,7 +667,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
     );
     return m
       ? `【角色风格】\n${m[1].trim()}`
-      : "你是角色「锋利」，短句、直接。";
+      : "你是证官·理证，短句、严谨。";
   }
 
   function plotSummaryBlock(plotSummary, replyContext) {

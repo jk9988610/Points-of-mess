@@ -3,6 +3,17 @@
  * 档案格式：数学证明体（论题 G / 前提 / 待证 Lk / 已证 Sk / 证毕）。
  */
 (function () {
+  function getRoleLabels(seed) {
+    return {
+      prover: String(seed?.roleLabel || "证官").trim() || "证官",
+      player: String(seed?.playerRoleLabel || "证辩者").trim() || "证辩者",
+    };
+  }
+
+  function isProofTheme(seed) {
+    return seed?.proofTheme !== false;
+  }
+
   /** 从 seed 读取论证配置（兼容 argumentProfile 与旧字段） */
   function getArgumentProfile(seed) {
     const profile = seed?.argumentProfile || {};
@@ -270,9 +281,10 @@
       lastSharp
     );
     const followupStreak = countRecentFollowupStreak(context?.session);
-    const parts = ["【本局态势】"];
+    const labels = getRoleLabels(context?.seed);
+    const parts = ["【证辩态势】"];
     if (goal) {
-      parts.push(`论题 G：${goal}`);
+      parts.push(`${goal.startsWith("论题") ? goal : `论题 G：${goal}`}`);
     }
     if (pending.length) {
       const pendingNote =
@@ -288,33 +300,33 @@
       parts.push(`本轮回合 keypoint 建议原句：「${programKp}」`);
     }
     if (lastSharp) {
-      parts.push(`锋利上一句：${lastSharp}`);
+      parts.push(`${labels.prover}上一句：${lastSharp}`);
     }
     parts.push(
       "",
-      "【选项写法】",
-      "推进(keypoint)：必须用上方建议 offer 或【玩家证据】未消耗句；禁止重复已亮过的筹码。",
-      "询问(followup)：来意/态度；禁指使者/账本/亮牌交换。",
+      "【选项写法·证明题】",
+      "keypoint（求证）：须用【玩家证据】offer 原句出示引理，或核对证官刚说的专名推导步。",
+      "followup（质询）：立场/动机/关系；禁主控链、数据集 Λ、引理交换。",
       "禁止两条同义。"
     );
     if (followupStreak >= 2) {
       parts.push(
-        `玩家已连续 ${followupStreak} 轮旁询无推进：followup 仍可为旁询，但 keypoint 必须用建议句。`
+        `证辩者已连续 ${followupStreak} 轮质询无推进：followup 仍可为质询，但 keypoint 必须用建议句。`
       );
     }
-    if (/指使者|就是指使者|是.+派|主使/.test(lastSharp)) {
+    if (/授权者|主控|就是指使者|是.+派|主使|Ω/.test(lastSharp)) {
       parts.push(
-        "锋利已点名指使者：keypoint 须确认并追问仍缺的事实（如下落），勿再空换循环。"
+        `${labels.prover}已给出授权者：keypoint 须确认并追问仍缺的引理（如 Λ 存放），勿再空换。`
       );
     }
     if (window.GameOnion?.shouldClearPendingBlock?.(plotSummary)) {
-      parts.push("主使已供述：keypoint 用确认句收束，勿再「换你说指使者」。");
+      parts.push("主控已供述：keypoint 用确认句收束，勿再「换你说授权者」。");
     }
     if (stallTurns >= 2) {
-      parts.push("连续无进展：亮牌必须用【玩家证据】中未用过的 offer 句。");
+      parts.push("连续无进展：须用【玩家证据】中未用过的 offer 引理。");
     }
     if (context?.emptyPromiseCount >= 2) {
-      parts.push("玩家信用破产：keypoint 只能确认已说事实；followup 仍可为旁询。");
+      parts.push("证辩者信用破产：keypoint 只能确认已说事实；followup 仍可为质询。");
     }
     return parts.join("\n");
   }
@@ -338,7 +350,7 @@
   function pickProgramInquireLine(session, seed) {
     const pool = getInquireLines(seed);
     if (!pool.length) {
-      return "你来找我，到底想干什么？";
+      return "你来证辩，先说明你的公理基与立场。";
     }
     const idx = session?.inquireLineIndex ?? 0;
     return pool[idx % pool.length];
@@ -369,72 +381,72 @@
 
     if (pickIntent === "followup") {
       lines.push(
-        "【旁询】玩家打听来意/态度；用陈述顶回，禁止问句",
-        "本句可不送新线索，但禁止心里清楚、甩锅陈四、反咬玩家可疑"
+        "【质询】证辩者问立场/动机；用陈述顶回，禁止问句",
+        "本句可不送新引理，但禁止「去查公理表」、推给 α、反咬证辩者可疑"
       );
       if (countRecentFollowupStreak(context?.session) >= 2) {
-        lines.push("玩家已多轮旁询：可加一句可核对事实破冰，仍用陈述");
+        lines.push("证辩者多轮质询：可加一句可核对推导步破冰，仍用陈述");
       }
-      lines.push("角色台词：只答不问");
-      return `\n【本局规则·本轮】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
+      lines.push("证官台词：只答不问");
+      return `\n【证明规则·本轮】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
     }
 
     if (context?.playerConcreteReveal && pickIntent === "keypoint") {
       lines.push(
-        "玩家已亮牌（含可核对专名/地点）。你必须兑现交换：直接回答玩家所问的一条新事实",
-        "禁止「你心里清楚」等敷衍；禁止只顶回不给料；**禁止问句**",
-        "若玩家用具体专名交换，须给出指使者姓名或关键物证去向之一"
+        "证辩者已出示引理（含可核对专名）。须兑现交换：直接给出一条新推导步",
+        "禁止「去查手册」等推托；禁止只顶回不给步；**禁止问句**",
+        "若交换成立，须给出授权者专名或数据集 Λ 现存放处之一"
       );
     } else if (context?.emptyPromiseBankrupt) {
       lines.push(
-        "玩家多次空头交换；拒绝再交易",
-        "只回复：「别光说不做。没料就别换。」本轮不给人名/去向"
+        "证辩者多次空头交换；拒绝再论",
+        "只回复：「没引理就别换步。」本轮不给专名/存放处"
       );
     } else if (context?.hollowTradeOffer) {
       lines.push(
-        "玩家未亮牌却要情报；不得先给新线索",
-        "回复：「先把你说的事讲实，我再开口。」"
+        "证辩者未出示引理却要推导步；不得先给新步",
+        "回复：「先把你的引理讲实，我再补一步。」"
       );
     }
     if (context?.redundantOffer) {
       lines.push(
-        "玩家拿【已确认】里已有事实来换；回复「这我知道了，拿新鲜的来换」",
-        "不得因复读再送新线索"
+        "证辩者复读证明席已有前提；回复「这步已知，拿新引理来换」",
+        "不得因复读再送新推导步"
       );
     }
     if (context?.playerNamesMastermind) {
-      lines.push("玩家已指认指使者姓名；接住并确认，勿再逼「谁指使」");
+      lines.push("证辩者已指认授权者；接住并确认，勿再逼「谁授权」");
     }
     if (context?.neglectWarn) {
-      lines.push("玩家长期未用「推进」亮牌；语气加压（仅对推进轮）");
+      lines.push("证辩者长期未用 keypoint 出示引理；语气加压（仅求证轮）");
     }
     if (context?.neglectFail) {
-      lines.push("终局：对方不肯亮牌推进，你没时间了，结束对峙");
+      lines.push("终局：证辩者不肯出示引理，论证时限到，休庭");
     }
 
     if (stallTurns >= 2) {
       lines.push(
-        "连续无进展：须给出一条可核对事实（人名/地点/去向），用陈述句",
-        "禁止向玩家发问；禁止「你不说我不说」式空耗"
+        "连续无进展：须给出一条可核对推导步（专名/存放处），用陈述句",
+        "禁止向证辩者发问；禁止空耗"
       );
     } else if (pickIntent === "keypoint" && !context?.playerConcreteReveal) {
       if (isGoalAdvancePlayerLine(context?.playerLine)) {
-        lines.push("玩家在逼核心；给出一条具体事实或明确否认，**禁止问句**");
+        lines.push("证辩者在逼 Lk；给出一条具体推导步或明确否认，**禁止问句**");
       } else {
-        lines.push("玩家推进；给出具体回答、承认或否认，勿搪塞，**禁止问句**");
+        lines.push("证辩者求证；给出具体推导步、承认或否认，勿搪塞，**禁止问句**");
       }
     }
 
-    lines.push("角色台词：只答不问（无 ？/?，不以吗/呢 发问）");
+    lines.push("证官台词：只答不问（无 ？/?，不以吗/呢 发问）");
 
     if (goal) {
-      lines.push(`本局目标：${goal}`);
+      lines.push(goal.startsWith("论题") ? goal : `论题 G：${goal}`);
     }
     if (pending[0]) {
       lines.push(`优先待证：${pending[0]}`);
     }
 
-    return `\n【本局规则·本轮】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
+    return `\n【证明规则·本轮】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
   }
 
   function updateStallCounters(session, plotSummary) {
@@ -477,9 +489,9 @@
   const CONCRETE_PLAYER_INFO_RE =
     /在[\u4e00-\u9fa5]{1,8}(?:手里|处|家|那儿)|藏在|经手(?:人)?(?:是|为)|见过[\u4e00-\u9fa5]{1,6}|[\u4e00-\u9fa5]{2,4}(?:手里|身上|派我|拦我)|(?:是|叫|名叫)[\u4e00-\u9fa5]{2,6}|阻拦(?:者)?(?:是|叫)?[\u4e00-\u9fa5]{2,6}/;
   const ACTION_RE = /带我去|领我去|帮我找|陪我去|跟我去|带我去找/;
-  /** followup 不得包含：会逼核心目标/互怼指使者 */
+  /** followup 不得包含：会逼核心目标/互怼授权链 */
   const GOAL_ADVANCE_LINE_RE =
-    /指使|指使者|账本|谁派|幕后|主子|换你|换一句|陈四|刘老三|老九|赵家|开口|心里鬼|凭什么|谁先答|别绕|说清楚/;
+    /授权|主控|指使|指使者|数据集|Λ|谁派|幕后|主子|换你|换一句|α|β|Ω|陈四|刘老三|老九|赵家|开口|心里鬼|凭什么|谁先答|别绕|说清楚|账本|引理包/;
   const PLAYER_ASKING_RE =
     /[？?]|吗$|谁让你|谁派你|谁是|到底是谁|查我|什么关系|干什么|来意|套话/;
 
@@ -522,7 +534,7 @@
       "我告诉你我说已经知道了换用拿是的有在人不".split("")
     );
     const hits = chunks.filter((c) => c.length >= 2 && !stop.has(c) && confirmed.includes(c));
-    return hits.length >= 2 || (hits.length >= 1 && /经手|老周|账本|钥匙|保险柜|女儿/.test(line));
+    return hits.length >= 2 || (hits.length >= 1 && /经手|Λ|数据集|β|账本|钥匙|保险柜|女儿/.test(line));
   }
 
   function detectPlayerNamesMastermind(playerLine) {
@@ -685,7 +697,7 @@
     const avail = getAvailableKnowledge(session, seed);
     const label = usesDynamicPlayerEvidence(seed) ? "【玩家证据】" : "【玩家已知】";
     if (!avail.length) {
-      return `${label}（暂无未用证据；keypoint 须确认锋利上一句或陈述新事实）`;
+      return `${label}（暂无未用证据；keypoint 须确认证官上一句或陈述新事实）`;
     }
     const lines = avail.map(
       (k, i) => `  ${i + 1}. ${k.text} → offer:「${k.offerLine}」`
@@ -699,11 +711,11 @@
   }
 
   const DEFLECT_REPLY_RE =
-    /你心里|心里清楚|别装|你该去问|去问陈四|问太多|反倒可疑|爱信不信|不护谁|疑心太重|随你|误事|少说|废话|挡话|栽我身上/;
+    /你心里|心里清楚|别装|你该去问|去问陈四|去问α|去查公理|问太多|反倒可疑|爱信不信|不护谁|疑心太重|随你|误事|少说|废话|挡话|栽我身上/;
 
   /** followup 短拒白名单：≤20 字顶回，不算敷衍（A4） */
   const FOLLOWUP_SHORT_ACCEPT_RE =
-    /谁都不保|谁都不护|不关我事|与你无关|查账本是我|别挡|少管|少兜|来意|套话|谈事|你自己的事|与我何干|爱咋咋|随你便/;
+    /谁都不保|谁都不护|不关我事|与你无关|复核Λ是我|查账本是我|别挡|少管|少兜|来意|套话|谈事|你自己的事|与我何干|爱咋咋|随你便|休庭|公理基/;
 
   function isFollowupShortAccept(text) {
     const t = String(text || "").trim();
@@ -734,6 +746,9 @@
       return false;
     }
     if (MASTERMIND_NAMED_IN_ARCHIVE_RE.test(text)) {
+      return true;
+    }
+    if (/证官供述[：:][^。\n]{0,48}(?:授权|指使|指使者|主使|主控)/.test(text)) {
       return true;
     }
     if (/锋利供述[：:][^。\n]{0,48}(?:指使|指使者|主使)/.test(text)) {
@@ -781,13 +796,13 @@
 
   function formatMastermindConfirmLabel(name) {
     const n = String(name || "").trim();
-    if (!n || n === "幕后主使") {
-      return "指使者你已说定，账本下落也该说了。";
+    if (!n || n === "幕后主使" || n === "主控者") {
+      return "授权者你已说定，数据集 Λ 存放处也该说了。";
     }
-    if (/主使|指使|幕后/.test(n)) {
-      return `${n}、账本在他手里，你已说定。`;
+    if (/主使|指使|幕后|主控|授权/.test(n)) {
+      return `${n}、数据集 Λ 在你处，你已说定。`;
     }
-    return `${n}就是指使者，账本在他手里，你已说定。`;
+    return `${n}就是授权者，数据集 Λ 在你处，你已说定。`;
   }
 
   /** 推进选项：优先未消耗亮牌；指使者已供则确认句 */
@@ -803,8 +818,8 @@
       const name = extractMastermindLabel(plotSummary, line);
       return formatMastermindConfirmLabel(name);
     }
-    if (/指使者|幕后|主使/.test(pending) && !mastermindTrackSatisfied(blob)) {
-      return "你已认了陈四，换你说他背后主使是谁。";
+    if (/授权者|主控|指使者|幕后|主使/.test(pending) && !mastermindTrackSatisfied(blob)) {
+      return "你已认了 α，换你说其授权者是谁。";
     }
     return "";
   }
@@ -812,7 +827,7 @@
   function pickProgramStatementFallback(seed) {
     const pool = seed?.sharpStatementFallbacks;
     if (!Array.isArray(pool) || !pool.length) {
-      return "查账本是我自己的事，你别挡。";
+      return "复核 Λ 是我的职责，你别打断推导。";
     }
     return String(pool[0]).trim();
   }
@@ -1235,14 +1250,14 @@
     }
     const pending = extractPendingLines(plotSummary)[0];
     const lines = [
-      "【交换·本回合】玩家亮牌 → 锋利须兑现一条新专名事实，禁止敷衍",
+      "【交换·本回合】证辩者出示引理 → 证官须兑现一条新专名推导步，禁止敷衍",
     ];
     if (pending) {
       lines.push(`须直接推进：${pending}`);
     }
     if (context?.playerConcreteReveal) {
       lines.push(
-        "须供述：本句只给一条——指使者姓名（2～4字）或账本现下落，勿同句两条；禁心里清楚、去问陈四"
+        "须供述：本句只给一条——授权者专名（2～4字）或数据集 Λ 现存放处，勿同句两条；禁心里清楚、去查公理表、推给 α"
       );
     }
     return lines.join("\n");
@@ -1279,9 +1294,13 @@
   function detectLedgerTrackProgress(playerLine, seed) {
     const line = String(playerLine || "");
     const kws = seed?.goalTracks?.ledger?.keywords || [
-      "账本",
+      "数据集",
+      "Λ",
+      "引理包",
       "经手",
+      "β",
       "保管",
+      "账本",
       "刘老三",
     ];
     return kws.some((k) => line.includes(String(k).trim()));
@@ -1483,10 +1502,14 @@
         const play = gameplayConfirmedBlob(plotSummary);
         const blockerOk =
           spent.includes("blocker") ||
+          /证官供述[^。\n]{0,48}α/.test(play) ||
+          /证辩者[^。\n]{0,48}α/.test(play) ||
           /锋利供述[^。\n]{0,48}陈四/.test(play) ||
           /玩家供述[^。\n]{0,48}陈四/.test(play);
         const ledgerOk =
           spent.includes("ledger") ||
+          /证官供述[^。\n]{0,48}(?:β|Λ|数据集)/.test(play) ||
+          /证辩者[^。\n]{0,48}(?:β|Λ|数据集)/.test(play) ||
           /锋利供述[^。\n]{0,48}(?:刘老三|账本)/.test(play) ||
           /玩家供述[^。\n]{0,48}(?:刘老三|账本)/.test(play);
         if (!blockerOk || !ledgerOk) {
@@ -1518,6 +1541,8 @@
   }
 
   window.GameOnion = {
+    getRoleLabels,
+    isProofTheme,
     getArgumentProfile,
     getMaxOpenClaims,
     getMinPremisesForEnding,

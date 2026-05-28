@@ -22,12 +22,12 @@
     const hintBlock = hints.length
       ? `\n【背景线索（可改写为玩家视角，勿照抄）】\n${hints.map((h) => `- ${h}`).join("\n")}`
       : "";
-    return `你是证明席外的「玩家证据官」。根据本局对话与证明席，赋予玩家**恰好一条**新获得的、可核对事实（亲眼所见 / 亲耳所闻 / 调查所得）。
+    return `你是证明席外的「引理授予官」。根据本局对话与证明席，赋予证辩者**恰好一条**新获得的、可核对观测引理（亲眼所见 / 亲耳所闻 / 调查所得）。
 
-【论证目标】${goal || "查明真相"}${hintBlock}
+【论证目标】${goal || "闭合论题 G"}${hintBlock}
 
 【输出】只输出 JSON：
-{"text":"玩家证据：…（≤40字）","offerLine":"…，换你说…（keypoint 亮牌原句，≤35字；格式：先亮证据，再换情报）","match":"专名片段（2～6字）"}
+{"text":"观测引理：…（≤40字）","offerLine":"…，换你说…（keypoint 出示原句，≤35字；格式：先亮引理，再换推导步）","match":"专名片段（2～6字）"}
 
 【规则】
 1. 每轮仅一条；须含专名；offerLine 须指向当前待证引理 Lk。
@@ -89,8 +89,15 @@
     const plot = String(session?.plotSummary || "").trim();
     const done = window.GameDialogue?.getDoneMessages?.(session?.messages || []) || [];
     const recent = done.slice(-6);
+    const labels = window.GameOnion?.getRoleLabels?.(seed) || {
+      prover: "证官",
+      player: "证辩者",
+    };
     const dialogue = recent
-      .map((m) => `${m.role === "assistant" ? "锋利" : "玩家"}: ${m.content}`)
+      .map(
+        (m) =>
+          `${m.role === "assistant" ? labels.prover : labels.player}: ${m.content}`
+      )
       .join("\n");
     const parts = [];
     if (plot) {
@@ -137,8 +144,8 @@
         {
           role: "user",
           content: bootstrap
-            ? `${userContent}\n\n【任务】开局：赋予玩家第一条可亮牌证据（基于背景线索与档案）。`
-            : `${userContent}\n\n【任务】根据本轮最新对白，赋予玩家一条**新**证据。`,
+            ? `${userContent}\n\n【任务】开局：赋予证辩者第一条可出示引理（基于背景线索与档案）。`
+            : `${userContent}\n\n【任务】根据本轮最新对白，赋予证辩者一条**新**观测引理。`,
         },
       ],
       temperature: window.PomTokens?.TEMP_EVIDENCE ?? 0.35,

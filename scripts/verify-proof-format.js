@@ -27,7 +27,7 @@ const closed = `【论证目标】
 【证明席】
 【证明进程】
 - [证毕#1] L1：指使者为马奎
-- [已证] S1：锋利供述马奎`;
+- [已证] S1：证官供述马奎`;
 
 if (extractPendingLines(open).length !== 1) {
   console.error("open lemma");

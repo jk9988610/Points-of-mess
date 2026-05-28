@@ -24,11 +24,14 @@ function buildSeedPlotSummary(seed) {
 
 function extractGoal(text) {
   const block = text.match(/【论证目标】[\s\S]*?(?=【|$)/)?.[0] || "";
-  return block
-    .split("\n")
-    .map((l) => l.replace(/^[-*•]\s+(?:论题\s*G[：:]\s*)?/, "").trim())
-    .filter(Boolean)
-    .join("；");
+  const items = [];
+  for (const line of block.split("\n")) {
+    const m = line.trim().match(/^[-*•]\s+(?:论题\s*G[：:]\s*)?(.+)$/);
+    if (m) {
+      items.push(m[1].trim());
+    }
+  }
+  return items.join("；");
 }
 
 function extractPendingLines(text) {
@@ -41,9 +44,9 @@ function extractPendingLines(text) {
 }
 
 const seed = {
-  goal: "查明：谁在背后操控这一切",
-  confirmed: ["前提甲", "前提乙", "前提丙"],
-  pending: ["陈四的指使者是谁"],
+  goal: "证明谁主控本推理链（谁授权 α 拦截并掌控数据集 Λ 的流向）",
+  confirmed: ["前提 Pα", "前提 Pβ", "前提 PΛ"],
+  pending: ["α 的授权者是谁（直指主控命题）"],
 };
 const plot = buildSeedPlotSummary(seed);
 if (!plot.includes("【论证目标】") || !plot.includes("【证明席】")) {
@@ -66,7 +69,7 @@ if (extractPendingLines(plot).length !== 1) {
   console.error("expected 1 open lemma");
   process.exit(1);
 }
-if (!extractGoal(plot).includes("操控")) {
+if (!extractGoal(plot).includes("主控")) {
   console.error("extractGoal failed");
   process.exit(1);
 }

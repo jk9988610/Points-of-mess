@@ -367,7 +367,7 @@
         ? "等待角色回复… · 点击可移动（可走出橙圈）"
         : isDialogueSuspended()
           ? state.episodeAwaitingRestart && isInTalkZoneNow()
-            ? "本局已结束 · 再点锋利重新开始"
+            ? "本局已结束 · 再点证官重新开始"
             : state.dialogueHungUp && isInTalkZoneNow()
               ? "对话已挂起 · 走出橙圈再进入可继续"
               : "回到橙圈内，对话气泡会恢复"
@@ -376,7 +376,7 @@
         ? `点击「${near.name}」交谈`
         : nearDoc
           ? `点击「${nearDoc.title}」打开文档`
-          : "点击空地移动 · 靠近📄或锋利";
+          : "点击空地移动 · 靠近📄或证官";
   }
 
   function endTalking() {
@@ -586,10 +586,10 @@
     stopButtonEl.disabled = true;
     window.PomDebug?.logLocal(
       "本局结局结束",
-      "已重置会话并挂起 · 再点锋利重新开始",
+      "已重置会话并挂起 · 再点证官重新开始",
       ["ui"]
     );
-    setStatus("本局已结束。再点锋利重新开始。", false);
+    setStatus("本局已结束。再点证官重新开始。", false);
     renderMap();
     syncSpeechBubbles(false);
   }
@@ -629,10 +629,10 @@
     stopButtonEl.disabled = true;
     window.PomDebug?.logLocal(
       "本局失败",
-      "回避 #1 达上限 · 已重置并挂起 · 再点锋利重新开始",
+      "回避 #1 达上限 · 已重置并挂起 · 再点证官重新开始",
       ["ui"]
     );
-    setStatus("本局失败。再点锋利重新开始。", false);
+    setStatus("本局失败。再点证官重新开始。", false);
     renderMap();
     syncSpeechBubbles(false);
   }
@@ -884,7 +884,7 @@
         true,
         { thinking: true }
       );
-      setStatus("锋利结束对峙…", false);
+      setStatus("证官休庭收束…", false);
       abortController = new AbortController();
       try {
         const fail = await requestFailureSequence({
@@ -930,7 +930,7 @@
         .reverse()
         .find((m) => m.role === "assistant" && m.status === "done")?.content || "";
     setBubble(thinkingBubble, true, { thinking: true });
-    setStatus("锋利在想…", false);
+    setStatus("证官推导中…", false);
     renderMap();
 
     abortController = new AbortController();
