@@ -36,13 +36,27 @@ function hasCoreGoalAchieved(plotSummary, seed) {
   return keywords.some((k) => blob.includes(k));
 }
 
+function hasGoalTracksAchieved(plotSummary, seed) {
+  const tracks = seed?.goalTracks;
+  if (!tracks) return null;
+  const blob = extractConfirmedLines(plotSummary).join("\n");
+  for (const key of Object.keys(tracks)) {
+    const kws = tracks[key]?.keywords;
+    if (!kws?.some((k) => blob.includes(k))) return false;
+  }
+  return true;
+}
+
 function isReadyForEnding(plotSummary, seed) {
   if (!extractGoal(plotSummary)) return false;
-  if (extractPendingLines(plotSummary).length > 0) return false;
   const confirmed = (plotSummary.match(/\[已确认\]/g) || []).length;
   const min = seed?.endingMinConfirmed ?? 2;
   if (confirmed < min) return false;
-  return hasCoreGoalAchieved(plotSummary, seed);
+  if (!hasCoreGoalAchieved(plotSummary, seed)) return false;
+  const tracksOk = hasGoalTracksAchieved(plotSummary, seed);
+  if (tracksOk === true) return true;
+  if (tracksOk === false) return false;
+  return extractPendingLines(plotSummary).length === 0;
 }
 
 const seed = { endingMinConfirmed: 2, endingCoreKeywords: ["幕后"] };
@@ -61,4 +75,23 @@ if (!isReadyForEnding(ready, seed)) {
   console.error("should be ready");
   process.exit(1);
 }
+
+const trackSeed = {
+  endingMinConfirmed: 2,
+  endingCoreKeywords: ["指使"],
+  goalTracks: {
+    mastermind: { keywords: ["老九"] },
+    ledger: { keywords: ["刘老三"] },
+  },
+};
+const readyTracks = `【本局目标】\n- 查明幕后
+【剧情档案】
+- [已确认] 老九指使陈四
+- [已确认] 账本在刘老三手里
+- [待核实#1] 细节未清`;
+if (!isReadyForEnding(readyTracks, trackSeed)) {
+  console.error("goalTracks: should be ready with pending left");
+  process.exit(1);
+}
+
 console.log("verify-ending-ready: ok");

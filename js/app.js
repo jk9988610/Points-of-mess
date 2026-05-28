@@ -300,8 +300,8 @@
   }
 
   const INTENT_ARIA = {
-    keypoint: "深挖",
-    followup: "推进",
+    keypoint: "亮牌",
+    followup: "施压",
     suspend: "挂起",
     close: "结束对话",
   };
@@ -449,6 +449,9 @@
     state.playerBubbleText = "";
     state.dialogueHungUp = false;
     const session = getSession(state, characterId);
+    if (!Array.isArray(session.spentPlayerKnowledge)) {
+      session.spentPlayerKnowledge = [];
+    }
     const seeded = ensureOnionSeedPlotSummary(session, archetype);
     if (seeded) {
       persist(state);
@@ -485,7 +488,7 @@
 
     state.currentOptions = presetOptions(archetype);
     window.PomDebug?.logLocal(
-      "首轮选项（预设·深挖/推进，不发 API）",
+      "首轮选项（预设·亮牌/施压，不发 API）",
       state.currentOptions.map((o) => o.line)
     );
 
@@ -556,6 +559,8 @@
     session.neglectPrimaryRounds = 0;
     session.endingOffered = false;
     session.inEndingCloseChoices = false;
+    session.emptyPromiseCount = 0;
+    session.spentPlayerKnowledge = [];
   }
 
   function finishEpisodeAfterFailure() {
@@ -797,6 +802,11 @@
       createdAt: Date.now(),
       status: "done",
     });
+    window.GameOnion?.markKnowledgeSpent?.(
+      session,
+      apiLine,
+      archetype.onionSeed
+    );
     persist(state);
     setPlayerBubble(rawLine);
 

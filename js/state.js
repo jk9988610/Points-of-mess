@@ -51,6 +51,7 @@
           lastConfirmedCount: 0,
           neglectPrimaryRounds: 0,
           emptyPromiseCount: 0,
+          spentPlayerKnowledge: [],
         };
       }
       return state.sessions[characterId];

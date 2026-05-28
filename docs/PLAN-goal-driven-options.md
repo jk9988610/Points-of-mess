@@ -1,0 +1,106 @@
+# 计划：目标驱动选项（keypoint / followup 重构）
+
+> 状态：**原型 v0.5.31**（`playerKnowledge` + 双轨结局 + 亮牌/施压语义）  
+> 前置：v0.5.30 交易先亮牌、每轮摘要、回避#1 强制结束
+
+---
+
+## 1. 问题（为何又死锁）
+
+| 现象 | 根因 |
+|------|------|
+| 一直点「推进」问账本，#1 警号/失败 | **双 pending 并行**，回避只盯 #1，但选项允许只推 #2 |
+| 双方「若我说…你就…」 | 玩家**没有可消耗的事实库**，选项全是向锋利索取 |
+| 对白里已有陈四/老九，档案不动 | 摘要滞后；`stallTurns` 涨 → 体感卡死 |
+| 深挖/推进文案同质 | intent 绑 #1/#2 **问法**，不是**行动类型** |
+
+**结论**：在「唯一目标」下，选项应是**会改变目标状态的玩家行动**，而不是两条不同角度的逼问。
+
+---
+
+## 2. 设计原则
+
+1. **一个本局目标**（已有 `【本局目标】`）
+2. **子轨 goalTracks**（指使链 / 账本链）——结局看两条轨是否都有 `[已确认]` 依据，**不要求** `[待核实]` 全删
+3. **玩家已知事实 `playerKnowledge`**——可亮牌、可消耗，消灭空头交易
+4. **intent 语义重绑**（UI 可仍叫 keypoint/followup）：
+   - **keypoint → 亮牌**：陈述玩家已知事实 / 确认锋利上一句 / 带具体信息的交换
+   - **followup → 施压**：限时、逼供、换角度；**不**附带空头「若我说…」
+5. **僵局兜底**：`stallTurns ≥ 2` 时，keypoint 由程序填入下一条未用的 `offerLine`
+
+---
+
+## 3. 数据（preset / session）
+
+### 3.1 `onionSeed.playerKnowledge`
+
+```js
+playerKnowledge: [
+  {
+    id: "blocker",
+    match: "陈四",
+    text: "阻拦者名叫陈四（玩家亲眼所见）",
+    offerLine: "阻拦的是陈四，换你说他背后是谁",
+  },
+  {
+    id: "ledger",
+    match: "刘老三",
+    text: "账本最后经手人是刘老三",
+    offerLine: "账本在刘老三手里，换你说指使者是谁",
+  },
+],
+goalTracks: {
+  mastermind: { keywords: ["指使", "幕后", "老九", "主使", "陈四"] },
+  ledger: { keywords: ["账本", "刘老三", "经手", "保管"] },
+},
+```
+
+### 3.2 session
+
+- `spentPlayerKnowledge: string[]` — 已消耗的 `id`
+- 开局 `startTalking` / `resetSessionProgressFlags` 时清空
+
+---
+
+## 4. 程序行为（v0.5.31）
+
+| 模块 | 行为 |
+|------|------|
+| `GameOnion.pickProgramRevealLine` | 取下一条未用 `offerLine` |
+| `GameOnion.markKnowledgeSpent` | 玩家台词含 `match` 时标记消耗 |
+| `GameOnion.isReadyForEnding` | 若存在 `goalTracks`：双轨 keyword 均命中 `[已确认]` + `endingMinConfirmed` + `endingCoreKeywords`；**允许仍有 [待核实]** |
+| `bumpNeglectBeforeReply` | 若 `goalTracks`：仅推账本线 / 亮牌**不**累加回避 #1 |
+| `formatOptionsBlock` | 写明亮牌/施压分工 + 可用 `playerKnowledge` 列表 |
+| `generateOptions` 后 | `applyGoalDrivenOptions`：僵局或空头 keypoint → 替换为程序亮牌句 |
+
+---
+
+## 5. 未做（下一迭代）
+
+- [ ] **单轨 pending**：#2 仅在 #1 收窄后出现（减少并行卡死）
+- [ ] **第三对话钮 `confirm`**：「所以你承认老九是指使者？」
+- [ ] **第二 NPC**（刘老三）— 切换信息源，同一 `goal`
+- [ ] **storyState / needFromPlayer** 显式字段进 session（现用 goalTracks 隐式推断）
+
+---
+
+## 6. 验收
+
+1. 首轮可见一条含「陈四」的亮牌向选项（预设或第二轮起程序注入）
+2. 连续只问账本不应触发回避失败（v0.5.31 `goalTracks`）
+3. `[已确认]` 同时含指使链与账本链关键词时可进结局（待核实可残留）
+4. `stall ≥ 2` 时 keypoint 变为 `offerLine` 之一
+
+```bash
+node scripts/verify-goal-driven.js
+node scripts/verify-ending-ready.js
+node scripts/verify-trade-onion.js
+```
+
+---
+
+## 7. 选项数量
+
+**维持 2 对话 + 挂起**。防死锁靠**行动分型 + 玩家 knowledge 池**，不靠加到 4～5 个按钮。
+
+*最后更新：2026-05 · v0.5.31 原型*
