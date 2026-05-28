@@ -30,9 +30,9 @@ if (badNames.test(blueprint.topicHint)) {
 }
 
 const sample = intents.attachOptionIds([
-  { intent: "advance", line: "设 n 为偶数，换你说 n² 的表达式" },
-  { intent: "decoy", line: "直接断言 n² 偶，跳过 L1" },
-  { intent: "decoy", line: "由结论反推，故前提成立" },
+  { intent: "advance", line: "地不湿，故按若下雨则地湿，下雨不成立" },
+  { intent: "decoy", line: "地不湿，故原命题不成立" },
+  { intent: "decoy", line: "未下雨，故地不湿" },
 ]);
 const check = intents.validateProofOptions(sample);
 if (!check.ok) {

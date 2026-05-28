@@ -122,6 +122,12 @@
       endingCoreKeywords: ["无理", "矛盾", "互素", "偶数"],
       goalTracks: { core: { keywords: ["矛盾", "互素", "偶数", "无理"] } },
       endingEpilogueFallback: "G 证毕：√2 无理。",
+      lemmaChain: [
+        "若 √2 = p/q（既约），则 p² 为偶数",
+        "若 p² 为偶数，则 p 为偶数",
+        "若 p 偶且 2q²=p²，则 q 为偶数",
+        "p、q 均为偶数，与互素矛盾，故 √2 非有理数",
+      ],
       inquireLines: [
         "你采用反证还是直接构造？",
         "互素条件打算在哪一步用？",
@@ -159,6 +165,10 @@
       endingCoreKeywords: ["无穷", "素数", "素因子", "矛盾"],
       goalTracks: { core: { keywords: ["素数", "素因子", "无穷"] } },
       endingEpilogueFallback: "G 证毕：素数无穷。",
+      lemmaChain: [
+        "设素数仅有限个 p₁,…,p_k，可构造 N",
+        "N 的素因子不在原有限表中，故素数无穷",
+      ],
       inquireLines: [
         "反设有限后，你的构造是什么？",
         "N+1 与表中素数有何同余关系？",
@@ -228,6 +238,10 @@
       endingCoreKeywords: ["矛盾", "最大", "N+1"],
       goalTracks: { core: { keywords: ["矛盾", "最大", "N+1"] } },
       endingEpilogueFallback: "G 证毕：整数无上界。",
+      lemmaChain: [
+        "反设 N 为最大整数",
+        "N+1 为整数且 N+1>N，与最大矛盾",
+      ],
       inquireLines: ["反设最大元后，你的关键一步是什么？"],
     },
     {
@@ -428,6 +442,50 @@
     delete session.proverDisplayName;
   }
 
+
+  function findProblemById(problemId) {
+    const id = String(problemId || "").trim();
+    if (!id) {
+      return null;
+    }
+    return (
+      CURATED_PROBLEMS.find((p) => p.id === id) ||
+      CONCLUSION_TEMPLATES.find((p) => p.id === id) ||
+      null
+    );
+  }
+
+  function getLemmaChain(problemId) {
+    const problem = findProblemById(problemId);
+    const chain = problem?.lemmaChain;
+    if (!Array.isArray(chain) || !chain.length) {
+      return [];
+    }
+    return chain.map((s) => String(s).trim()).filter(Boolean);
+  }
+
+  function getLemmaChainLength(problemId) {
+    const chain = getLemmaChain(problemId);
+    return chain.length > 0 ? chain.length : 2;
+  }
+
+  function getLemmaAtChainIndex(problemId, qedCount) {
+    const chain = getLemmaChain(problemId);
+    const idx = Number(qedCount) || 0;
+    if (idx >= chain.length) {
+      return null;
+    }
+    return chain[idx];
+  }
+
+  function getMinLemmaStepsForEnding(problemId) {
+    const chain = getLemmaChain(problemId);
+    if (chain.length > 0) {
+      return chain.length;
+    }
+    return 2;
+  }
+
   window.GameProofPool = {
     MATHEMATICIANS,
     CURATED_PROBLEMS,
@@ -444,5 +502,10 @@
     getSessionSystem,
     clearSessionProof,
     buildProverSystem,
+    findProblemById,
+    getLemmaChain,
+    getLemmaChainLength,
+    getLemmaAtChainIndex,
+    getMinLemmaStepsForEnding,
   };
 })();

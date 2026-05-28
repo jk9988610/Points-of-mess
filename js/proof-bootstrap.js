@@ -63,17 +63,22 @@ ${hint}
   function buildSeedFromSummary(plotSummary, blueprint) {
     const goal = window.GameOnion?.extractGoal?.(plotSummary) || "";
     const prover = blueprint?.proverName || "证官";
+    const problemId = blueprint?.problemId || "";
+    const poolProblem = window.GameProofPool?.findProblemById?.(problemId);
+    const minLemmaSteps =
+      window.GameProofPool?.getMinLemmaStepsForEnding?.(problemId) || 2;
     return {
       proofTheme: true,
       aiDriven: true,
       poolLemmaGrant: false,
       dynamicPlayerEvidence: false,
-      problemId: blueprint?.problemId || "",
+      problemId,
+      minLemmaStepsForEnding: minLemmaSteps,
       roleLabel: prover,
       playerRoleLabel: "证辩者",
       goal,
       endingMinConfirmed: 2,
-      endingCoreKeywords: [],
+      endingCoreKeywords: poolProblem?.endingCoreKeywords || [],
       endingMinKeypointTurns: 2,
       maxOpenClaims: 1,
       argumentProfile: {

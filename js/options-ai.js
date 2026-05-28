@@ -185,10 +185,28 @@ ${pendingNote}
       signal,
       debugLabel: "结局·①宣布",
     });
+    function clampEndingReplyLength(text, maxLen = 40) {
+      let t = String(text || "").trim();
+      if (!t || t.length <= maxLen) {
+        return t;
+      }
+      const cut = t.slice(0, maxLen);
+      const lastStop = Math.max(
+        cut.lastIndexOf("。"),
+        cut.lastIndexOf("，"),
+        cut.lastIndexOf("；")
+      );
+      if (lastStop >= 8) {
+        return cut.slice(0, lastStop + 1);
+      }
+      return `${cut}…`;
+    }
+
     function filterEndingReply(text) {
       let t = String(text || "").trim();
       t = t.replace(/^([\u4e00-\u9fa5]{2,8})[？?]/, "$1，");
       t = t.replace(/[？?]/g, "。");
+      t = clampEndingReplyLength(t, 40);
       if (!t || isWeakReply(t) || window.GameOnion?.isDeflectReply?.(t)) {
         return "";
       }
