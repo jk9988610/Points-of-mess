@@ -415,7 +415,7 @@
         ? "等待角色回复… · 点击可移动（可走出橙圈）"
         : isDialogueSuspended()
           ? state.episodeAwaitingRestart && isInTalkZoneNow()
-            ? "本局已结束 · 再点证官重新开始"
+            ? "本局已结束 · 靠近证官继续下一题"
             : state.dialogueHungUp && isInTalkZoneNow()
               ? "对话已挂起 · 走出橙圈再进入可继续"
               : "回到橙圈内，对话气泡会恢复"
@@ -860,7 +860,7 @@
       });
       persist(state);
       setPlayerBubble(pick.line);
-      finishEpisodeAfterClose();
+      await finishEpisodeAfterClose();
       return;
     }
 
@@ -973,7 +973,7 @@
         });
         persist(state);
         setBubble(fail.reply, false, { thinking: false });
-        finishEpisodeAfterFailure();
+        await finishEpisodeAfterFailure();
       } catch (e) {
         if (e.name !== "AbortError") {
           setStatus(e.message || "生成失败", true);
