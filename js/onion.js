@@ -155,10 +155,10 @@
     }
     parts.push(
       "",
-      "【选项写法】",
-      "亮牌(keypoint)：用【玩家可亮牌】原句，或核对锋利上一句（例：「赵家老二就是指使者，账本现在在哪？」）。",
-      "施压(followup)：逼问、限时、否认；不要写「若我说…你就…」或「账本下落换实话」。",
-      "禁止两条同义；禁止用【已确认】里已有事实再换线索。"
+      "【选项写法·硬性分工】",
+      "推进(keypoint)：唯一推进目标的选项。须用【玩家可亮牌】offer，或核对锋利专名（例：「赵家老二就是指使者，账本在哪？」）。",
+      "询问(followup)：旁敲侧击/来意/态度/关系；**禁止**出现：指使者、账本、谁派、陈四、刘老三、换你说、别绕、谁先答。",
+      "禁止两条同义；followup 不得与 keypoint 同义。"
     );
     if (/指使者|就是指使者|是.+派|赵家|老九|主使/.test(lastSharp)) {
       parts.push(
@@ -169,9 +169,41 @@
       parts.push("连续无进展：亮牌必须用【玩家可亮牌】中未用过的 offer 句。");
     }
     if (context?.emptyPromiseCount >= 2) {
-      parts.push("玩家信用破产：两条选项都不得再提交换，只能确认事实或施压。");
+      parts.push("玩家信用破产：keypoint 只能确认已说事实；followup 仍可为旁询。");
     }
     return parts.join("\n");
+  }
+
+  function isGoalAdvancePlayerLine(playerLine) {
+    const line = String(playerLine || "").trim();
+    if (!line || PLAYER_ASKING_RE.test(line)) {
+      return false;
+    }
+    return GOAL_ADVANCE_LINE_RE.test(line);
+  }
+
+  function getInquireLines(seed) {
+    const raw = seed?.inquireLines;
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.map((s) => String(s).trim()).filter(Boolean);
+  }
+
+  function pickProgramInquireLine(session, seed) {
+    const pool = getInquireLines(seed);
+    if (!pool.length) {
+      return "你来找我，到底想干什么？";
+    }
+    const idx = session?.inquireLineIndex ?? 0;
+    return pool[idx % pool.length];
+  }
+
+  function advanceInquireIndex(session) {
+    if (!session) {
+      return;
+    }
+    session.inquireLineIndex = (session.inquireLineIndex || 0) + 1;
   }
 
   /** ① reply system：按玩家 intent + 僵局动态约束 */
@@ -184,6 +216,15 @@
     const pickIntent = context?.pickIntent || "";
     const stallTurns = context?.stallTurns ?? 0;
     const lines = [];
+
+    if (pickIntent === "followup") {
+      lines.push(
+        "【旁询】玩家本轮仅打听来意/态度/关系，不追本局核心目标",
+        "可冷淡、讽刺、反问一句；禁止逼玩家交代「谁派你来」",
+        "禁止追问指使者、账本下落；本句可不提供新线索，勿开启互怼循环"
+      );
+      return `\n【本局规则·本轮】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
+    }
 
     if (context?.playerConcreteReveal && pickIntent === "keypoint") {
       lines.push(
@@ -209,26 +250,26 @@
       );
     }
     if (context?.playerNamesMastermind) {
-      lines.push("玩家已指认指使者；接住并确认，勿再逼「谁指使」");
+      lines.push("玩家已指认指使者姓名；接住并确认，勿再逼「谁指使」");
     }
     if (context?.neglectWarn) {
-      lines.push("玩家多轮未碰指使者线；语气加压，下轮须点名或否认");
+      lines.push("玩家长期未用「推进」亮牌；语气加压（仅对推进轮）");
     }
     if (context?.neglectFail) {
-      lines.push("终局：对方不肯说指使者，你没时间了，结束对峙");
+      lines.push("终局：对方不肯亮牌推进，你没时间了，结束对峙");
     }
 
     if (stallTurns >= 2) {
       lines.push(
         "连续无进展：须先给一条可核对事实（人名/地点/去向），再附带一句追问",
-        "禁止整轮「你不说我不说」"
-      );
-    } else if (pickIntent === "followup") {
-      lines.push(
-        "玩家施压：可加压或否认，但若上句已给姓名，本句应补账本/去向或承认，勿空泛嘲讽"
+        "禁止整轮「你不说我不说」；禁止反要求玩家先交代指使者"
       );
     } else if (pickIntent === "keypoint" && !context?.playerConcreteReveal) {
-      lines.push("玩家追问；给出具体回答、承认或否认，勿连续搪塞");
+      if (isGoalAdvancePlayerLine(context?.playerLine)) {
+        lines.push("玩家在逼核心问题；给出一条具体事实或明确否认，勿只反问玩家");
+      } else {
+        lines.push("玩家推进；给出具体回答、承认或否认，勿连续搪塞");
+      }
     }
 
     if (goal) {
@@ -247,6 +288,10 @@
     }
     const confirmed = countLayers(plotSummary).confirmed;
     const prev = session.lastConfirmedCount ?? 0;
+    if (session.lastPickIntent === "followup") {
+      session.lastConfirmedCount = confirmed;
+      return { stallTurns: session.stallTurns || 0, confirmed };
+    }
     if (confirmed > prev) {
       session.stallTurns = 0;
     } else {
@@ -267,6 +312,11 @@
   const CONCRETE_PLAYER_INFO_RE =
     /在[\u4e00-\u9fa5]{1,8}(?:手里|处|家|那儿)|藏在|经手(?:人)?(?:是|为)|见过[\u4e00-\u9fa5]{1,6}|[\u4e00-\u9fa5]{2,4}(?:手里|身上|派我|拦我)|(?:是|叫|名叫)[\u4e00-\u9fa5]{2,6}|阻拦(?:者)?(?:是|叫)?[\u4e00-\u9fa5]{2,6}/;
   const ACTION_RE = /带我去|领我去|帮我找|陪我去|跟我去|带我去找/;
+  /** followup 不得包含：会逼核心目标/互怼指使者 */
+  const GOAL_ADVANCE_LINE_RE =
+    /指使|指使者|账本|谁派|幕后|主子|换你|换一句|陈四|刘老三|老九|赵家|开口|心里鬼|凭什么|谁先答|别绕|说清楚/;
+  const PLAYER_ASKING_RE =
+    /[？?]|吗$|谁让你|谁派你|谁是|到底是谁|查我|什么关系|干什么|来意|套话/;
 
   function normalizePlayerLineForApi(playerLine) {
     let s = String(playerLine || "").trim();
@@ -311,7 +361,11 @@
   }
 
   function detectPlayerNamesMastermind(playerLine) {
-    return MASTERMIND_RE.test(String(playerLine || ""));
+    const line = String(playerLine || "").trim();
+    if (!line || PLAYER_ASKING_RE.test(line)) {
+      return false;
+    }
+    return MASTERMIND_RE.test(line);
   }
 
   function hasConcretePlayerInfo(playerLine) {
@@ -378,9 +432,12 @@
     return TRADE_OFFER_RE.test(line) && !isPlayerLineConcrete(line, seed);
   }
 
-  function trackEmptyPromise(session, playerLine, seed) {
+  function trackEmptyPromise(session, playerLine, seed, pickIntent) {
     if (!session) {
       return 0;
+    }
+    if (pickIntent === "followup") {
+      return session.emptyPromiseCount || 0;
     }
     if (detectHollowTradeOffer(playerLine, seed)) {
       session.emptyPromiseCount = (session.emptyPromiseCount || 0) + 1;
@@ -507,8 +564,11 @@
   }
 
   /** 回合初：根据玩家本轮台词更新回避 #1 计数（与摘要是否压缩无关） */
-  function bumpNeglectBeforeReply(session, playerLine, plotSummary, seed) {
+  function bumpNeglectBeforeReply(session, playerLine, plotSummary, seed, pickIntent) {
     if (!session) {
+      return getNeglectState(session, seed);
+    }
+    if (pickIntent === "followup") {
       return getNeglectState(session, seed);
     }
     const pending = extractPendingLines(plotSummary);
@@ -598,6 +658,7 @@
       hollowTradeOffer: Boolean(extra?.hollowTradeOffer),
       tradeOfferNeedsPlayerFirst: Boolean(extra?.tradeOfferNeedsPlayerFirst),
       playerConcreteReveal: Boolean(extra?.playerConcreteReveal),
+      playerLine: String(extra?.playerLine || ""),
       emptyPromiseBankrupt: bankrupt,
       emptyPromiseCount: emptyCount,
     };
@@ -687,6 +748,10 @@
     getPlayerKnowledgeList,
     getAvailableKnowledge,
     pickProgramRevealLine,
+    pickProgramInquireLine,
+    advanceInquireIndex,
+    isGoalAdvancePlayerLine,
+    getInquireLines,
     markKnowledgeSpent,
     detectPlayerRevealedKnowledge,
     hasGoalTracksAchieved,

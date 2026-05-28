@@ -36,10 +36,15 @@ function assert(cond, msg) {
 const session = { spentPlayerKnowledge: [], neglectPrimaryRounds: 0 };
 const plot = `【本局目标】\n- 查明\n【剧情档案】\n- [待核实#1] 指使者`;
 
-G.bumpNeglectBeforeReply(session, "账本在刘老三手里，换线索", plot, seed);
+G.bumpNeglectBeforeReply(session, "账本在刘老三手里，换线索", plot, seed, "keypoint");
 assert(
   session.neglectPrimaryRounds === 0,
-  "只推账本线不应累加回避"
+  "推进且亮账本不应累加回避"
+);
+G.bumpNeglectBeforeReply(session, "你来找我干什么？", plot, seed, "followup");
+assert(
+  session.neglectPrimaryRounds === 0,
+  "询问轮不累加回避"
 );
 
 session.neglectPrimaryRounds = 0;

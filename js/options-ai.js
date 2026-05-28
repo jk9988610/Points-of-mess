@@ -1,7 +1,7 @@
 (function () {
   const OPTION_SCHEMA = [
-    { id: 1, intent: "keypoint", label: "亮牌" },
-    { id: 2, intent: "followup", label: "施压" },
+    { id: 1, intent: "keypoint", label: "推进" },
+    { id: 2, intent: "followup", label: "询问" },
     { id: 3, intent: "suspend", label: "挂起" },
   ];
 
@@ -54,12 +54,11 @@
     const name = String(characterName || "锋利").trim() || "锋利";
     return `你是选项撰稿人。玩家与「${name}」对峙。输出玩家下一句台词（中文一句 ≤35 字）。
 
-【两种意图】
-- keypoint（亮牌）：用【玩家可亮牌】里的原句；或核对锋利刚说的专名（例：「赵家老二就是指使者，账本在哪？」）。
-- followup（施压）：逼问、限时、否认；**不要**写「若我说…你就…」「下落换实话」。
+【硬性分工·不可违反】
+- keypoint（推进）：**唯一**推进本局目标的选项。必须用【玩家可亮牌】里的 offer 原句，或核对锋利刚说的专名。
+- followup（询问）：旁敲侧击——来意、态度、关系、场面；**不得**含：指使者、账本、谁派、陈四、刘老三、换你说、别绕、谁先答。
 
-【禁止】
-- 两条同义；用【已确认】里已有事实再换线索；锋利已点名指使者后仍写「你说X换你说Y」。
+【禁止】两条同义；followup 写成第二句推进。
 
 只输出 JSON：
 {"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."}]}`;
@@ -67,30 +66,36 @@
 
   /** 仅合并 API 备用路径；挂起按钮不进模型上下文 */
   function buildIntentHintsForApi() {
-    return `- keypoint（亮牌）
-- followup（施压）
+    return `- keypoint（推进）
+- followup（询问）
 - 结束对话`;
   }
 
   function applyGoalDrivenOptions(archetype, session, duo, onionContext) {
     const seed = archetype?.onionSeed;
     const lastSharp = String(onionContext?.lastAssistantLine || "").trim();
+    let keypoint = String(duo?.keypoint || "").trim();
+    let followup = String(duo?.followup || "").trim();
+
     const confirm = window.GameOnion?.pickConfirmAfterSharpLine?.(lastSharp);
     if (confirm) {
-      return { ...duo, keypoint: confirm };
+      keypoint = confirm;
+    } else {
+      const reveal = window.GameOnion?.pickProgramRevealLine?.(session, seed);
+      const stall = (onionContext?.stallTurns ?? 0) >= 2;
+      const hollow = window.GameOnion?.detectHollowTradeOffer?.(keypoint, seed);
+      const concrete = window.GameOnion?.isPlayerLineConcrete?.(keypoint, seed);
+      if (reveal && (stall || hollow || !concrete)) {
+        keypoint = reveal;
+      }
     }
-    const reveal = window.GameOnion?.pickProgramRevealLine?.(session, seed);
-    if (!reveal) {
-      return duo;
+
+    if (window.GameOnion?.isGoalAdvancePlayerLine?.(followup)) {
+      followup = window.GameOnion.pickProgramInquireLine(session, seed);
+      window.GameOnion.advanceInquireIndex?.(session);
     }
-    const stall = (onionContext?.stallTurns ?? 0) >= 2;
-    const keypoint = String(duo?.keypoint || "").trim();
-    const hollow = window.GameOnion?.detectHollowTradeOffer?.(keypoint, seed);
-    const concrete = window.GameOnion?.isPlayerLineConcrete?.(keypoint, seed);
-    if (stall || hollow || !concrete) {
-      return { ...duo, keypoint: reveal };
-    }
-    return duo;
+
+    return { keypoint, followup };
   }
 
   function fixedSuspendLine(archetype) {

@@ -52,6 +52,8 @@
           neglectPrimaryRounds: 0,
           emptyPromiseCount: 0,
           spentPlayerKnowledge: [],
+          inquireLineIndex: 0,
+          lastPickIntent: "",
         };
       }
       return state.sessions[characterId];

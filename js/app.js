@@ -300,8 +300,8 @@
   }
 
   const INTENT_ARIA = {
-    keypoint: "亮牌",
-    followup: "施压",
+    keypoint: "推进",
+    followup: "询问",
     suspend: "挂起",
     close: "结束对话",
   };
@@ -488,7 +488,7 @@
 
     state.currentOptions = presetOptions(archetype);
     window.PomDebug?.logLocal(
-      "首轮选项（预设·亮牌/施压，不发 API）",
+      "首轮选项（预设·推进/询问，不发 API）",
       state.currentOptions.map((o) => o.line)
     );
 
@@ -561,6 +561,8 @@
     session.inEndingCloseChoices = false;
     session.emptyPromiseCount = 0;
     session.spentPlayerKnowledge = [];
+    session.inquireLineIndex = 0;
+    session.lastPickIntent = "";
   }
 
   function finishEpisodeAfterFailure() {
@@ -776,7 +778,8 @@
     const emptyPromiseCount = window.GameOnion?.trackEmptyPromise?.(
       session,
       apiLine,
-      seed
+      seed,
+      pick.intent
     );
     const emptyPromiseBankrupt = Boolean(
       window.GameOnion?.isEmptyPromiseBankrupt?.(session)
@@ -786,8 +789,14 @@
         session,
         apiLine,
         plotBefore,
-        archetype.onionSeed
+        archetype.onionSeed,
+        pick.intent
       ) || { shouldWarn: false, shouldFail: false };
+
+    session.lastPickIntent = pick.intent;
+    if (pick.intent === "followup") {
+      window.GameOnion?.advanceInquireIndex?.(session);
+    }
 
     window.PomDebug?.logUser("玩家选择", {
       intent: pick.intent,
@@ -890,6 +899,7 @@
       hollowTradeOffer,
       tradeOfferNeedsPlayerFirst,
       playerConcreteReveal,
+      playerLine: apiLine,
       emptyPromiseBankrupt,
       emptyPromiseCount,
     };
