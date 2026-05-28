@@ -1207,7 +1207,13 @@
                   session,
                   signal,
                   plotSummary: session.plotSummary,
-                  onionContext: onionExtra,
+                  onionContext: {
+                    ...onionExtra,
+                    stallTurns: session.stallTurns ?? 0,
+                    plotSummary: session.plotSummary,
+                    session,
+                    seed: seedForTurn,
+                  },
                   logTag: "拆分·②选项·摘要后补发",
                 });
                 if (regen?.length) {
