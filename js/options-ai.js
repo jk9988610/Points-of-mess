@@ -52,19 +52,17 @@
 
   function buildOptionsSystemDuo(characterName) {
     const name = String(characterName || "锋利").trim() || "锋利";
-    return `你是选项撰稿人。玩家与「${name}」对峙。选项=玩家说的话。
+    return `你是选项撰稿人。玩家与「${name}」对峙。输出玩家下一句台词（中文一句 ≤35 字）。
 
-- keypoint（亮牌）：从【玩家已知】选 offer 句，或确认/核对锋利上一句；须含具体人名/地点/物证。
-- followup（施压）：逼供、限时、换角度；对准本局目标或当前待核实，但**不**写空头「若我说…你就…」。
+【两种意图】
+- keypoint（亮牌）：用【玩家可亮牌】里的原句；或核对锋利刚说的专名（例：「赵家老二就是指使者，账本在哪？」）。
+- followup（施压）：逼问、限时、否认；**不要**写「若我说…你就…」「下落换实话」。
 
-❌ 禁止：「账本下落换你一句实话」等空换。
-✅ 亮牌例：「阻拦的是陈四，换你说他背后是谁」；施压例：「别绕了，指使者到底是谁？」
+【禁止】
+- 两条同义；用【已确认】里已有事实再换线索；锋利已点名指使者后仍写「你说X换你说Y」。
 
-禁止两条同义；禁止连续两轮都只问「你先告诉我X」。
-
-只输出 JSON（无 markdown）：
-{"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."}]}
-每条 line 中文一句 ≤35 字。不要 close。`;
+只输出 JSON：
+{"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."}]}`;
   }
 
   /** 仅合并 API 备用路径；挂起按钮不进模型上下文 */
@@ -76,14 +74,19 @@
 
   function applyGoalDrivenOptions(archetype, session, duo, onionContext) {
     const seed = archetype?.onionSeed;
+    const lastSharp = String(onionContext?.lastAssistantLine || "").trim();
+    const confirm = window.GameOnion?.pickConfirmAfterSharpLine?.(lastSharp);
+    if (confirm) {
+      return { ...duo, keypoint: confirm };
+    }
     const reveal = window.GameOnion?.pickProgramRevealLine?.(session, seed);
     if (!reveal) {
       return duo;
     }
     const stall = (onionContext?.stallTurns ?? 0) >= 2;
     const keypoint = String(duo?.keypoint || "").trim();
-    const hollow = window.GameOnion?.detectHollowTradeOffer?.(keypoint);
-    const concrete = window.GameOnion?.hasConcretePlayerInfo?.(keypoint);
+    const hollow = window.GameOnion?.detectHollowTradeOffer?.(keypoint, seed);
+    const concrete = window.GameOnion?.isPlayerLineConcrete?.(keypoint, seed);
     if (stall || hollow || !concrete) {
       return { ...duo, keypoint: reveal };
     }
@@ -583,7 +586,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     }
     const text = window.GameOnion?.compactPlotSummaryForApi?.(full) || full;
     const onionHint = window.GameOnion?.formatReplyHint?.(full, replyContext) || "";
-    return `\n【剧情摘要】（长程记忆；事实以此为准。reply 接最近一轮对白，勿重复摘要已写明的内容。）\n${text}${onionHint}\n`;
+    return `\n【剧情档案·摘录】（长程记忆；事实以此为准。勿重复已写明内容。）\n${text}${onionHint}\n`;
   }
 
   async function requestReplyOnly({
@@ -635,8 +638,9 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
   }
 
   function buildOptionsUserContent({ character, last, priorText, plotSummary, onionContext }) {
+    const ctx = { ...(onionContext || {}), lastAssistantLine: last };
     const summaryBlock =
-      window.GameOnion?.formatOptionsBlock?.(plotSummary, onionContext) ||
+      window.GameOnion?.formatOptionsBlock?.(plotSummary, ctx) ||
       plotSummaryForOptions(plotSummary);
     const parts = [
       `角色名：${character.name}`,
@@ -751,11 +755,16 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       turn?.pick?.intent,
       turn?.onionExtra
     );
+    const lastSharp =
+      [...session.messages]
+        .reverse()
+        .find((m) => m.role === "assistant" && m.status === "done")?.content || "";
     const onionContext = {
       stallTurns: session?.stallTurns ?? 0,
       emptyPromiseCount: session?.emptyPromiseCount ?? 0,
       session,
       seed: archetype?.onionSeed,
+      lastAssistantLine: lastSharp,
     };
     const retry = window.PomApiRetry?.withApiRetries;
 

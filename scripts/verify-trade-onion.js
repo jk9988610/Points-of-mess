@@ -19,18 +19,33 @@ function assert(cond, msg) {
   }
 }
 
-assert(G.detectHollowTradeOffer("账本下落换你一句实话"), "应识别空头交易");
+const seed = {
+  neglectPrimaryWarnAt: 3,
+  neglectPrimaryFailAt: 5,
+  playerKnowledge: [
+    {
+      id: "blocker",
+      match: "陈四",
+      offerLine: "阻拦的是陈四，换你说他背后是谁",
+    },
+  ],
+};
+
+assert(G.detectHollowTradeOffer("账本下落换你一句实话", seed), "应识别空头交易");
 assert(
-  !G.detectHollowTradeOffer("账本在刘老三手里，换你说陈四背后是谁"),
+  !G.detectHollowTradeOffer("账本在刘老三手里，换你说陈四背后是谁", seed),
   "含具体信息不应算空头"
 );
 assert(
-  G.detectTradeOfferNeedsPlayerFirst("若我说指使者，你就告诉我老九"),
+  !G.detectHollowTradeOffer("阻拦的是陈四，换你说他背后是谁", seed),
+  "预设亮牌句不应判空头"
+);
+assert(
+  G.detectTradeOfferNeedsPlayerFirst("若我说指使者，你就告诉我老九", seed),
   "若我说…就应先亮牌"
 );
 
 const session = { neglectPrimaryRounds: 0 };
-const seed = { neglectPrimaryWarnAt: 3, neglectPrimaryFailAt: 5 };
 const plot = `【本局目标】\n- 查明幕后\n【剧情档案】\n- [待核实#1] 指使者是谁`;
 
 for (let i = 0; i < 4; i++) {
@@ -42,8 +57,8 @@ assert(G.getNeglectState(session, seed).shouldFail, "第 5 轮回避应触发 sh
 
 session.neglectPrimaryRounds = 0;
 session.emptyPromiseCount = 0;
-G.trackEmptyPromise(session, "账本下落换你一句实话");
-G.trackEmptyPromise(session, "若我说指使者你就说老九");
+G.trackEmptyPromise(session, "账本下落换你一句实话", seed);
+G.trackEmptyPromise(session, "若我说指使者你就说老九", seed);
 assert(G.isEmptyPromiseBankrupt(session), "两次空头承诺应信用破产");
 
 if (failed) {

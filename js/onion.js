@@ -1,5 +1,5 @@
 /**
- * 洋葱记事 · 程序侧（种子摘要、摘录、调试计数）。模型 prompt 仅做最少补充。
+ * 剧情档案 · 程序侧（种子摘要、摘录、推进计数）。注入 API 的约束块由此生成。
  */
 (function () {
   function buildSeedPlotSummary(seed) {
@@ -125,7 +125,7 @@
     return { confirmed, pending, goal };
   }
 
-  /** ② 选项 user：程序指定优先剥的中层（不全文贴摘要） */
+  /** ② 选项 user：本局态势 + 写法（不含「洋葱」术语） */
   function formatOptionsBlock(plotSummary, context) {
     const goal = extractGoal(plotSummary);
     const pending = extractPendingLines(plotSummary);
@@ -134,39 +134,43 @@
     }
     const stallTurns = context?.stallTurns ?? 0;
     const knowledge = formatPlayerKnowledgeForOptions(context?.session, context?.seed);
-    const parts = [
-      "【程序·目标驱动选项】",
-      "唯一本局目标；子轨 #1 指使链 / #2 账本线，均服务同一幕后。",
-      "keypoint（亮牌）：须陈述【玩家已知】中的具体事实，或确认锋利上一句；可写「…，换你说…」",
-      "followup（施压）：逼供、限时、换角度；禁止空头「若我说…你就…」",
-      "禁止「你必须先答另一条线」式拒绝。",
-    ];
+    const lastSharp = String(context?.lastAssistantLine || "").trim();
+    const parts = ["【本局态势】"];
+    if (goal) {
+      parts.push(`目标：${goal}`);
+    }
+    if (pending.length) {
+      parts.push(
+        `仍待弄清：${pending
+          .slice(0, 2)
+          .map((p, i) => `${i + 1}) ${p}`)
+          .join("；")}`
+      );
+    }
     if (knowledge) {
       parts.push(knowledge);
     }
-    if (goal) {
-      parts.push(`本局核心目标：${goal}`);
-    }
-    pending.slice(0, 4).forEach((p, i) => {
-      parts.push(`#${i + 1} ${p}`);
-    });
-    if (stallTurns >= 2) {
-      parts.push(
-        "（僵局：keypoint 必须从【玩家已知】选一条 offerLine 亮牌；followup 施压但不空换）"
-      );
-    }
-    if (context?.emptyPromiseCount >= 2) {
-      parts.push(
-        "（信用破产：禁止「若我说…你就…」空泛交易；选项须直接陈述具体事实，如「账本在刘老三手里，换你说陈四背后是谁」）"
-      );
-    } else {
-      parts.push(
-        "交易选项须**先亮牌**：line 中须含玩家已给出的具体信息（人名/地点/物证），禁止仅写「账本下落换你一句实话」等空头承诺"
-      );
+    if (lastSharp) {
+      parts.push(`锋利上一句：${lastSharp}`);
     }
     parts.push(
-      "禁止生成「用【已确认】里已有的事实」换新线索的选项（如再拿老周/经手人报价）"
+      "",
+      "【选项写法】",
+      "亮牌(keypoint)：用【玩家可亮牌】原句，或核对锋利上一句（例：「赵家老二就是指使者，账本现在在哪？」）。",
+      "施压(followup)：逼问、限时、否认；不要写「若我说…你就…」或「账本下落换实话」。",
+      "禁止两条同义；禁止用【已确认】里已有事实再换线索。"
     );
+    if (/指使者|就是指使者|是.+派|赵家|老九|主使/.test(lastSharp)) {
+      parts.push(
+        "锋利已点名指使者：亮牌须**确认并追问账本/下落**，勿再「你说X换你说Y」循环。"
+      );
+    }
+    if (stallTurns >= 2) {
+      parts.push("连续无进展：亮牌必须用【玩家可亮牌】中未用过的 offer 句。");
+    }
+    if (context?.emptyPromiseCount >= 2) {
+      parts.push("玩家信用破产：两条选项都不得再提交换，只能确认事实或施压。");
+    }
     return parts.join("\n");
   }
 
@@ -181,79 +185,60 @@
     const stallTurns = context?.stallTurns ?? 0;
     const lines = [];
 
-    if (context?.emptyPromiseBankrupt) {
+    if (context?.playerConcreteReveal && pickIntent === "keypoint") {
       lines.push(
-        "【信用破产】玩家多次空头承诺；不再接受任何「若我说…你就…」交易",
-        "只回复类似：「你每次都只说不做。没信用的人，我不谈交易。」勿再给出新的人名/幕后线索"
+        "玩家已亮牌（含可核对专名/地点）。你必须兑现交换：直接回答玩家所问的一条新事实",
+        "禁止「你心里清楚」「不过是个跑腿的」等敷衍；禁止只反问不给料",
+        "若玩家用陈四/刘老三等换指使者或账本，须给出指使者姓名或账本去向之一"
+      );
+    } else if (context?.emptyPromiseBankrupt) {
+      lines.push(
+        "玩家多次空头交换；拒绝再交易",
+        "只回复：「别光说不做。没料就别换。」本轮不给人名/去向"
       );
     } else if (context?.hollowTradeOffer) {
       lines.push(
-        "【空头交易】玩家提议交换但未亮牌（无具体人名/地点/物证）；本轮不得先给新线索",
-        "须要求玩家先兑现其承诺的具体内容，例：「你先把账本说清楚，我再开口。」",
-        "禁止用未来承诺换当轮情报；禁止先给陈四/老九等再讨玩家承诺"
-      );
-    } else if (context?.tradeOfferNeedsPlayerFirst) {
-      lines.push(
-        "【交易规则】玩家提议「若我说X你就Y」或「X换Y」：须要求玩家**先说出具体X**（人名/地点/物证），再回应Y",
-        "禁止先给信息换取玩家「未来的承诺」；未亮牌前不得输出新的人名/幕后/账本线索"
+        "玩家未亮牌却要情报；不得先给新线索",
+        "回复：「先把你说的事讲实，我再开口。」"
       );
     }
     if (context?.redundantOffer) {
       lines.push(
-        "【信息价值】玩家拿【已确认】里已有的事实来交易；须拒绝并指出「这我已经知道了，拿我不知道的来换」",
-        "勿因玩家复读已知信息而给出钥匙/带路等新线索"
+        "玩家拿【已确认】里已有事实来换；回复「这我知道了，拿新鲜的来换」",
+        "不得因复读再送新线索"
       );
     }
     if (context?.playerNamesMastermind) {
-      lines.push(
-        "玩家已供述指使者/幕后；须接住并写入事实，可评估是否达成核心目标，勿再逼「你先说指使」"
-      );
+      lines.push("玩家已指认指使者；接住并确认，勿再逼「谁指使」");
     }
     if (context?.neglectWarn) {
-      lines.push("【警告】玩家多轮回避 #1；语气加压：下次不再绕开指使者");
+      lines.push("玩家多轮未碰指使者线；语气加压，下轮须点名或否认");
     }
     if (context?.neglectFail) {
-      lines.push("【终局】直接结束对峙：对方不肯说指使者，你没时间了");
+      lines.push("终局：对方不肯说指使者，你没时间了，结束对峙");
     }
 
     if (stallTurns >= 2) {
       lines.push(
-        "【程序·破局】必须先给出一条可核对的具体事实（地点/人名/时间/物证），再附带追问",
-        "禁止整句「你不说X我就不说Y」；禁止连续第3轮完全拒绝"
+        "连续无进展：须先给一条可核对事实（人名/地点/去向），再附带一句追问",
+        "禁止整轮「你不说我不说」"
       );
-      if (pending[1]) {
-        lines.push(`可对 #2「${pending[1]}」先让步给部分答案以换 #1`);
-      }
-    } else if (pickIntent === "followup" && pending.length >= 2) {
+    } else if (pickIntent === "followup") {
       lines.push(
-        `玩家在推进 #2「${pending[1]}」：须让步——先给 #2 的部分线索或明确否认，再要求玩家补 #1`,
-        `禁止整轮只回复「先回答 #1」`
+        "玩家施压：可加压或否认，但若上句已给姓名，本句应补账本/去向或承认，勿空泛嘲讽"
       );
-      if (pending[0]) {
-        lines.push(`#1 仍为：${pending[0]}`);
-      }
-    } else if (pickIntent === "keypoint") {
-      lines.push(
-        "玩家亮牌（keypoint）：已给出或可核对的具体事实；须接住并回以信息、否认或交换，禁止空换"
-      );
-      if (pending[0]) {
-        lines.push(`当前优先待核实：${pending[0]}`);
-      }
-    } else if (pickIntent === "followup" && pending[0]) {
-      lines.push(
-        `玩家施压（followup）：可逼供、限时；针对「${pending[0]}」或账本线，勿整轮拒答`
-      );
-    } else if (pending[0]) {
-      lines.push(`优先回应中层 #1：${pending[0]}`);
+    } else if (pickIntent === "keypoint" && !context?.playerConcreteReveal) {
+      lines.push("玩家追问；给出具体回答、承认或否认，勿连续搪塞");
     }
 
     if (goal) {
-      lines.push(`本局唯一核心：${goal}`);
-      lines.push("所有待核实均服务此核心；剥任一中层即可，勿强迫玩家先答另一条线");
+      lines.push(`本局目标：${goal}`);
     }
-    lines.push("一次只剥一层；每轮须推进至少一条待核实（回答、收窄或部分确认）");
+    if (pending[0]) {
+      lines.push(`优先弄清：${pending[0]}`);
+    }
 
-    return `\n【程序·本轮推进】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
+    return `\n【本局规则·本轮】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
   }
 
   function updateStallCounters(session, plotSummary) {
@@ -280,7 +265,7 @@
   const VAGUE_TRADE_TOKEN_RE =
     /账本下落|指使者|实话|真相|线索|谁派|幕后|下落(?!为|在)|一句实话|一句真话/;
   const CONCRETE_PLAYER_INFO_RE =
-    /在[\u4e00-\u9fa5]{1,8}(?:手里|处|家|那儿)|藏在|经手(?:人)?(?:是|为)|见过[\u4e00-\u9fa5]{1,6}|[\u4e00-\u9fa5]{2,4}(?:手里|身上|派我|拦我)/;
+    /在[\u4e00-\u9fa5]{1,8}(?:手里|处|家|那儿)|藏在|经手(?:人)?(?:是|为)|见过[\u4e00-\u9fa5]{1,6}|[\u4e00-\u9fa5]{2,4}(?:手里|身上|派我|拦我)|(?:是|叫|名叫)[\u4e00-\u9fa5]{2,6}|阻拦(?:者)?(?:是|叫)?[\u4e00-\u9fa5]{2,6}/;
   const ACTION_RE = /带我去|领我去|帮我找|陪我去|跟我去|带我去找/;
 
   function normalizePlayerLineForApi(playerLine) {
@@ -340,39 +325,88 @@
     if (MASTERMIND_RE.test(line) && /[\u4e00-\u9fa5]{2,4}/.test(line)) {
       return true;
     }
+    if (/^你说|你刚说|就是指使者|就是指|换你说/.test(line) && /[\u4e00-\u9fa5]{2,5}/.test(line)) {
+      return true;
+    }
+    return false;
+  }
+
+  function isPlayerLineConcrete(playerLine, seed) {
+    const line = String(playerLine || "").trim();
+    if (!line) {
+      return false;
+    }
+    if (hasConcretePlayerInfo(line)) {
+      return true;
+    }
+    if (seed && detectPlayerRevealedKnowledge(line, seed)) {
+      return true;
+    }
+    if (seed) {
+      for (const k of getPlayerKnowledgeList(seed)) {
+        if (k.match && line.includes(k.match)) {
+          return true;
+        }
+        if (k.offerLine) {
+          const frag = k.offerLine.replace(/[，。！？]/g, "").slice(0, 10);
+          if (frag.length >= 4 && line.replace(/\s/g, "").includes(frag)) {
+            return true;
+          }
+        }
+      }
+    }
     return false;
   }
 
   /** 玩家提出交易但未给出可核对的具体信息（空头支票） */
-  function detectHollowTradeOffer(playerLine) {
+  function detectHollowTradeOffer(playerLine, seed) {
     const line = String(playerLine || "").trim();
     if (!line || !TRADE_OFFER_RE.test(line)) {
       return false;
     }
-    if (hasConcretePlayerInfo(line)) {
+    if (isPlayerLineConcrete(line, seed)) {
       return false;
     }
-    if (VAGUE_TRADE_TOKEN_RE.test(line) || OFFER_KNOWN_RE.test(line)) {
+    if (/下落换|若我说|若我告诉|一句实话|账本下落/.test(line)) {
       return true;
     }
-    return TRADE_OFFER_RE.test(line);
+    return VAGUE_TRADE_TOKEN_RE.test(line) && !/[\u4e00-\u9fa5]{2,6}(?:手里|是|叫|名叫)/.test(line);
   }
 
-  function detectTradeOfferNeedsPlayerFirst(playerLine) {
+  function detectTradeOfferNeedsPlayerFirst(playerLine, seed) {
     const line = String(playerLine || "").trim();
-    return TRADE_OFFER_RE.test(line) && !hasConcretePlayerInfo(line);
+    return TRADE_OFFER_RE.test(line) && !isPlayerLineConcrete(line, seed);
   }
 
-  function trackEmptyPromise(session, playerLine) {
+  function trackEmptyPromise(session, playerLine, seed) {
     if (!session) {
       return 0;
     }
-    if (detectHollowTradeOffer(playerLine)) {
+    if (detectHollowTradeOffer(playerLine, seed)) {
       session.emptyPromiseCount = (session.emptyPromiseCount || 0) + 1;
-    } else if (hasConcretePlayerInfo(playerLine)) {
+    } else if (isPlayerLineConcrete(playerLine, seed)) {
       session.emptyPromiseCount = 0;
     }
     return session.emptyPromiseCount || 0;
+  }
+
+  function pickConfirmAfterSharpLine(lastAssistantLine) {
+    const t = String(lastAssistantLine || "").trim();
+    if (!t) {
+      return "";
+    }
+    const patterns = [
+      /指使者(?:是|乃|为)([\u4e00-\u9fa5]{2,8})/,
+      /([\u4e00-\u9fa5]{2,8})(?:就是指使者|是幕后|是主使)/,
+      /经手人(?:是|乃)([\u4e00-\u9fa5]{2,8})/,
+    ];
+    for (const re of patterns) {
+      const m = t.match(re);
+      if (m?.[1]) {
+        return `${m[1]}就是指使者，账本现在在哪？`;
+      }
+    }
+    return "";
   }
 
   function isEmptyPromiseBankrupt(session) {
@@ -563,6 +597,7 @@
       playerNamesMastermind: Boolean(extra?.playerNamesMastermind),
       hollowTradeOffer: Boolean(extra?.hollowTradeOffer),
       tradeOfferNeedsPlayerFirst: Boolean(extra?.tradeOfferNeedsPlayerFirst),
+      playerConcreteReveal: Boolean(extra?.playerConcreteReveal),
       emptyPromiseBankrupt: bankrupt,
       emptyPromiseCount: emptyCount,
     };
@@ -639,6 +674,8 @@
     detectHollowTradeOffer,
     detectTradeOfferNeedsPlayerFirst,
     hasConcretePlayerInfo,
+    isPlayerLineConcrete,
+    pickConfirmAfterSharpLine,
     trackEmptyPromise,
     isEmptyPromiseBankrupt,
     bumpNeglectBeforeReply,

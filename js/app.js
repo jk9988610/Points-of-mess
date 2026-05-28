@@ -457,7 +457,7 @@
       persist(state);
       const goal = window.GameOnion?.extractGoal?.(session.plotSummary) || "";
       window.PomDebug?.logLocal(
-        "洋葱·种子摘要已注入",
+        "剧情·种子摘要已注入",
         `${window.GameOnion.formatLayersDebug(session.plotSummary)}${goal ? `\n目标：${goal}` : ""}`,
         ["summary-out"]
       );
@@ -763,15 +763,20 @@
     const playerNamesMastermind = Boolean(
       window.GameOnion?.detectPlayerNamesMastermind?.(apiLine)
     );
+    const seed = archetype.onionSeed;
+    const playerConcreteReveal = Boolean(
+      window.GameOnion?.isPlayerLineConcrete?.(apiLine, seed)
+    );
     const hollowTradeOffer = Boolean(
-      window.GameOnion?.detectHollowTradeOffer?.(apiLine)
+      window.GameOnion?.detectHollowTradeOffer?.(apiLine, seed)
     );
     const tradeOfferNeedsPlayerFirst = Boolean(
-      window.GameOnion?.detectTradeOfferNeedsPlayerFirst?.(apiLine)
+      window.GameOnion?.detectTradeOfferNeedsPlayerFirst?.(apiLine, seed)
     );
     const emptyPromiseCount = window.GameOnion?.trackEmptyPromise?.(
       session,
-      apiLine
+      apiLine,
+      seed
     );
     const emptyPromiseBankrupt = Boolean(
       window.GameOnion?.isEmptyPromiseBankrupt?.(session)
@@ -790,6 +795,7 @@
       apiLine: apiLine !== rawLine ? apiLine : undefined,
       redundantOffer,
       hollowTradeOffer,
+      playerConcreteReveal,
       emptyPromiseCount,
       neglectRounds: neglectBefore.neglectPrimaryRounds,
     });
@@ -883,6 +889,7 @@
       neglectWarn: neglectBefore.shouldWarn,
       hollowTradeOffer,
       tradeOfferNeedsPlayerFirst,
+      playerConcreteReveal,
       emptyPromiseBankrupt,
       emptyPromiseCount,
     };
@@ -974,7 +981,7 @@
       const stall = window.GameOnion?.updateStallCounters?.(session, session.plotSummary);
       if (stall && stall.stallTurns >= 2) {
         window.PomDebug?.logLocalWarn(
-          "洋葱·僵局",
+          "剧情·僵局",
           `连续 ${stall.stallTurns} 轮 [已确认] 无增加 · 下轮 reply/选项已加强让步与破局提示`,
           ["summary"]
         );
@@ -988,7 +995,7 @@
       );
       if (neglect?.shouldWarn) {
         window.PomDebug?.logLocalWarn(
-          "洋葱·回避#1",
+          "剧情·回避指使者",
           `已连续 ${neglect.neglectPrimaryRounds} 轮未推进指使者 · 下轮加压`,
           ["summary"]
         );
@@ -1000,12 +1007,16 @@
           ["summary"]
         );
       }
-      if (hollowTradeOffer || emptyPromiseBankrupt) {
+      if (emptyPromiseBankrupt) {
         window.PomDebug?.logLocalWarn(
-          "交易·先亮牌",
-          emptyPromiseBankrupt
-            ? `空头承诺 ${emptyPromiseCount} 次 · 信用破产`
-            : "玩家空头交易 · reply 须拒先给线索",
+          "交易·信用破产",
+          `空头承诺 ${emptyPromiseCount} 次`,
+          ["summary"]
+        );
+      } else if (hollowTradeOffer) {
+        window.PomDebug?.logLocalWarn(
+          "交易·未亮牌",
+          "玩家空头交换 · reply 须拒先给线索",
           ["summary"]
         );
       }
@@ -1239,7 +1250,7 @@
   if (!window.GameState.PERSIST_SESSIONS) {
     window.PomDebug?.logLocal(
       "调试说明",
-      "打印选择=过滤面板+复制。黄/绿=①②③ API。开局程序注入洋葱种子摘要。详见 docs/DEBUG-API-SPLIT.md",
+      "打印选择=过滤面板+复制。黄/绿=①②③ API。开局注入剧情种子摘要。详见 docs/DEBUG-API-SPLIT.md",
       ["ui"]
     );
   }
