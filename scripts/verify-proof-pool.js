@@ -75,7 +75,6 @@ for (const p of pool.CURATED_PROBLEMS) {
 const sample = intents.attachOptionIds([
   { intent: "advance", line: "地不湿，故按若下雨则地湿，下雨不成立" },
   { intent: "decoy", line: "地不湿，故原命题不成立" },
-  { intent: "decoy", line: "未下雨，故地不湿" },
 ]);
 const check = intents.validateProofOptions(sample);
 if (!check.ok) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** 僵局：3×advance 选项校验 */
+/** 僵局：2×advance 选项校验 */
 
 const fs = require("fs");
 const path = require("path");
@@ -16,7 +16,6 @@ const I = ctx.window.GameProofIntents;
 const raw = [
   { intent: "advance", line: "由 P1、P2，依否后律得 L1。" },
   { intent: "advance", line: "后件假，故前件假，未下雨。" },
-  { intent: "advance", line: "地不湿，由 P1 否后得未下雨。" },
 ];
 
 const check = I.validateStallAdvanceOptions(raw);
@@ -26,8 +25,8 @@ if (!check.ok) {
 }
 
 const opts = I.attachStallAdvanceIds(raw);
-if (opts.length !== 3 || opts.some((o) => o.intent !== "advance")) {
-  console.error("expected 3 advance buttons");
+if (opts.length !== 2 || opts.some((o) => o.intent !== "advance")) {
+  console.error("expected 2 advance buttons");
   process.exit(1);
 }
 if (!opts.every((o) => o.isCorrect)) {

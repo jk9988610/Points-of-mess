@@ -506,16 +506,16 @@
     parts.push(
       "",
       "【选项写法】",
-      "共 3 条推证句：1 条 advance（正确，须实质推进当前 Lk）+ 2 条 decoy（似真误推，不可推进 Lk）。",
+      "共 2 条推证句：1 条 advance（正确，须实质推进当前 Lk）+ 1 条 decoy（似真误推，不可推进 Lk）。",
       "decoy：与 advance 同步骤的似真误推；**建议**以谬误名称起首（如「肯定后件：…」「循环论证：…」）；禁止跳跃/提前/跳过 Lk 直证 G。",
-      "三句难度相近；程序随机排列按钮位置。"
+      "两句难度相近；程序随机排列按钮位置。"
     );
     if (inquireStreak >= 2) {
       parts.push("连续多轮未选 advance：本轮 advance 须直指待证 Lk。");
     }
     if (stallTurns >= 2) {
       parts.push(
-        "僵局破局：共 3 条，**全部为 advance**（措辞可不同，逻辑须正确推进当前 Lk）；**禁止 decoy**。"
+        "僵局破局：共 2 条，**全部为 advance**（措辞可不同，逻辑须正确推进当前 Lk）；**禁止 decoy**。"
       );
     }
     if (context?.emptyPromiseCount >= 2) {

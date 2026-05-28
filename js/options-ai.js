@@ -68,31 +68,31 @@
     const pendingNote = "须阅读【证明态势】中的开放引理 Lk；advance 只推进该 Lk，decoy 不得推进该 Lk。";
     return `你是**逻辑推理论证题**选项撰稿人。证辩者与「${name}」对论。输出下一句逻辑推断（≤35 字）。
 
-【选项类型】共 3 条：
+【选项类型】共 2 条：
 - advance ×1：唯一正确逻辑推断，实质推进当前 Lk（不可跳步直证 G）
-- decoy ×2：与 advance **同一步骤粒度**的似真误推（语气/结构相近），如肯定后件、否定前件、逆命题、误用前提、混淆充分必要、选言误用、循环论证等；不可推进 Lk
+- decoy ×1：与 advance **同一步骤粒度**的似真误推（语气/结构相近），如肯定后件、否定前件、逆命题、误用前提、混淆充分必要、选言误用、循环论证等；不可推进 Lk
 - **禁止** decoy 写「跳过 Lk」「提前证 G」「这步可省略」「直接得 G」等不参与当前 Lk 的跳跃/提前类句子
 
 【写法】用「若…则…」「故」「否则」「矛盾」；禁止算式、符号链、心算。禁止问句。
 ${pendingNote}
 只输出 JSON：
-{"options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"decoy","line":"..."}]}`;
+{"options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."}]}`;
   }
 
   function buildOptionsSystemStall(characterName) {
     const name = String(characterName || "证官").trim() || "证官";
     return `你是**逻辑推理论证题**选项撰稿人。证辩者与「${name}」对论。本局处于**僵局破局**。
-输出 3 条 **advance**（均须为正确、可推进当前 Lk 的推断；措辞可不同，逻辑等价）。
+输出 2 条 **advance**（均须为正确、可推进当前 Lk 的推断；措辞可不同，逻辑等价）。
 禁止 decoy。禁止问句。禁止算式链。
 只输出 JSON：
-{"options":[{"intent":"advance","line":"..."},{"intent":"advance","line":"..."},{"intent":"advance","line":"..."}]}`;
+{"options":[{"intent":"advance","line":"..."},{"intent":"advance","line":"..."}]}`;
   }
 
   const buildOptionsSystemDuo = buildOptionsSystemProof;
 
   function buildIntentHintsForApi() {
     return `- advance（正确推证，×1）
-- decoy（误推证，×2）
+- decoy（误推证，×1）
 - 结束证辩`;
   }
 
@@ -476,7 +476,7 @@ ${archetype.system}
       return `${base}
 
 非收束轮示例：
-{"reply":"先把逻辑步讲实，我再补一步。","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"decoy","line":"..."}]}
+{"reply":"先把逻辑步讲实，我再补一步。","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."}]}
 
 收束轮示例：
 {"reply":"G 已证毕，休庭。"}`;
@@ -501,8 +501,8 @@ ${summaryBlock}
 ${buildIntentHintsForApi()}
 
 【输出】
-${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"decoy","line":"..."}]}。'}
-reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 advance + 2 decoy）；advance 只推进当前 Lk；decoy 须似真误推、与 advance 同步骤，禁止跳跃/提前证 G。${closeBlock}`;
+${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."}]}。'}
+reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 2 条（1 advance + 1 decoy）；advance 只推进当前 Lk；decoy 须似真误推、与 advance 同步骤，禁止跳跃/提前证 G。${closeBlock}`;
   }
 
   function presetOptions(archetype) {

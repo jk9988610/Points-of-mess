@@ -411,6 +411,7 @@
         opt?.intent === "continue" || opt?.intent === "reargue"
       );
       btn.disabled = disabled || !opt?.line || loading;
+      btn.classList.toggle("hidden", !opt);
     }
     optionsBar.classList.toggle(
       "options-bar--ending",
@@ -441,21 +442,17 @@
       highlightId,
       highlightDocId: nearDoc?.id || null,
     });
-    hintEl.textContent = state.talkingId
-      ? state.isStreaming
-        ? "等待角色回复… · 点击可移动（可走出橙圈）"
-        : isDialogueSuspended()
-          ? state.episodeAwaitingRestart && isInTalkZoneNow()
-            ? "本局已结束 · 靠近证官继续下一题"
-            : state.dialogueHungUp && isInTalkZoneNow()
-              ? "对话已挂起 · 走出橙圈再进入可继续"
-              : "回到橙圈内，对话气泡会恢复"
-          : "点选下方句子 · 点击移动（走出橙圈将暂停选项）"
-      : near
+    if (state.talkingId) {
+      hintEl.textContent = "";
+      hintEl.classList.add("map-hint--hidden");
+    } else {
+      hintEl.classList.remove("map-hint--hidden");
+      hintEl.textContent = near
         ? `点击「${near.name}」交谈`
         : nearDoc
           ? `点击「${nearDoc.title}」打开文档`
           : "点击空地移动 · 靠近📄或证官";
+    }
   }
 
   function endTalking() {

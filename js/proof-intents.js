@@ -1,9 +1,8 @@
 (function () {
-  /** 证明题选项：三推证（一正两误，位置随机） */
+  /** 证明题选项：双推证（一正一误，位置随机） */
   const PROOF_OPTION_SPECS = [
     { id: 1, intent: "advance", label: "推证", engine: "keypoint", slot: "proof1" },
     { id: 2, intent: "decoy", label: "推证", engine: "decoy", slot: "proof2" },
-    { id: 3, intent: "decoy", label: "推证", engine: "decoy", slot: "proof3" },
   ];
 
   const LEGACY_MAP = {
@@ -80,8 +79,8 @@
     if (advanceCount !== 1) {
       return { ok: false, reason: `advance 应为 1 条，实际 ${advanceCount}` };
     }
-    if (decoyCount !== 2) {
-      return { ok: false, reason: `decoy 应为 2 条，实际 ${decoyCount}` };
+    if (decoyCount !== 1) {
+      return { ok: false, reason: `decoy 应为 1 条，实际 ${decoyCount}` };
     }
     const lines = list.map((o) => String(o?.line || "").trim()).filter(Boolean);
     if (new Set(lines).size < lines.length) {
@@ -98,16 +97,16 @@
     return { ok: true };
   }
 
-  /** 僵局：仅 3 条 advance（措辞可不同，逻辑均正确） */
+  /** 僵局：仅 2 条 advance（措辞可不同，逻辑均正确） */
   function validateStallAdvanceOptions(options) {
     const list = Array.isArray(options) ? options : [];
     const advances = list
       .map((o) => ({ ui: normalizeUiIntent(o?.intent), line: String(o?.line || "").trim() }))
       .filter((o) => o.ui === "advance" && o.line);
-    if (advances.length !== 3) {
+    if (advances.length !== 2) {
       return {
         ok: false,
-        reason: `僵局破局应为 3 条 advance，实际 ${advances.length}`,
+        reason: `僵局破局应为 2 条 advance，实际 ${advances.length}`,
       };
     }
     const lines = advances.map((o) => o.line);
@@ -126,18 +125,18 @@
         advanceLines.push(line);
       }
     }
-    while (advanceLines.length < 3) {
+    while (advanceLines.length < 2) {
       advanceLines.push(advanceLines[0] || "依前提推出当前引理。");
     }
-    const triple = shuffleInPlace(
-      advanceLines.slice(0, 3).map((line) => ({
+    const pair = shuffleInPlace(
+      advanceLines.slice(0, 2).map((line) => ({
         intent: "advance",
         line,
         isCorrect: true,
       }))
     );
     return PROOF_OPTION_SPECS.map((spec, i) => {
-      const item = triple[i];
+      const item = pair[i];
       return {
         id: spec.id,
         intent: "advance",
@@ -149,10 +148,10 @@
     });
   }
 
-  /** 绑定 id，并随机排列三枚推证钮（intent 随句迁移） */
+  /** 绑定 id，并随机排列两枚推证钮（intent 随句迁移） */
   function attachOptionIds(parsedList) {
     let advanceLine = "";
-    const decoyLines = [];
+    let decoyLine = "";
     for (const item of parsedList) {
       const ui = normalizeUiIntent(item?.intent);
       const line = String(item?.line || "").trim();
@@ -161,17 +160,16 @@
       }
       if (ui === "advance" && !advanceLine) {
         advanceLine = line;
-      } else if (ui === "decoy") {
-        decoyLines.push(line);
+      } else if (ui === "decoy" && !decoyLine) {
+        decoyLine = line;
       }
     }
-    const triple = shuffleInPlace([
+    const pair = shuffleInPlace([
       { intent: "advance", line: advanceLine, isCorrect: true },
-      { intent: "decoy", line: decoyLines[0] || "", isCorrect: false },
-      { intent: "decoy", line: decoyLines[1] || "", isCorrect: false },
+      { intent: "decoy", line: decoyLine, isCorrect: false },
     ]);
     return PROOF_OPTION_SPECS.map((spec, i) => {
-      const item = triple[i];
+      const item = pair[i];
       return {
         id: spec.id,
         intent: item.intent,
