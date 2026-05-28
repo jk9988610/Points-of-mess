@@ -10,6 +10,7 @@ vm.runInContext(code, vm.createContext(ctx));
 const G = ctx.window.GameOnion;
 
 const seed = {
+  dynamicPlayerEvidence: false,
   neglectPrimaryFailAt: 5,
   goalTracks: {
     mastermind: { keywords: ["指使", "老九"] },

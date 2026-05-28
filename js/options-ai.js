@@ -55,7 +55,7 @@
     return `你是选项撰稿人。玩家与「${name}」对峙。输出玩家下一句（中文 ≤35 字）。
 
 【分工】
-- keypoint（推进）：唯一推进本局目标；须用【玩家可亮牌】offer 原句，或核对锋利刚说的专名。
+- keypoint（推进）：唯一推进本局目标；须用【玩家证据】offer 原句，或核对锋利刚说的专名。
 - followup（询问）：来意/态度/关系；禁核心密语、亮牌交换、互怼逼供。
 
 禁止两条同义。只输出 JSON：
@@ -100,7 +100,7 @@
       const reveal = window.GameOnion?.pickProgramRevealLine?.(session, seed);
       const stall = (onionContext?.stallTurns ?? 0) >= 2;
       const hollow = window.GameOnion?.detectHollowTradeOffer?.(keypoint, seed);
-      const concrete = window.GameOnion?.isPlayerLineConcrete?.(keypoint, seed);
+      const concrete = window.GameOnion?.isPlayerLineConcrete?.(keypoint, seed, session);
       if (reveal && (stall || hollow || !concrete)) {
         keypoint = reveal;
       }

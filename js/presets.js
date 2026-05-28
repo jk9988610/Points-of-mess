@@ -36,7 +36,16 @@
           minPremisesForEnding: 3,
           minKeypointTurns: 2,
         },
-        /** 结局前须消耗全部【玩家可亮牌】 */
+        /** AI 每轮赋予玩家证据（替代固定 playerKnowledge 亮牌） */
+        dynamicPlayerEvidence: true,
+        /** 结局前须亮出至少 N 条 AI 赋予的证据 */
+        endingMinEvidenceSpent: 2,
+        /** 供 AI 证据赋予参考的背景线索（非直接 offer） */
+        evidenceSeedHints: [
+          "玩家亲眼见陈四在东门阻拦锋利",
+          "玩家调查得知账本最后经刘老三经手",
+        ],
+        /** 结局前须消耗亮牌证据 */
         endingSpendAllKnowledge: true,
         endingEpilogueFallback: "主使已明，账本在他手里，这场对峙到此为止。",
         neglectPrimaryWarnAt: 3,
@@ -61,7 +70,7 @@
             keywords: ["账本", "经手", "保管", "手里", "转移", "下落"],
           },
         },
-        /** 玩家开局已知、可消耗的事实（防空头交易死锁） */
+        /** 背景线索（仅 AI 证据 prompt 参考；亮牌由 session.playerEvidence 驱动） */
         playerKnowledge: [
           {
             id: "blocker",
@@ -104,8 +113,8 @@
           id: 1,
           intent: "keypoint",
           label: "推进",
-          line: "阻拦的是陈四，换你说他背后是谁。",
-          send: "[intent:keypoint] 阻拦的是陈四，换你说他背后是谁。",
+          line: "用我掌握的证据，换你说实话。",
+          send: "[intent:keypoint] 用我掌握的证据，换你说实话。",
         },
         {
           id: 2,

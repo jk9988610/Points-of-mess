@@ -51,6 +51,8 @@
           lastConfirmedCount: 0,
           neglectPrimaryRounds: 0,
           emptyPromiseCount: 0,
+          playerEvidence: [],
+          lastEvidenceGrantKey: "",
           spentPlayerKnowledge: [],
           inquireLineIndex: 0,
           lastPickIntent: "",

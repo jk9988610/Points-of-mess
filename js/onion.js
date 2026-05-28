@@ -204,7 +204,7 @@
     parts.push(
       "",
       "【选项写法】",
-      "推进(keypoint)：必须用上方建议 offer 或【玩家可亮牌】未消耗句；禁止重复已亮过的筹码。",
+      "推进(keypoint)：必须用上方建议 offer 或【玩家证据】未消耗句；禁止重复已亮过的筹码。",
       "询问(followup)：来意/态度；禁指使者/账本/亮牌交换。",
       "禁止两条同义。"
     );
@@ -222,7 +222,7 @@
       parts.push("主使已供述：keypoint 用确认句收束，勿再「换你说指使者」。");
     }
     if (stallTurns >= 2) {
-      parts.push("连续无进展：亮牌必须用【玩家可亮牌】中未用过的 offer 句。");
+      parts.push("连续无进展：亮牌必须用【玩家证据】中未用过的 offer 句。");
     }
     if (context?.emptyPromiseCount >= 2) {
       parts.push("玩家信用破产：keypoint 只能确认已说事实；followup 仍可为旁询。");
@@ -461,7 +461,7 @@
     return false;
   }
 
-  function isPlayerLineConcrete(playerLine, seed) {
+  function isPlayerLineConcrete(playerLine, seed, session) {
     const line = String(playerLine || "").trim();
     if (!line) {
       return false;
@@ -469,11 +469,11 @@
     if (hasConcretePlayerInfo(line)) {
       return true;
     }
-    if (seed && detectPlayerRevealedKnowledge(line, seed)) {
+    if (seed && detectPlayerRevealedKnowledge(line, seed, session)) {
       return true;
     }
     if (seed) {
-      for (const k of getPlayerKnowledgeList(seed)) {
+      for (const k of getPlayerKnowledgeList(session, seed)) {
         if (k.match && line.includes(k.match)) {
           return true;
         }
@@ -546,7 +546,11 @@
     return (session?.emptyPromiseCount || 0) >= 2;
   }
 
-  function getPlayerKnowledgeList(seed) {
+  function usesDynamicPlayerEvidence(seed) {
+    return seed?.dynamicPlayerEvidence !== false;
+  }
+
+  function getSeedKnowledgeList(seed) {
     const raw = seed?.playerKnowledge;
     if (!Array.isArray(raw)) {
       return [];
@@ -561,20 +565,43 @@
       .filter((k) => k.id && k.offerLine);
   }
 
+  function getSessionEvidenceList(session) {
+    if (!Array.isArray(session?.playerEvidence)) {
+      return [];
+    }
+    return session.playerEvidence
+      .map((k) => ({
+        id: String(k?.id || "").trim(),
+        match: String(k?.match || "").trim(),
+        text: String(k?.text || "").trim(),
+        offerLine: String(k?.offerLine || k?.text || "").trim(),
+      }))
+      .filter((k) => k.id && k.offerLine);
+  }
+
+  /** 可亮牌证据：动态池优先，否则回退 seed.playerKnowledge */
+  function getPlayerKnowledgeList(session, seed) {
+    if (usesDynamicPlayerEvidence(seed)) {
+      return getSessionEvidenceList(session);
+    }
+    return getSeedKnowledgeList(seed);
+  }
+
   function getAvailableKnowledge(session, seed) {
     const spent = session?.spentPlayerKnowledge || [];
-    return getPlayerKnowledgeList(seed).filter((k) => !spent.includes(k.id));
+    return getPlayerKnowledgeList(session, seed).filter((k) => !spent.includes(k.id));
   }
 
   function formatPlayerKnowledgeForOptions(session, seed) {
     const avail = getAvailableKnowledge(session, seed);
+    const label = usesDynamicPlayerEvidence(seed) ? "【玩家证据】" : "【玩家已知】";
     if (!avail.length) {
-      return "【玩家已知】（已用尽，keypoint 须确认锋利上一句或陈述新事实）";
+      return `${label}（暂无未用证据；keypoint 须确认锋利上一句或陈述新事实）`;
     }
     const lines = avail.map(
       (k, i) => `  ${i + 1}. ${k.text} → offer:「${k.offerLine}」`
     );
-    return `【玩家已知】（keypoint 优先用 offer 亮牌）\n${lines.join("\n")}`;
+    return `${label}（keypoint 须用 offer 原句亮牌）\n${lines.join("\n")}`;
   }
 
   function pickProgramRevealLine(session, seed) {
@@ -778,6 +805,9 @@
     const t = String(line || "");
     if (slotId === "mastermind") {
       const patterns = [
+        /而是([\u4e00-\u9fa5]{2,6})/,
+        /的是([\u4e00-\u9fa5]{2,6})(?:[，。；]|$)/,
+        /指使[\u4e00-\u9fa5]{0,8}的是([\u4e00-\u9fa5]{2,6})/,
         /指使者(?:是|乃|为)(?:账房总管)?([\u4e00-\u9fa5]{2,6})/,
         /([\u4e00-\u9fa5]{2,6})(?:就是|乃是)?(?:唯一)?主使/,
         /([\u4e00-\u9fa5]{2,6}).{0,8}(?:指使|派我)/,
@@ -792,6 +822,7 @@
     }
     if (slotId === "ledger") {
       const patterns = [
+        /不在([\u4e00-\u9fa5]{2,6})手里/,
         /账本(?:在|于|还在)?([\u4e00-\u9fa5]{2,6})/,
         /经手人(?:是|为)([\u4e00-\u9fa5]{2,6})/,
         /([\u4e00-\u9fa5]{2,6})(?:手里|手上|保管)/,
@@ -804,6 +835,41 @@
       }
     }
     return "";
+  }
+
+  /** 档案中同 slot 是否仍有未标记 [已推翻] 的双真值（A2.1） */
+  function hasUnresolvedSlotContradiction(plotSummary, seed) {
+    const archiveMatch = String(plotSummary || "").match(
+      /(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/
+    );
+    if (!archiveMatch) {
+      return false;
+    }
+    const bodyLines = archiveMatch[1].split("\n").slice(1);
+    const slotIds = Object.keys(seed?.goalTracks || { mastermind: {} });
+    for (const slotId of slotIds) {
+      const kws = seed?.goalTracks?.[slotId]?.keywords || [];
+      if (!kws.length) {
+        continue;
+      }
+      const names = [];
+      for (const line of bodyLines) {
+        if (!/\[已确认\]/.test(line) || /\[已推翻\]/.test(line)) {
+          continue;
+        }
+        if (!kws.some((k) => line.includes(String(k).trim()))) {
+          continue;
+        }
+        const name = extractClaimName(line, slotId);
+        if (name) {
+          names.push(name);
+        }
+      }
+      if ([...new Set(names)].length > 1) {
+        return true;
+      }
+    }
+    return false;
   }
 
   function slotClosed(plotSummary, seed, slotId) {
@@ -916,6 +982,9 @@
   /** 论证闭合：无未决开放论断 + 必填 slot 闭合 + 核心目标词（A3） */
   function isArgumentClosed(plotSummary, seed) {
     if (!extractGoal(plotSummary)) {
+      return false;
+    }
+    if (hasUnresolvedSlotContradiction(plotSummary, seed)) {
       return false;
     }
     const claims = openClaims(plotSummary);
@@ -1070,7 +1139,7 @@
     }
     const line = String(playerLine || "");
     let marked = false;
-    for (const k of getPlayerKnowledgeList(seed)) {
+    for (const k of getPlayerKnowledgeList(session, seed)) {
       if (session.spentPlayerKnowledge.includes(k.id)) {
         continue;
       }
@@ -1082,9 +1151,9 @@
     return marked;
   }
 
-  function detectPlayerRevealedKnowledge(playerLine, seed) {
+  function detectPlayerRevealedKnowledge(playerLine, seed, session) {
     const line = String(playerLine || "");
-    return getPlayerKnowledgeList(seed).some(
+    return getPlayerKnowledgeList(session, seed).some(
       (k) => k.match && line.includes(k.match)
     );
   }
@@ -1139,7 +1208,7 @@
       return getNeglectState(session, seed);
     }
     if (seed?.goalTracks) {
-      if (detectPlayerRevealedKnowledge(playerLine, seed)) {
+      if (detectPlayerRevealedKnowledge(playerLine, seed, session)) {
         session.neglectPrimaryRounds = 0;
         return getNeglectState(session, seed);
       }
@@ -1280,17 +1349,29 @@
     }
     if (seed?.endingSpendAllKnowledge) {
       const spent = session.spentPlayerKnowledge || [];
-      const play = gameplayConfirmedBlob(plotSummary);
-      const blockerOk =
-        spent.includes("blocker") ||
-        /锋利供述[^。\n]{0,48}陈四/.test(play) ||
-        /玩家供述[^。\n]{0,48}陈四/.test(play);
-      const ledgerOk =
-        spent.includes("ledger") ||
-        /锋利供述[^。\n]{0,48}(?:刘老三|账本)/.test(play) ||
-        /玩家供述[^。\n]{0,48}(?:刘老三|账本)/.test(play);
-      if (!blockerOk || !ledgerOk) {
-        return false;
+      if (usesDynamicPlayerEvidence(seed)) {
+        const granted = getSessionEvidenceList(session);
+        const minSpend =
+          Number(seed?.endingMinEvidenceSpent) > 0
+            ? seed.endingMinEvidenceSpent
+            : Math.min(2, granted.length);
+        const spentCount = granted.filter((e) => spent.includes(e.id)).length;
+        if (spentCount < minSpend) {
+          return false;
+        }
+      } else {
+        const play = gameplayConfirmedBlob(plotSummary);
+        const blockerOk =
+          spent.includes("blocker") ||
+          /锋利供述[^。\n]{0,48}陈四/.test(play) ||
+          /玩家供述[^。\n]{0,48}陈四/.test(play);
+        const ledgerOk =
+          spent.includes("ledger") ||
+          /锋利供述[^。\n]{0,48}(?:刘老三|账本)/.test(play) ||
+          /玩家供述[^。\n]{0,48}(?:刘老三|账本)/.test(play);
+        if (!blockerOk || !ledgerOk) {
+          return false;
+        }
       }
     }
     return true;
@@ -1332,6 +1413,10 @@
     isReadyForEnding,
     isPlotReadyForEnding,
     isArgumentClosed,
+    hasUnresolvedSlotContradiction,
+    usesDynamicPlayerEvidence,
+    getSessionEvidenceList,
+    getSeedKnowledgeList,
     slotCoverage,
     reconcileEvidenceSlots,
     isFollowupShortAccept,

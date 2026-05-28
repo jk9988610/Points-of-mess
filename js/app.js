@@ -452,6 +452,9 @@
     if (!Array.isArray(session.spentPlayerKnowledge)) {
       session.spentPlayerKnowledge = [];
     }
+    if (!Array.isArray(session.playerEvidence)) {
+      session.playerEvidence = [];
+    }
     if (typeof session.keypointTurnCount !== "number") {
       session.keypointTurnCount = 0;
     }
@@ -494,6 +497,41 @@
       "首轮选项（预设·推进/询问，不发 API）",
       state.currentOptions.map((o) => o.line)
     );
+
+    if (window.GameEvidence?.bootstrapPlayerEvidence) {
+      window.GameEvidence.bootstrapPlayerEvidence(session, archetype.onionSeed).then(
+        (granted) => {
+          if (!granted || state.talkingId !== characterId || state.isStreaming) {
+            return;
+          }
+          const seed = archetype.onionSeed;
+          const kp = window.GameOnion?.pickKeypointOfferLine?.(
+            session,
+            seed,
+            session.plotSummary,
+            archetype.opening
+          );
+          if (kp && state.currentOptions?.length) {
+            state.currentOptions = state.currentOptions.map((o) =>
+              o.intent === "keypoint"
+                ? {
+                    ...o,
+                    line: kp,
+                    send: `[intent:keypoint] ${kp}`,
+                  }
+                : o
+            );
+            renderOptionButtons(state.currentOptions, false);
+            window.PomDebug?.logLocal(
+              "首轮 keypoint 已换为 AI 证据",
+              kp,
+              ["evidence-out"]
+            );
+          }
+          persist(state);
+        }
+      );
+    }
 
     setOptionsVisible(true);
     setMemoryInputVisible(true);
@@ -564,6 +602,8 @@
     session.inEndingCloseChoices = false;
     session.emptyPromiseCount = 0;
     session.spentPlayerKnowledge = [];
+    session.playerEvidence = [];
+    session.lastEvidenceGrantKey = "";
     session.inquireLineIndex = 0;
     session.lastPickIntent = "";
     session.keypointTurnCount = 0;
@@ -771,7 +811,7 @@
     );
     const seed = archetype.onionSeed;
     const playerConcreteReveal = Boolean(
-      window.GameOnion?.isPlayerLineConcrete?.(apiLine, seed)
+      window.GameOnion?.isPlayerLineConcrete?.(apiLine, seed, session)
     );
     const hollowTradeOffer = Boolean(
       window.GameOnion?.detectHollowTradeOffer?.(apiLine, seed)
@@ -911,7 +951,9 @@
     const willSummary = window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
 
     const apiSteps = willSummary
-      ? ["①reply", "②选项", "③摘要"]
+      ? window.GameOnion?.usesDynamicPlayerEvidence?.(archetype.onionSeed)
+        ? ["①reply", "②选项", "③摘要", "④证据"]
+        : ["①reply", "②选项", "③摘要"]
       : ["①reply", "②选项"];
     window.PomDebug?.logLocal(
       "API 路径",
@@ -963,6 +1005,24 @@
           );
           if (summaryOk) {
             persist(state);
+            if (window.GameEvidence?.grantPlayerEvidence) {
+              try {
+                const evOk = await window.GameEvidence.grantPlayerEvidence(
+                  session,
+                  archetype.onionSeed,
+                  signal
+                );
+                if (evOk) {
+                  persist(state);
+                }
+              } catch (e) {
+                if (e.name !== "AbortError") {
+                  window.PomDebug?.logLocalWarn("④证据赋予失败", e.message, [
+                    "evidence",
+                  ]);
+                }
+              }
+            }
           }
         } catch (e) {
           if (e.name !== "AbortError") {

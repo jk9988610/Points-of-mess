@@ -22,8 +22,9 @@ function extractClaimName(line, slotId) {
   const t = String(line || "");
   if (slotId === "mastermind") {
     const patterns = [
-      /指使者(?:是|乃|为)([\u4e00-\u9fa5]{2,6})/,
-      /([\u4e00-\u9fa5]{2,6})(?:就是|乃是)?(?:唯一)?主使/,
+      /而是([\u4e00-\u9fa5]{2,6})/,
+      /的是([\u4e00-\u9fa5]{2,6})(?:[，。；]|$)/,
+      /指使[\u4e00-\u9fa5]{0,8}的是([\u4e00-\u9fa5]{2,6})/,
       /(赵二爷|赵爷|老九|赵德柱)/,
     ];
     for (const re of patterns) {
