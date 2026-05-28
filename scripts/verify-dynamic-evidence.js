@@ -62,7 +62,7 @@ if (avail.length !== 1 || !avail[0].offerLine.includes("陈四")) {
 }
 
 const fmt = G.formatPlayerKnowledgeForOptions(session, seed);
-if (!fmt.includes("【玩家证据】")) {
+if (!fmt.includes("【证辩者引理】")) {
   console.error("options block label");
   process.exit(1);
 }

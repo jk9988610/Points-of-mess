@@ -20,7 +20,7 @@ function extractClaimName(line, slotId) {
 
 function reconcileEvidenceSlots(text, seed) {
   let result = String(text || "").trim();
-  const archiveMatch = result.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
+  const archiveMatch = result.match(/(【证明席】[\s\S]*?)$/) || result.match(/(【剧情档案】[\s\S]*?)$/);
   if (!archiveMatch) return result.trim();
   const head = archiveMatch[1].split("\n").slice(0, 1);
   const bodyLines = archiveMatch[1].split("\n").slice(1);
@@ -47,9 +47,9 @@ function reconcileEvidenceSlots(text, seed) {
 }
 
 function hasUnresolvedSlotContradiction(plotSummary, seed) {
-  const archiveMatch = String(plotSummary || "").match(
-    /(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/
-  );
+  const archiveMatch =
+    String(plotSummary || "").match(/(【证明席】[\s\S]*?)$/) ||
+    String(plotSummary || "").match(/(【剧情档案】[\s\S]*?)$/);
   if (!archiveMatch) return false;
   const bodyLines = archiveMatch[1].split("\n").slice(1);
   for (const slotId of Object.keys(seed?.goalTracks || {})) {

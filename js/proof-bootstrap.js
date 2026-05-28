@@ -17,7 +17,7 @@ ${hint}
 【输出】只输出一个合法 JSON（无 markdown）：
 {
   "opening":"证官开场 1～2 句（≤40字，陈述式，禁止问句）",
-  "plotSummary":"完整证明席（含【论证目标】论题 G、【证明席】[前提]、[待证#1] L1 及「若要证 G…」行；≤900字）",
+  "plotSummary":"完整证明席（【论证目标】论题 G +【证明席】[前提]、[待证#1] L1、- [依赖] 若要证 G，则需证 L1；≤900字）",
   "options":[
     {"intent":"advance","line":"证辩者推进证明（≤35字，须能推进待证 L1）"},
     {"intent":"clarify","line":"了解论题/待证含义（≤35字，不推进）"},
@@ -29,7 +29,8 @@ ${hint}
 【规则】
 1. options 恰好 4 条，intent 各一；advance 仅 1 条且必须能推进证明
 2. 三条了解类语义互不重复；禁止休庭/离开
-3. plotSummary 用数学证明体标记，待证至多 1 条开放引理`;
+3. plotSummary 用数学证明体标记；待证至多 1 条；[依赖] 只写命题编号（G/Lk），不写引理全文
+4. 禁止【关系与态度】段`;
   }
 
   function parseBootstrapRaw(raw) {

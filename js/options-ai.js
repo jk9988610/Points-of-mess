@@ -264,7 +264,7 @@
   }) {
     const name = character.name;
     const pending = window.GameOnion?.extractPendingLines?.(plotSummary) || [];
-    const p1 = pending[0] || "α 的授权者是谁";
+    const p1 = pending[0] || "开放引理 L1";
     const failLine = String(archetype.failureLine || "你不出示引理，这证我收不了。").trim();
     const failSystem = `${roleStyleFromSystem(archetype.system)}${plotSummaryBlock(plotSummary)}
 【失败轮】证辩者多轮回避 #1「${p1}」。你是「${name}」。
@@ -459,7 +459,7 @@ ${archetype.system}
       : "";
 
     const summaryBlock = turn.plotSummary?.trim()
-      ? `\n【剧情摘要】（长程记忆；已写明的事实勿在 reply 里重复追问）\n${turn.plotSummary.trim()}\n`
+      ? `\n【证明席·长程】（已写入事实勿重复追问）\n${turn.plotSummary.trim()}\n`
       : "";
 
     return `${base}

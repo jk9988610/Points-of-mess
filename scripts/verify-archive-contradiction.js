@@ -41,7 +41,7 @@ function reconcileEvidenceSlots(text, seed) {
     /\n- \[待核实#[^\]]*\]\s*[（(]?(?:无|暂无|待填|待剧情推进后填写)[）)]?[^\n]*/gi,
     ""
   );
-  const archiveMatch = result.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
+  const archiveMatch = result.match(/(【证明席】[\s\S]*?)$/) || result.match(/(【剧情档案】[\s\S]*?)$/);
   if (!archiveMatch) return result.trim();
 
   const head = archiveMatch[1].split("\n").slice(0, 1);

@@ -16,30 +16,30 @@ function assert(cond, msg) {
 }
 
 const seed = {
-  inquireLines: ["你来找我，到底想干什么？", "你和阻拦我的人，什么关系？"],
+  inquireLines: ["你打算用反证还是直接证？", "本步关键引理是什么？"],
 };
 
 assert(
-  !G.detectPlayerNamesMastermind("别绕了，指使你的人到底是谁？"),
-  "问句不应判为供述指使者"
+  !G.detectPlayerNamesMastermind("L1 与前提 P1 如何衔接？"),
+  "了解句不应判为供述指使者"
 );
 assert(
-  G.isGoalAdvancePlayerLine("少废话，先答谁指使你的"),
-  "逼供句应为推进型"
+  G.isGoalAdvancePlayerLine("设 n=2k，换你说 n² 的表达式"),
+  "引理交换句应为推进型"
 );
 assert(
-  !G.isGoalAdvancePlayerLine("你来找我，到底想干什么？"),
-  "旁询句不应为推进型"
+  !G.isGoalAdvancePlayerLine("这题适合用反证吗？"),
+  "了解句不应为推进型"
 );
 const session = {};
 assert(
-  G.pickProgramInquireLine(session, seed).includes("干什么"),
-  "应有旁询句"
+  G.pickProgramInquireLine(session, seed).includes("反证"),
+  "应有了解句"
 );
 G.advanceInquireIndex(session);
 assert(
-  G.pickProgramInquireLine(session, seed).includes("关系"),
-  "旁询句应轮换"
+  G.pickProgramInquireLine(session, seed).includes("引理"),
+  "了解句应轮换"
 );
 
 if (failed) {

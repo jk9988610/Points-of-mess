@@ -94,7 +94,6 @@
         "既约分数 p/q 中 p、q 互素（无公因子）",
       ],
       pending: ["推出 p、q 均为偶数，与互素矛盾"],
-      attitude: ["证官要求每步可核对，拒绝跳步"],
       lemmaPool: [
         {
           id: "s1",
@@ -139,7 +138,6 @@
         "任意整数 n>1 必有素因子",
       ],
       pending: ["构造 N+1 并说明其素因子不在原表中"],
-      attitude: ["证官关注构造是否完备"],
       lemmaPool: [
         {
           id: "p1",
@@ -176,7 +174,6 @@
         "正整数 n 给定",
       ],
       pending: ["配对求和得到 S=n(n+1)/2"],
-      attitude: ["证官要求代数变形可核对"],
       lemmaPool: [
         {
           id: "g1",
@@ -210,7 +207,6 @@
       goal: "证明：对任意整数 n，存在 n+1>n",
       premises: ["整数的序关系：若 m=n+1 则 m>n"],
       pending: ["说明不存在上界最大的整数"],
-      attitude: ["证官要求反设后推出矛盾"],
       lemmaPool: [
         {
           id: "l1",
@@ -244,7 +240,6 @@
         "模 p 下非零元关于乘法封闭",
       ],
       pending: ["说明 a^(p-1) 模 p 余 1 的推理链"],
-      attitude: ["证官要求每步同余可核对"],
       lemmaPool: [
         {
           id: "f1",
@@ -278,7 +273,6 @@
         "平行线截线产生同位角相等",
       ],
       pending: ["用同位角将三内角拼成平角"],
-      attitude: ["证官要求几何关系可指认"],
       lemmaPool: [
         {
           id: "t1",
@@ -359,87 +353,6 @@
         b: "论证闭合，休庭。",
       },
     };
-  }
-
-  function buildOnionSeed(problem, mathematician) {
-    return {
-      proofTheme: true,
-      poolLemmaGrant: true,
-      problemId: problem.id,
-      roleLabel: `证官·${mathematician.name}`,
-      playerRoleLabel: "证辩者",
-      goal: problem.goal,
-      confirmed: problem.premises || [],
-      pending: [problem.pending].flat().filter(Boolean),
-      attitude: problem.attitude || [`证官·${mathematician.name} 主持证明，语气严谨`],
-      endingMinConfirmed: Math.max(3, (problem.premises?.length || 2) + 1),
-      endingCoreKeywords: problem.endingCoreKeywords || [],
-      endingMinKeypointTurns: 2,
-      maxOpenClaims: 1,
-      argumentProfile: {
-        label: "3推1",
-        maxOpenClaims: 1,
-        minPremisesForEnding: Math.max(3, (problem.premises?.length || 2) + 1),
-        minKeypointTurns: 2,
-      },
-      dynamicPlayerEvidence: true,
-      endingMinEvidenceSpent: Math.min(2, problem.lemmaPool?.length || 2),
-      endingSpendAllKnowledge: false,
-      endingEpilogueFallback:
-        problem.endingEpilogueFallback || "G 证毕，论证闭合。",
-      neglectPrimaryWarnAt: 3,
-      neglectPrimaryFailAt: 5,
-      goalTracks: problem.goalTracks || {
-        core: { keywords: problem.endingCoreKeywords || [] },
-      },
-      lemmaPool: problem.lemmaPool || [],
-      playerKnowledge: problem.lemmaPool || [],
-      inquireLines: problem.inquireLines || [
-        "你打算用反证还是直接证？",
-        "本步关键引理是什么？",
-        "与已知前提如何衔接？",
-      ],
-      sharpReveals: problem.sharpReveals || [],
-      sharpStatementFallbacks: [
-        "先把你的引理讲实，我再补一步。",
-        "逐步来，别跳步。",
-      ],
-    };
-  }
-
-  function buildOpening(problem, mathematician) {
-    const th = problem.theorem || problem.goal;
-    return `${mathematician.name}：今日论题 G——${th}。你已有部分前提，请用引理逐步证毕。`;
-  }
-
-  function buildInitialOptions(problem, seed) {
-    const firstLemma = problem.lemmaPool?.[0];
-    const followup = seed.inquireLines?.[0] || "你采用何种证法？";
-    const keypointLine =
-      firstLemma?.offerLine || "我有引理，换你补一条推导步。";
-    return [
-      {
-        id: 1,
-        intent: "keypoint",
-        label: "求证",
-        line: keypointLine,
-        send: `[intent:keypoint] ${keypointLine}`,
-      },
-      {
-        id: 2,
-        intent: "followup",
-        label: "质询",
-        line: followup,
-        send: `[intent:followup] ${followup}`,
-      },
-      {
-        id: 3,
-        intent: "suspend",
-        label: "休庭",
-        line: "休庭，稍后继续证辩。",
-        send: "休庭，稍后继续证辩。",
-      },
-    ];
   }
 
   /** 从前提块 + 结论模板组合一题（约 30% 概率或显式调用） */

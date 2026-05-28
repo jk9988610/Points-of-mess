@@ -79,7 +79,33 @@
     s = s.replace(/\[已确认\]/g, "[已证]");
     s = s.replace(/\[待核实#(\d+)\]/gi, "[待证#$1]");
     s = s.replace(/\[待核实\]/gi, "[待证#1]");
-    return s;
+    s = s.replace(/【关系与态度】[\s\S]*$/g, "").trim();
+    const lines = [];
+    for (const raw of s.split("\n")) {
+      let line = raw;
+      const depInline = line.match(
+        /^(\s*)若要证\s+(G|L[\d.]+)\s*，\s*则需证\s+(G|L[\d.]+)\s*[：:]\s*.+$/
+      );
+      if (depInline) {
+        line = `- [依赖] 若要证 ${depInline[2]}，则需证 ${depInline[3]}`;
+      } else if (/^\s*若要证\s+(G|L[\d.]+)\s*，\s*则需证\s+(G|L[\d.]+)\s*$/.test(line.trim())) {
+        const m = line.trim().match(/若要证\s+(G|L[\d.]+)\s*，\s*则需证\s+(G|L[\d.]+)/);
+        if (m) {
+          line = `- [依赖] 若要证 ${m[1]}，则需证 ${m[2]}`;
+        }
+      } else if (/^\s*-\s*\[依赖\]\s*/.test(line)) {
+        line = line.replace(/^\s*-\s*\[依赖\]\s*/, "- [依赖] ");
+      }
+      lines.push(line);
+    }
+    return lines.join("\n").trim();
+  }
+
+  /** 命题间推导依赖（非单句内因果） */
+  function formatDependencyLine(fromLabel, toLabel) {
+    const from = String(fromLabel || "G").trim();
+    const to = String(toLabel || "L1").trim();
+    return `- [依赖] 若要证 ${from}，则需证 ${to}`;
   }
 
   function extractGoalBlock(text) {
@@ -92,19 +118,30 @@
   }
 
   function extractArchiveBody(text) {
-    const t = String(text || "");
+    const t = normalizeProofArchive(String(text || ""));
     const m =
-      t.match(/【证明席】([\s\S]*?)(?=【关系与态度】|$)/) ||
-      t.match(/【剧情档案】([\s\S]*?)(?=【关系与态度】|$)/);
-    return m ? m[1] : "";
+      t.match(/【证明席】([\s\S]*?)$/) ||
+      t.match(/【剧情档案】([\s\S]*?)$/);
+    return m ? m[1].trim() : "";
   }
 
   function extractArchiveSection(text) {
-    const t = String(text || "");
+    const t = normalizeProofArchive(String(text || ""));
     const m =
-      t.match(/(【证明席】[\s\S]*?)(?=【关系与态度】|$)/) ||
-      t.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
-    return m ? m[1] : "";
+      t.match(/(【证明席】[\s\S]*?)$/) ||
+      t.match(/(【剧情档案】[\s\S]*?)$/);
+    return m ? m[1].trim() : "";
+  }
+
+  function extractDependencyLines(text) {
+    const lines = [];
+    for (const line of extractArchiveBody(text).split("\n")) {
+      const t = line.trim();
+      if (/\[依赖\]/.test(t) || /^\s*若要证\s+(G|L[\d.]+)\s*，\s*则需证/.test(t)) {
+        lines.push(t.replace(/^[-*•]\s*/, ""));
+      }
+    }
+    return lines;
   }
 
   function extractQedOrders(text) {
@@ -150,7 +187,6 @@
     const pending = (seed?.pending || seed?.openLemmas || [])
       .map((s) => String(s).trim())
       .filter(Boolean);
-    const attitude = (seed?.attitude || []).map((s) => String(s).trim()).filter(Boolean);
 
     const lines = [];
     if (goal) {
@@ -166,17 +202,11 @@
       const n = i + 1;
       const body = p.replace(/^L\d+[：:]\s*/i, "").trim();
       lines.push(`- [待证#${n}] L${n}：${body}`);
-      lines.push(`  若要证 G，则需证 L${n}：${body}`);
+      lines.push(formatDependencyLine("G", `L${n}`));
     });
     if (!confirmed.length && !pending.length) {
-      lines.push("- [待证#1] L1：（待剧情推进后填写）");
-      lines.push("  若要证 G，则需证 L1");
-    }
-    if (attitude.length) {
-      lines.push("", "【关系与态度】");
-      for (const a of attitude) {
-        lines.push(`- ${a}`);
-      }
+      lines.push("- [待证#1] L1：（待填）");
+      lines.push(formatDependencyLine("G", "L1"));
     }
     return lines.join("\n").trim();
   }
@@ -208,7 +238,10 @@
       if (!trimmed) {
         continue;
       }
-      if (/^\s*若要证/.test(trimmed) && !/\[待证|\[待核实/.test(trimmed)) {
+      if (/^\s*若要证/.test(trimmed) && !/\[待证|\[待核实|\[依赖\]/.test(trimmed)) {
+        continue;
+      }
+      if (/^\s*-\s*\[依赖\]/.test(trimmed)) {
         continue;
       }
       const parsed = parsePendingFromLine(trimmed);
@@ -239,16 +272,18 @@
       return "";
     }
     const goalBlock = extractGoalBlock(text)?.trim() || "";
-    const attitudeBlock = text.match(/【关系与态度】[\s\S]*$/)?.[0]?.trim() || "";
     const archiveBody = extractArchiveBody(text);
     const proven = [];
     const pending = [];
+    const deps = [];
     for (const line of archiveBody.split("\n")) {
       const t = line.trim();
-      if (!t || /^【/.test(t) || /^\s*若要证/.test(t)) {
+      if (!t || /^【/.test(t)) {
         continue;
       }
-      if (/\[已证\]|\[已确认\]|\[前提\]/.test(t)) {
+      if (/\[依赖\]|^\s*若要证\s+(G|L[\d.]+)\s*，\s*则需证/.test(t)) {
+        deps.push(t.replace(/^[-*•]\s*/, ""));
+      } else if (/\[已证\]|\[已确认\]|\[前提\]/.test(t)) {
         proven.push(t);
       } else if (/\[待证|\[待核实/.test(t)) {
         pending.push(t);
@@ -263,10 +298,7 @@
     if (tailProven.some((l) => /\[前提\]/.test(l))) {
       parts.push("【前提集】");
     }
-    parts.push(...tailProven, ...pending);
-    if (attitudeBlock) {
-      parts.push("", attitudeBlock.split("\n").slice(0, 3).join("\n"));
-    }
+    parts.push(...tailProven, ...pending, ...deps.slice(-3));
     return parts.join("\n").trim();
   }
 
@@ -290,61 +322,42 @@
       return "";
     }
     const stallTurns = context?.stallTurns ?? 0;
-    const knowledge = formatPlayerKnowledgeForOptions(context?.session, context?.seed);
+    const deps = extractDependencyLines(plotSummary);
     const lastSharp = String(context?.lastAssistantLine || "").trim();
-    const programKp = pickKeypointOfferLine(
-      context?.session,
-      context?.seed,
-      plotSummary,
-      lastSharp
-    );
-    const followupStreak = countRecentFollowupStreak(context?.session);
+    const inquireStreak = countRecentFollowupStreak(context?.session);
     const labels = getRoleLabels(context?.seed);
-    const parts = ["【证辩态势】"];
+    const parts = ["【证明态势】"];
     if (goal) {
-      parts.push(`${goal.startsWith("论题") ? goal : `论题 G：${goal}`}`);
+      parts.push(goal.startsWith("论题") ? goal : `论题 G：${goal}`);
     }
     if (pending.length) {
       const pendingNote =
         pending.length === 1
-          ? `仍待证 L1：${pending[0]}`
-          : `仍待证：${pending.map((p, i) => `L${i + 1}·${p}`).join("；")}`;
+          ? `开放引理 L1：${pending[0]}`
+          : `开放引理：${pending.map((p, i) => `L${i + 1}·${p}`).join("；")}`;
       parts.push(pendingNote);
     }
-    if (knowledge) {
-      parts.push(knowledge);
-    }
-    if (programKp) {
-      parts.push(`本轮回合 keypoint 建议原句：「${programKp}」`);
+    if (deps.length) {
+      parts.push(`命题依赖：${deps.slice(-2).join("；")}`);
     }
     if (lastSharp) {
       parts.push(`${labels.prover}上一句：${lastSharp}`);
     }
     parts.push(
       "",
-      "【选项写法·证明题】",
-      "advance（推证）：须实质推进待证 Lk，给出引理交换或推导请求。",
-      "clarify（题意）/ explore（证法）/ premise（前提）：了解题面，不推进证明。",
-      "禁止多条同义；恰好一条 advance。"
+      "【选项写法】",
+      "advance（推证）：须实质推进开放引理 Lk。",
+      "clarify / explore / premise：了解论题、证法或前提，不推进证明。",
+      "恰好一条 advance；三条了解类互不重复。"
     );
-    if (followupStreak >= 2) {
-      parts.push(
-        `证辩者已连续 ${followupStreak} 轮质询无推进：followup 仍可为质询，但 keypoint 必须用建议句。`
-      );
-    }
-    if (/授权者|主控|就是指使者|是.+派|主使|Ω/.test(lastSharp)) {
-      parts.push(
-        `${labels.prover}已给出授权者：keypoint 须确认并追问仍缺的引理（如 Λ 存放），勿再空换。`
-      );
-    }
-    if (window.GameOnion?.shouldClearPendingBlock?.(plotSummary)) {
-      parts.push("主控已供述：keypoint 用确认句收束，勿再「换你说授权者」。");
+    if (inquireStreak >= 2) {
+      parts.push("连续多轮未选 advance：本轮 advance 须直指待证 Lk。");
     }
     if (stallTurns >= 2) {
-      parts.push("连续无进展：须用【玩家证据】中未用过的 offer 引理。");
+      parts.push("连续无进展：advance 须给出可核对推导步或引理交换。");
     }
     if (context?.emptyPromiseCount >= 2) {
-      parts.push("证辩者信用破产：keypoint 只能确认已说事实；followup 仍可为质询。");
+      parts.push("空头交换过多：advance 仅确认已写入证明席的事实。");
     }
     return parts.join("\n");
   }
@@ -368,7 +381,7 @@
   function pickProgramInquireLine(session, seed) {
     const pool = getInquireLines(seed);
     if (!pool.length) {
-      return "你来证辩，先说明你的公理基与立场。";
+      return "请先说明采用何种证法。";
     }
     const idx = session?.inquireLineIndex ?? 0;
     return pool[idx % pool.length];
@@ -399,11 +412,11 @@
 
     if (pickIntent === "followup") {
       lines.push(
-        "【质询】证辩者问立场/动机；用陈述顶回，禁止问句",
-        "本句可不送新引理，但禁止「去查公理表」、推给 α、反咬证辩者可疑"
+        "【了解轮】证辩者询问题意/证法/前提；用陈述解释，禁止问句",
+        "本句可不给出新推导步，但禁止推托「去查手册」或反咬证辩者"
       );
       if (countRecentFollowupStreak(context?.session) >= 2) {
-        lines.push("证辩者多轮质询：可加一句可核对推导步破冰，仍用陈述");
+        lines.push("证辩者多轮了解：可加一句可核对推导步破冰，仍用陈述");
       }
       lines.push("证官台词：只答不问");
       return `\n【证明规则·本轮】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
@@ -412,13 +425,12 @@
     if (context?.playerConcreteReveal && pickIntent === "keypoint") {
       lines.push(
         "证辩者已出示引理（含可核对专名）。须兑现交换：直接给出一条新推导步",
-        "禁止「去查手册」等推托；禁止只顶回不给步；**禁止问句**",
-        "若交换成立，须给出授权者专名或数据集 Λ 现存放处之一"
+        "禁止推托；禁止只顶回不给步；**禁止问句**"
       );
     } else if (context?.emptyPromiseBankrupt) {
       lines.push(
         "证辩者多次空头交换；拒绝再论",
-        "只回复：「没引理就别换步。」本轮不给专名/存放处"
+        "只回复：「没引理就别换步。」本轮不给新推导步"
       );
     } else if (context?.hollowTradeOffer) {
       lines.push(
@@ -432,11 +444,8 @@
         "不得因复读再送新推导步"
       );
     }
-    if (context?.playerNamesMastermind) {
-      lines.push("证辩者已指认授权者；接住并确认，勿再逼「谁授权」");
-    }
     if (context?.neglectWarn) {
-      lines.push("证辩者长期未用 keypoint 出示引理；语气加压（仅求证轮）");
+      lines.push("证辩者长期未选 advance 出示引理；语气加压（仅推证轮）");
     }
     if (context?.neglectFail) {
       lines.push("终局：证辩者不肯出示引理，论证时限到，休庭");
@@ -444,14 +453,14 @@
 
     if (stallTurns >= 2) {
       lines.push(
-        "连续无进展：须给出一条可核对推导步（专名/存放处），用陈述句",
+        "连续无进展：须给出一条可核对推导步，用陈述句",
         "禁止向证辩者发问；禁止空耗"
       );
     } else if (pickIntent === "keypoint" && !context?.playerConcreteReveal) {
       if (isGoalAdvancePlayerLine(context?.playerLine)) {
         lines.push("证辩者在逼 Lk；给出一条具体推导步或明确否认，**禁止问句**");
       } else {
-        lines.push("证辩者求证；给出具体推导步、承认或否认，勿搪塞，**禁止问句**");
+        lines.push("证辩者推证；给出具体推导步、承认或否认，勿搪塞，**禁止问句**");
       }
     }
 
@@ -507,9 +516,9 @@
   const CONCRETE_PLAYER_INFO_RE =
     /在[\u4e00-\u9fa5]{1,8}(?:手里|处|家|那儿)|藏在|经手(?:人)?(?:是|为)|见过[\u4e00-\u9fa5]{1,6}|[\u4e00-\u9fa5]{2,4}(?:手里|身上|派我|拦我)|(?:是|叫|名叫)[\u4e00-\u9fa5]{2,6}|阻拦(?:者)?(?:是|叫)?[\u4e00-\u9fa5]{2,6}/;
   const ACTION_RE = /带我去|领我去|帮我找|陪我去|跟我去|带我去找/;
-  /** followup 不得包含：会逼核心目标/互怼授权链 */
+  /** followup 选项不得含：逼开放引理 / 引理交换话术 */
   const GOAL_ADVANCE_LINE_RE =
-    /授权|主控|指使|指使者|数据集|Λ|谁派|幕后|主子|换你|换一句|α|β|Ω|陈四|刘老三|老九|赵家|开口|心里鬼|凭什么|谁先答|别绕|说清楚|账本|引理包/;
+    /换你|换一句|换一条|谁派|幕后|凭什么|别绕|说清楚|开口|心里鬼|谁先答|引理包|账本|数据集|Λ|α|β|Ω|陈四|刘老三|老九|赵家/;
   const PLAYER_ASKING_RE =
     /[？?]|吗$|谁让你|谁派你|谁是|到底是谁|查我|什么关系|干什么|来意|套话/;
 
@@ -713,14 +722,14 @@
 
   function formatPlayerKnowledgeForOptions(session, seed) {
     const avail = getAvailableKnowledge(session, seed);
-    const label = usesDynamicPlayerEvidence(seed) ? "【玩家证据】" : "【玩家已知】";
+    const label = usesDynamicPlayerEvidence(seed) ? "【证辩者引理】" : "【证辩者已知】";
     if (!avail.length) {
-      return `${label}（暂无未用证据；keypoint 须确认证官上一句或陈述新事实）`;
+      return `${label}（暂无未用引理；advance 须确认证官上一句或陈述新事实）`;
     }
     const lines = avail.map(
       (k, i) => `  ${i + 1}. ${k.text} → offer:「${k.offerLine}」`
     );
-    return `${label}（keypoint 须用 offer 原句亮牌）\n${lines.join("\n")}`;
+    return `${label}（advance 须用 offer 原句亮牌）\n${lines.join("\n")}`;
   }
 
   function pickProgramRevealLine(session, seed) {
@@ -729,11 +738,11 @@
   }
 
   const DEFLECT_REPLY_RE =
-    /你心里|心里清楚|别装|你该去问|去问陈四|去问α|去查公理|问太多|反倒可疑|爱信不信|不护谁|疑心太重|随你|误事|少说|废话|挡话|栽我身上/;
+    /你心里|心里清楚|别装|你该去问|问太多|反倒可疑|爱信不信|不护谁|疑心太重|随你|误事|少说|废话|挡话|栽我身上/;
 
   /** followup 短拒白名单：≤20 字顶回，不算敷衍（A4） */
   const FOLLOWUP_SHORT_ACCEPT_RE =
-    /谁都不保|谁都不护|不关我事|与你无关|复核Λ是我|查账本是我|别挡|少管|少兜|来意|套话|谈事|你自己的事|与我何干|爱咋咋|随你便|休庭|公理基/;
+    /不关我事|与你无关|别挡|少管|来意|套话|谈事|你自己的事|与我何干|爱咋咋|随你便|休庭|公理基|逐步来|别跳步/;
 
   function isFollowupShortAccept(text) {
     const t = String(text || "").trim();
@@ -837,7 +846,7 @@
       return formatMastermindConfirmLabel(name);
     }
     if (/授权者|主控|指使者|幕后|主使/.test(pending) && !mastermindTrackSatisfied(blob)) {
-      return "你已认了 α，换你说其授权者是谁。";
+      return pending ? `就「${pending.slice(0, 24)}」，换你说可核对推导步。` : "请就开放引理 L1 给出可核对推导步。";
     }
     return "";
   }
@@ -845,7 +854,7 @@
   function pickProgramStatementFallback(seed) {
     const pool = seed?.sharpStatementFallbacks;
     if (!Array.isArray(pool) || !pool.length) {
-      return "复核 Λ 是我的职责，你别打断推导。";
+      return "先把逻辑步讲实，我再补一步。";
     }
     return String(pool[0]).trim();
   }
@@ -1047,8 +1056,8 @@
     result = result.replace(/\n- \[待核实\]\s*[（(]?(?:无|暂无)[）)]?[^\n]*/gi, "");
 
     const archiveMatch =
-      result.match(/(【证明席】[\s\S]*?)(?=【关系与态度】|$)/) ||
-      result.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
+      result.match(/(【证明席】[\s\S]*?)$/) ||
+      result.match(/(【剧情档案】[\s\S]*?)$/);
     if (!archiveMatch) {
       return result.trim();
     }
@@ -1112,6 +1121,7 @@
           new RegExp(`\\n- \\[待核实#?\\d*\\]\\s*${escaped}`, "gi"),
           ""
         );
+        result = result.replace(/\n- \[依赖\][^\n]*/gi, "");
         result = result.replace(/\n\s*若要证[^\n]*/gi, "");
       }
     }
@@ -1171,8 +1181,8 @@
     text = text.replace(/\n- \[已确认\][^\n]*可能意在[^\n]*/gi, "");
     text = text.replace(/\n- \[已确认\][^\n]*存疑[^\n]*/gi, "");
     const archiveMatch =
-      text.match(/(【证明席】[\s\S]*?)(?=【关系与态度】|$)/) ||
-      text.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
+      text.match(/(【证明席】[\s\S]*?)$/) ||
+      text.match(/(【剧情档案】[\s\S]*?)$/);
     if (archiveMatch) {
       const head = archiveMatch[1].split("\n").slice(0, 1);
       const bodyLines = archiveMatch[1].split("\n").slice(1);
@@ -1193,17 +1203,6 @@
       const trimmed = proven.slice(-maxProven);
       const newArchive = [...head, ...trimmed, ...other].join("\n");
       text = text.replace(archiveMatch[1], newArchive);
-    }
-    const attMatch = text.match(/【关系与态度】([\s\S]*?)$/);
-    if (attMatch) {
-      const attLines = attMatch[1]
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l.startsWith("-"));
-      if (attLines.length > 2) {
-        const shortAtt = ["【关系与态度】", ...attLines.slice(-2)].join("\n");
-        text = text.replace(/【关系与态度】[\s\S]*$/, shortAtt);
-      }
     }
     return text.trim();
   }
@@ -1268,14 +1267,14 @@
     }
     const pending = extractPendingLines(plotSummary)[0];
     const lines = [
-      "【交换·本回合】证辩者出示引理 → 证官须兑现一条新专名推导步，禁止敷衍",
+      "【引理交换·本回合】证辩者出示引理 → 证官须兑现一条新推导步，禁止敷衍",
     ];
     if (pending) {
       lines.push(`须直接推进：${pending}`);
     }
     if (context?.playerConcreteReveal) {
       lines.push(
-        "须供述：本句只给一条——授权者专名（2～4字）或数据集 Λ 现存放处，勿同句两条；禁心里清楚、去查公理表、推给 α"
+        "须给出一条可核对推导步（奇偶/整除/等价/矛盾之一），勿同句两条"
       );
     }
     return lines.join("\n");
@@ -1570,6 +1569,8 @@
     normalizeProofArchive,
     extractArchiveBody,
     extractQedOrders,
+    formatDependencyLine,
+    extractDependencyLines,
     buildSeedPlotSummary,
     extractGoal,
     extractPendingLines,

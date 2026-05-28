@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Phase A+ O3：摘录逻辑手测（与 options-ai.js extractPendingVerification 同语义） */
+/** 证明席摘录逻辑（与 options-ai.js extractPendingVerification 同语义） */
 
 function extractPendingVerification(plotSummary) {
   const text = String(plotSummary || "").trim();
@@ -13,7 +13,12 @@ function extractPendingVerification(plotSummary) {
     if (!trimmed) {
       continue;
     }
-    if (/^[-*•]\s*\[待核实\]/.test(trimmed) || /^\[待核实\]/.test(trimmed)) {
+    if (
+      /^[-*•]\s*\[待证#?\d*\]/i.test(trimmed) ||
+      /^[-*•]\s*\[待核实#?\d*\]/i.test(trimmed) ||
+      /^\[待证\]/i.test(trimmed) ||
+      /^\[待核实\]/i.test(trimmed)
+    ) {
       pendingLines.push(trimmed.replace(/^[-*•]\s*/, ""));
     }
   }
@@ -31,22 +36,20 @@ function extractPendingVerification(plotSummary) {
 
 const cases = [
   {
-    name: "A+ 多行待核实",
-    input: `【剧情档案】
-- [已确认] 林晨凌晨三点离开东门
-- [待核实] 蓝色账本完整下落
-- [待核实] 谁指使老张
-【关系与态度】
-- 锋利施压`,
-    expect: (out) => out.includes("账本") && out.includes("老张"),
+    name: "证明体多行待证",
+    input: `【证明席】
+【证明进程】
+- [已证] S1：n² 为偶数
+- [待证#1] L1：推出 n 为偶数
+- [依赖] 若要证 G，则需证 L1`,
+    expect: (out) => out.includes("L1") && out.includes("待证"),
   },
   {
     name: "旧格式未解问题",
-    input: `【已确认事实】林晨在场
+    input: `【已确认事实】P1 给定
 【未解问题】
-老张是谁
-【关系与态度】暂无`,
-    expect: (out) => out.includes("老张"),
+L1 如何由 n² 偶推出 n 偶`,
+    expect: (out) => out.includes("L1"),
   },
   {
     name: "无标记回退截断",

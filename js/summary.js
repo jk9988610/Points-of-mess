@@ -6,43 +6,45 @@
 
   function buildSummarySystem(seed) {
     const maxOpen = window.GameOnion?.getMaxOpenClaims?.(seed) ?? 1;
+    const depExample = window.GameOnion?.formatDependencyLine?.("G", "L1") || "- [依赖] 若要证 G，则需证 L1";
     const lemmaBlock =
       maxOpen === 1
         ? `- [待证#1] L1：…（开放引理，全篇至多 1 条）
-  若要证 G，则需证 L1：…`
+${depExample}`
         : Array.from({ length: maxOpen }, (_, i) => {
             const n = i + 1;
+            const dep =
+              window.GameOnion?.formatDependencyLine?.("G", `L${n}`) ||
+              `- [依赖] 若要证 G，则需证 L${n}`;
             return `- [待证#${n}] L${n}：…
-  若要证 G，则需证 L${n}：…`;
+${dep}`;
           }).join("\n") +
-          `\n（开放引理至多 ${maxOpen} 条；可写「若要证 L1，则需证 L1.1」拆子引理）`;
+          `\n（开放引理至多 ${maxOpen} 条；拆子引理时用「- [依赖] 若要证 L1，则需证 L1.1」）`;
 
     return `你是证明席书记员。维护本局**数学证明体**格式的论证档案（论题 G / 前提 P / 引理 L / 推导步 S / 证毕）。
 
-【输出】仅两段（不要输出【论证目标】，由程序保留）：
+【输出】仅一段（不要输出【论证目标】，由程序保留）：
 【证明席】
 【前提集】
 - [前提] P1：…（开局给定；专名只增不删）
 【证明进程】
 ${lemmaBlock}
 - [已证] S1：…（依据：证官供述/证辩者亮牌/对话，可注轮次）
-- [证毕#1] L1：…（L1 得证后写此行，并删除对应 [待证#1] 及其「若要证…」行）
-【关系与态度】
-- …
+- [证毕#1] L1：…（L1 得证后写此行，并删除对应 [待证#1] 及其 [依赖] 行）
 
 【证明规则】
 1. 论题 G 只在【论证目标】；证明席不写 G 标题。
-2. 每个 [待证#k] 必须紧跟一行「若要证 G，则需证 Lk：…」；拆分子引理时用「若要证 Lk，则需证 Lk.1：…」。
-3. 对话说定 → 写入 [已证] Sk；引理 Lk 被推导步充分确立 → 删 [待证#k] + 写 [证毕#k]。
-4. 改口 → 旧 [已证] 标 [已推翻]；以最新供述为准（槽位单真值）。
-5. [已证] 须可核对专名；禁止「可能/存疑/证辩者重复空换」入 [已证]。
-6. 禁止用「无/待填」占 [待证]；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown。
-7. 【关系与态度】最多 2 条，每条 ≤45 字。`;
+2. 每个 [待证#k] 后须单独一行命题间依赖，格式：- [依赖] 若要证 A，则需证 B。A、B 为不同命题编号（G / Lk / Lk.j），**不写** Lk 全文或冒号后复述。
+3. 拆分子引理时写 - [依赖] 若要证 Lk，则需证 Lk.1（仍为命题间依赖，非单句内因果）。
+4. 对话说定 → 写入 [已证] Sk；引理 Lk 被推导步充分确立 → 删 [待证#k]、[依赖] 行 + 写 [证毕#k]。
+5. 改口 → 旧 [已证] 标 [已推翻]；以最新供述为准（槽位单真值）。
+6. [已证] 须可核对专名；禁止「可能/存疑/空换」入 [已证]。
+7. 禁止用「无/待填」占 [待证]；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown；**禁止**【关系与态度】段。`;
   }
 
   function buildSummaryUserPrefix(seed) {
     const maxOpen = window.GameOnion?.getMaxOpenClaims?.(seed) ?? 1;
-    return `自检：新事实进 [已证]；Lk 得证则 [证毕#k] 并删 [待证#k]；待证至多 ${maxOpen} 条。只输出【证明席】【关系与态度】。
+    return `自检：新事实进 [已证]；Lk 得证则 [证毕#k] 并删 [待证#k] 与对应 [依赖]；待证至多 ${maxOpen} 条；[依赖] 只写命题编号不写引理全文。只输出【证明席】。
 
 `;
   }
@@ -82,6 +84,13 @@ ${lemmaBlock}
       window.PomDebug?.logLocalWarn(
         "摘要格式",
         "缺少【证明席】段；摘录将走旧格式回退",
+        ["summary"]
+      );
+    }
+    if (/【关系与态度】/.test(body)) {
+      window.PomDebug?.logLocalWarn(
+        "摘要格式",
+        "仍含【关系与态度】，应由 normalize 剥离",
         ["summary"]
       );
     }
