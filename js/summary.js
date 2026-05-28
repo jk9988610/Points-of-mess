@@ -1,65 +1,70 @@
 (function () {
-  /** 每轮选项后压摘要，避免锋利新事实长期不进 [已确认] */
+  /** 每轮选项后压摘要，避免锋利新事实长期不进 [已证] */
   const SUMMARY_EVERY_OPTION_TURNS = 1;
-  /** 压缩时保留最近若干条对白不进入「待压缩区」（与 API messages 是否全量无关） */
   const SUMMARY_PROTECT_MESSAGES = 4;
-  /** 摘要总字数上限（产品：尽量写满，专名只增不删） */
   const SUMMARY_MAX_CHARS = 1200;
 
   function buildSummarySystem(seed) {
     const maxOpen = window.GameOnion?.getMaxOpenClaims?.(seed) ?? 1;
-    const pendingLines =
+    const lemmaBlock =
       maxOpen === 1
-        ? "- [待核实#1] …（全篇最多 1 条）"
-        : Array.from(
-            { length: maxOpen },
-            (_, i) => `- [待核实#${i + 1}] …`
-          ).join("\n") + `\n（全篇最多 ${maxOpen} 条）`;
-    const skeleton =
-      maxOpen === 1
-        ? "三条件推一问"
-        : `${maxOpen + 2} 条件推 ${maxOpen} 问`;
-    return `你是剧情档案维护员。结构像论证题：**一个本局目标 + 已确认前提 + 开放论断**（${skeleton}；对局过程中 [已确认] 可增多，[待核实] 始终至多 ${maxOpen} 条）。
+        ? `- [待证#1] L1：…（开放引理，全篇至多 1 条）
+  若要证 G，则需证 L1：…`
+        : Array.from({ length: maxOpen }, (_, i) => {
+            const n = i + 1;
+            return `- [待证#${n}] L${n}：…
+  若要证 G，则需证 L${n}：…`;
+          }).join("\n") +
+          `\n（开放引理至多 ${maxOpen} 条；可写「若要证 L1，则需证 L1.1」拆子引理）`;
 
-【输出】仅两段（不要输出【本局目标】，由程序保留）：
-【剧情档案】
-- [已确认] …
-${pendingLines}
+    return `你是证明席书记员。维护本局**数学证明体**格式的论证档案（论题 G / 前提 P / 引理 L / 推导步 S / 证毕）。
+
+【输出】仅两段（不要输出【论证目标】，由程序保留）：
+【证明席】
+【前提集】
+- [前提] P1：…（开局给定；专名只增不删）
+【证明进程】
+${lemmaBlock}
+- [已证] S1：…（依据：锋利供述/玩家亮牌/对话，可注轮次）
+- [证毕#1] L1：…（L1 得证后写此行，并删除对应 [待证#1] 及其「若要证…」行）
 【关系与态度】
 - …
 
-【规则】
-1. 递进更新；[已确认] 专名只增不删；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown。
-2. [已确认] 最多 8 条；合并同义；禁止「可能/存疑/意在掩护」等猜测写入 [已确认]。
-3. 对话已说清的人名/去向 → [已确认]（可标「锋利供述：」）；玩家亮牌 → 仅写玩家原话中的可核对事实，勿写推断。
-4. 已解答的 [待核实] 须删除；锋利称「唯一主使/没有别人」或已供指使者姓名 → **不得**保留「是否还有更高层」类待核实。
-5. 仅旁询/态度、无新专名 → 勿增待核实；勿扩写关系段；禁止写「无」「待填」占待核实行。
-6. 【关系与态度】最多 2 条，每条 ≤45 字，只写当前信任/戒备。
-7. 只依据已有摘要与新增对话，禁止幻觉。`;
+【证明规则】
+1. 论题 G 只在【论证目标】；证明席不写 G 标题。
+2. 每个 [待证#k] 必须紧跟一行「若要证 G，则需证 Lk：…」；拆分子引理时用「若要证 Lk，则需证 Lk.1：…」。
+3. 对话说定 → 写入 [已证] Sk；引理 Lk 被推导步充分确立 → 删 [待证#k] + 写 [证毕#k]。
+4. 改口 → 旧 [已证] 标 [已推翻]；以最新供述为准（槽位单真值）。
+5. [已证] 须可核对专名；禁止「可能/存疑/玩家重复空换」入 [已证]。
+6. 禁止用「无/待填」占 [待证]；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown。
+7. 【关系与态度】最多 2 条，每条 ≤45 字。`;
   }
 
   function buildSummaryUserPrefix(seed) {
     const maxOpen = window.GameOnion?.getMaxOpenClaims?.(seed) ?? 1;
-    return `自检：说清的事实进 [已确认]；待核实至多 ${maxOpen} 条且已答必删/收窄。只输出【剧情档案】【关系与态度】两段。
+    return `自检：新事实进 [已证]；Lk 得证则 [证毕#k] 并删 [待证#k]；待证至多 ${maxOpen} 条。只输出【证明席】【关系与态度】。
 
 `;
   }
 
-  /** 压缩后保留种子里的【本局目标】段（模型不输出目标） */
+  /** 压缩后保留【论证目标】段（模型不输出论题 G） */
   function preserveGoalBlock(previousSummary, newSummary) {
     const prev = String(previousSummary || "").trim();
     const next = String(newSummary || "").trim();
-    if (!prev || !next) {
+    if (!next) {
       return next || prev;
     }
-    if (next.includes("【本局目标】")) {
-      return next;
+    if (next.includes("【论证目标】") || next.includes("【本局目标】")) {
+      return window.GameOnion?.normalizeProofArchive?.(next) || next;
     }
-    const goalBlock = prev.match(/【本局目标】[\s\S]*?(?=【|$)/)?.[0]?.trim();
+    const goalBlock =
+      prev.match(/【论证目标】[\s\S]*?(?=【|$)/)?.[0]?.trim() ||
+      prev.match(/【本局目标】[\s\S]*?(?=【|$)/)?.[0]?.trim();
     if (!goalBlock) {
-      return next;
+      return window.GameOnion?.normalizeProofArchive?.(next) || next;
     }
-    return `${goalBlock}\n\n${next}`.trim();
+    const normalized = window.GameOnion?.normalizeProofArchive?.(next) || next;
+    return `${goalBlock.replace(/【本局目标】/, "【论证目标】")}\n\n${normalized}`.trim();
   }
 
   function countOptionTurns(sessionMessages) {
@@ -73,19 +78,19 @@ ${pendingLines}
     if (!body) {
       return;
     }
-    if (!body.includes("【剧情档案】")) {
+    if (!body.includes("【证明席】") && !body.includes("【剧情档案】")) {
       window.PomDebug?.logLocalWarn(
         "摘要格式",
-        "缺少【剧情档案】段（A+）；摘录将走旧格式回退",
+        "缺少【证明席】段；摘录将走旧格式回退",
         ["summary"]
       );
     }
     const maxOpen = window.GameOnion?.getMaxOpenClaims?.(seed) ?? 1;
-    const pendingCount = (body.match(/\[待核实/gi) || []).length;
+    const pendingCount = (body.match(/\[待证|\[待核实/gi) || []).length;
     if (pendingCount > maxOpen) {
       window.PomDebug?.logLocalWarn(
         "摘要格式",
-        `[待核实] 出现 ${pendingCount} 次，应为至多 ${maxOpen} 条`,
+        `[待证] 出现 ${pendingCount} 次，应为至多 ${maxOpen} 条`,
         ["summary"]
       );
     }
@@ -113,7 +118,6 @@ ${pendingLines}
     return "";
   }
 
-  /** 本局本轮是否会压摘要（仅看选项轮次；执行在 ①② 与 assistant 写入之后） */
   function willRefreshPlotSummaryThisPick(session) {
     const optionTurns = countOptionTurns(session.messages);
     if (optionTurns < SUMMARY_EVERY_OPTION_TURNS) {
@@ -162,7 +166,7 @@ ${pendingLines}
       .map((m) => `${m.role === "assistant" ? "锋利" : "玩家"}: ${m.content}`)
       .join("\n");
     const body = session.plotSummary
-      ? `【已有摘要】\n${session.plotSummary}\n\n【新增对话】\n${block}`
+      ? `【已有证明席】\n${session.plotSummary}\n\n【新增对话】\n${block}`
       : `【新增对话】\n${block}`;
     const userContent = buildSummaryUserPrefix(seed) + body;
 
@@ -208,7 +212,7 @@ ${pendingLines}
       window.GameOnion?.extractPendingLines?.(beforeReconcile)?.length &&
       !window.GameOnion?.extractPendingLines?.(text)?.length
     ) {
-      window.PomDebug?.logLocal("③摘要 · reconcile", "已清除待核实#1", ["summary"]);
+      window.PomDebug?.logLocal("③摘要 · reconcile", "引理 Lk 已证毕", ["summary"]);
     }
 
     session.plotSummary = text;

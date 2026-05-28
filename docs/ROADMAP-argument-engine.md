@@ -108,7 +108,8 @@ evidenceSlots: [           // 程序判定用，可选
 
 | 项 | 内容 |
 |----|------|
-| B1 | `summary.js` / `DIALOGUE-PROMPT.md`：改为「论证目标 + 前提 + 开放论断（至多 N）」 |
+| B0 | **v0.5.44** 证明席格式：`[前提]`/`[待证#k]`/`[已证]`/`[证毕#k]` + 「若要证 G，则需证 Lk」 |
+| B1 | `summary.js` / prompt：数学证明体书记员（见 `buildSummarySystem`） |
 | B2 | 新增 `sharp-short` preset：**2 推 1**（`openClaims.length=1`, `minKeypointTurns=1`） |
 | B3 | 可选 **3 推 2**：`openClaims: [指使者, 账本下落]`，`maxOpenClaims:2` |
 

@@ -22,18 +22,17 @@
     const hintBlock = hints.length
       ? `\n【背景线索（可改写为玩家视角，勿照抄）】\n${hints.map((h) => `- ${h}`).join("\n")}`
       : "";
-    return `你是剧情法官。根据本局对话与摘要，赋予玩家**恰好一条**新获得的、可核对的事实证据（亲眼所见 / 亲耳所闻 / 合理调查所得）。
+    return `你是证明席外的「玩家证据官」。根据本局对话与证明席，赋予玩家**恰好一条**新获得的、可核对事实（亲眼所见 / 亲耳所闻 / 调查所得）。
 
 【论证目标】${goal || "查明真相"}${hintBlock}
 
-【输出】只输出一个 JSON 对象，无 markdown：
-{"text":"玩家证据：…（≤40字，第三人称或「你」均可）","offerLine":"…，换你说…（keypoint 亮牌原句，≤35字）","match":"专名片段（2～6字，供程序匹配）"}
+【输出】只输出 JSON：
+{"text":"玩家证据：…（≤40字）","offerLine":"…，换你说…（keypoint 亮牌原句，≤35字；格式：先亮证据，再换情报）","match":"专名片段（2～6字）"}
 
 【规则】
-1. 每轮仅一条；须含可核对专名（人名/地点/物证）。
-2. offerLine 必须是交换句式，指向本局开放论断（指使者/账本等）。
-3. 勿重复【已有证据】；勿写态度/猜测；勿与【剧情档案】矛盾。
-4. 若本轮无新事实可赋予，输出 {"skip":true}。`;
+1. 每轮仅一条；须含专名；offerLine 须指向当前待证引理 Lk。
+2. 勿重复【已有证据】（同 match 视为重复）；勿与【证明席】[已证] 矛盾。
+3. 若本轮无新事实，输出 {"skip":true}。`;
   }
 
   function parseEvidenceGrant(raw) {
@@ -58,8 +57,11 @@
   }
 
   function isDuplicateEvidence(session, item) {
-    const blob = existingEvidenceTexts(session);
-    return blob.includes(item.match) && blob.includes(item.offerLine.slice(0, 8));
+    return (session?.playerEvidence || []).some(
+      (e) =>
+        e.match === item.match ||
+        (e.offerLine && item.offerLine && e.offerLine.slice(0, 10) === item.offerLine.slice(0, 10))
+    );
   }
 
   function pushEvidence(session, item, turn) {
@@ -92,7 +94,7 @@
       .join("\n");
     const parts = [];
     if (plot) {
-      parts.push(`【剧情档案】\n${plot}`);
+      parts.push(`【证明席】\n${plot}`);
     }
     if (dialogue) {
       parts.push(`【最近对白】\n${dialogue}`);
@@ -103,7 +105,7 @@
     }
     const pending = window.GameOnion?.extractPendingLines?.(plot)?.[0];
     if (pending) {
-      parts.push(`【当前待证】${pending}`);
+      parts.push(`【当前待证 Lk】${pending}`);
     }
     return parts.join("\n\n");
   }

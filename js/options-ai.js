@@ -5,7 +5,7 @@
     { id: 3, intent: "suspend", label: "挂起" },
   ];
 
-  /** Phase A+：优先 [待核实] 行；兼容旧【未解问题】段 */
+  /** Phase A+：优先 [待证] / [待核实] 行 */
   function extractPendingVerification(plotSummary) {
     const text = String(plotSummary || "").trim();
     if (!text) {
@@ -18,7 +18,12 @@
       if (!trimmed) {
         continue;
       }
-      if (/^[-*•]\s*\[待核实\]/.test(trimmed) || /^\[待核实\]/.test(trimmed)) {
+      if (
+        /^[-*•]\s*\[待证#?\d*\]/i.test(trimmed) ||
+        /^[-*•]\s*\[待核实#?\d*\]/i.test(trimmed) ||
+        /^\[待证\]/i.test(trimmed) ||
+        /^\[待核实\]/i.test(trimmed)
+      ) {
         pendingLines.push(trimmed.replace(/^[-*•]\s*/, ""));
       }
     }
@@ -31,8 +36,11 @@
       return legacy[1].trim().slice(0, 400);
     }
 
-    if (text.includes("【剧情档案】") && !/\[待核实\]/.test(text)) {
-      window.PomDebug?.logLocalWarn("摘要摘录", "剧情档案中无 [待核实] 行");
+    if (
+      (text.includes("【证明席】") || text.includes("【剧情档案】")) &&
+      !/\[待证|\[待核实\]/.test(text)
+    ) {
+      window.PomDebug?.logLocalWarn("摘要摘录", "证明席中无 [待证] 行");
     }
 
     return text.slice(0, 400);
@@ -47,7 +55,7 @@
     if (!excerpt) {
       return "";
     }
-    return `当前剧情摘要（待核实事项，供推进型选项参考）：\n${excerpt}`;
+    return `当前证明席（待证引理，供推进型选项参考）：\n${excerpt}`;
   }
 
   function buildOptionsSystemDuo(characterName) {
@@ -669,7 +677,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
     }
     const text = window.GameOnion?.compactPlotSummaryForApi?.(full) || full;
     const onionHint = window.GameOnion?.formatReplyHint?.(full, replyContext) || "";
-    return `\n【剧情档案·摘录】（长程记忆；事实以此为准。勿重复已写明内容。）\n${text}${onionHint}\n`;
+    return `\n【证明席·摘录】（长程记忆；事实以此为准。勿重复已写明内容。）\n${text}${onionHint}\n`;
   }
 
   async function requestReplyOnly({

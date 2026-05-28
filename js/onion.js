@@ -1,5 +1,6 @@
 /**
- * 剧情档案 · 程序侧（种子摘要、摘录、推进计数）。注入 API 的约束块由此生成。
+ * 证明席 · 程序侧（种子摘要、摘录、推进计数）。注入 API 的约束块由此生成。
+ * 档案格式：数学证明体（论题 G / 前提 / 待证 Lk / 已证 Sk / 证毕）。
  */
 (function () {
   /** 从 seed 读取论证配置（兼容 argumentProfile 与旧字段） */
@@ -34,30 +35,113 @@
     return getArgumentProfile(seed).minPremisesForEnding;
   }
 
-  /** 开放论断 = [待核实] 行文本 */
+  /** 开放引理 = 未证毕的 [待证#n] */
   function openClaims(plotSummary) {
     return extractPendingLines(plotSummary);
   }
 
+  function normalizeProofArchive(text) {
+    let s = String(text || "").trim();
+    if (!s) {
+      return s;
+    }
+    s = s.replace(/【本局目标】/g, "【论证目标】");
+    s = s.replace(/【剧情档案】/g, "【证明席】");
+    s = s.replace(/\[已确认\]/g, "[已证]");
+    s = s.replace(/\[待核实#(\d+)\]/gi, "[待证#$1]");
+    s = s.replace(/\[待核实\]/gi, "[待证#1]");
+    return s;
+  }
+
+  function extractGoalBlock(text) {
+    const t = String(text || "");
+    return (
+      t.match(/【论证目标】[\s\S]*?(?=【|$)/)?.[0] ||
+      t.match(/【本局目标】[\s\S]*?(?=【|$)/)?.[0] ||
+      ""
+    );
+  }
+
+  function extractArchiveBody(text) {
+    const t = String(text || "");
+    const m =
+      t.match(/【证明席】([\s\S]*?)(?=【关系与态度】|$)/) ||
+      t.match(/【剧情档案】([\s\S]*?)(?=【关系与态度】|$)/);
+    return m ? m[1] : "";
+  }
+
+  function extractArchiveSection(text) {
+    const t = String(text || "");
+    const m =
+      t.match(/(【证明席】[\s\S]*?)(?=【关系与态度】|$)/) ||
+      t.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
+    return m ? m[1] : "";
+  }
+
+  function extractQedOrders(text) {
+    const orders = new Set();
+    for (const line of String(text || "").split("\n")) {
+      const m = line.trim().match(/\[证毕#?([\da-z]+)?\]/i);
+      if (m) {
+        orders.add(m[1] || "1");
+      }
+    }
+    return orders;
+  }
+
+  function parsePendingFromLine(trimmed) {
+    let m = trimmed.match(/^[-*•]?\s*\[待证#?([\da-z]+)?\]\s*(.*)$/i);
+    if (m) {
+      return { orderKey: m[1] || "1", text: m[2].trim() || trimmed };
+    }
+    m = trimmed.match(/^[-*•]?\s*\[待核实#?([\da-z]+)?\]\s*(.*)$/i);
+    if (m) {
+      return { orderKey: m[1] || "1", text: m[2].trim() || trimmed };
+    }
+    if (/^[-*•]\s*\[待证\]/i.test(trimmed) || /^\[待证\]/i.test(trimmed)) {
+      return {
+        orderKey: "1",
+        text: trimmed.replace(/^[-*•]\s*\[待证\]\s*/i, "").trim(),
+      };
+    }
+    if (/^[-*•]\s*\[待核实\]/i.test(trimmed) || /^\[待核实\]/i.test(trimmed)) {
+      return {
+        orderKey: "1",
+        text: trimmed.replace(/^[-*•]\s*\[待核实\]\s*/i, "").trim(),
+      };
+    }
+    return null;
+  }
+
   function buildSeedPlotSummary(seed) {
-    const goal = String(seed?.goal || "").trim();
-    const confirmed = (seed?.confirmed || []).map((s) => String(s).trim()).filter(Boolean);
-    const pending = (seed?.pending || []).map((s) => String(s).trim()).filter(Boolean);
+    const goal = String(seed?.goal || seed?.theorem || "").trim();
+    const confirmed = (seed?.confirmed || seed?.premises || [])
+      .map((s) => String(s).trim())
+      .filter(Boolean);
+    const pending = (seed?.pending || seed?.openLemmas || [])
+      .map((s) => String(s).trim())
+      .filter(Boolean);
     const attitude = (seed?.attitude || []).map((s) => String(s).trim()).filter(Boolean);
 
     const lines = [];
     if (goal) {
-      lines.push("【本局目标】（唯一，仅此一条）", `- ${goal}`, "");
+      lines.push("【论证目标】", `- 论题 G：${goal}`, "");
     }
-    lines.push("【剧情档案】");
-    for (const c of confirmed) {
-      lines.push(`- [已确认] ${c}`);
-    }
+    lines.push("【证明席】", "【前提集】");
+    confirmed.forEach((c, i) => {
+      const body = c.replace(/^P\d+[：:]\s*/i, "").trim();
+      lines.push(`- [前提] P${i + 1}：${body}`);
+    });
+    lines.push("", "【证明进程】");
     pending.forEach((p, i) => {
-      lines.push(`- [待核实#${i + 1}] ${p}`);
+      const n = i + 1;
+      const body = p.replace(/^L\d+[：:]\s*/i, "").trim();
+      lines.push(`- [待证#${n}] L${n}：${body}`);
+      lines.push(`  若要证 G，则需证 L${n}：${body}`);
     });
     if (!confirmed.length && !pending.length) {
-      lines.push("- [待核实#1] （待剧情推进后填写）");
+      lines.push("- [待证#1] L1：（待剧情推进后填写）");
+      lines.push("  若要证 G，则需证 L1");
     }
     if (attitude.length) {
       lines.push("", "【关系与态度】");
@@ -69,13 +153,13 @@
   }
 
   function extractGoal(text) {
-    const block = String(text || "").match(/【本局目标】[\s\S]*?(?=【|$)/)?.[0];
+    const block = extractGoalBlock(text);
     if (!block) {
       return "";
     }
     const items = [];
     for (const line of block.split("\n")) {
-      const m = line.trim().match(/^[-*•]\s+(.+)$/);
+      const m = line.trim().match(/^[-*•]\s+(?:论题\s*G[：:]\s*)?(.+)$/);
       if (m) {
         items.push(m[1].trim());
       }
@@ -84,30 +168,29 @@
   }
 
   function extractPendingLines(text) {
-    const body = String(text || "").trim();
+    const body = normalizeProofArchive(String(text || "").trim());
     if (!body) {
       return [];
     }
+    const qed = extractQedOrders(body);
     const items = [];
     for (const line of body.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) {
         continue;
       }
-      const m = trimmed.match(/^[-*•]?\s*\[待核实#?([\da-z]+)?\]\s*(.*)$/i);
-      if (m) {
-        items.push({
-          orderKey: m[1] || String(items.length + 1),
-          text: m[2].trim() || trimmed,
-        });
+      if (/^\s*若要证/.test(trimmed) && !/\[待证|\[待核实/.test(trimmed)) {
         continue;
       }
-      if (/^[-*•]\s*\[待核实\]/.test(trimmed) || /^\[待核实\]/.test(trimmed)) {
-        items.push({
-          orderKey: String(items.length + 1),
-          text: trimmed.replace(/^[-*•]\s*\[待核实\]\s*/i, "").trim(),
-        });
+      const parsed = parsePendingFromLine(trimmed);
+      if (!parsed) {
+        continue;
       }
+      const key = parsed.orderKey || String(items.length + 1);
+      if (qed.has(key)) {
+        continue;
+      }
+      items.push({ orderKey: key, text: parsed.text });
     }
     items.sort((a, b) => {
       const na = parseInt(String(a.orderKey).replace(/\D/g, ""), 10) || 0;
@@ -120,36 +203,38 @@
     return items.map((x) => x.text).filter(Boolean);
   }
 
-  /** 发给 API 的摘要压缩：保留目标+全部待核实+最近若干已确认 */
+  /** 发给 API：论题 + 待证 + 最近已证/前提 */
   function compactPlotSummaryForApi(plotSummary, maxConfirmed = 6) {
-    const text = String(plotSummary || "").trim();
+    const text = normalizeProofArchive(String(plotSummary || "").trim());
     if (!text) {
       return "";
     }
-    const goalBlock = text.match(/【本局目标】[\s\S]*?(?=【|$)/)?.[0]?.trim() || "";
+    const goalBlock = extractGoalBlock(text)?.trim() || "";
     const attitudeBlock = text.match(/【关系与态度】[\s\S]*$/)?.[0]?.trim() || "";
-    const archiveMatch = text.match(/【剧情档案】([\s\S]*?)(?=【关系与态度】|$)/);
-    const archiveBody = archiveMatch ? archiveMatch[1] : "";
-    const confirmed = [];
+    const archiveBody = extractArchiveBody(text);
+    const proven = [];
     const pending = [];
     for (const line of archiveBody.split("\n")) {
       const t = line.trim();
-      if (!t) {
+      if (!t || /^【/.test(t) || /^\s*若要证/.test(t)) {
         continue;
       }
-      if (/\[已确认\]/.test(t)) {
-        confirmed.push(t);
-      } else if (/\[待核实/.test(t)) {
+      if (/\[已证\]|\[已确认\]|\[前提\]/.test(t)) {
+        proven.push(t);
+      } else if (/\[待证|\[待核实/.test(t)) {
         pending.push(t);
       }
     }
-    const tailConfirmed = confirmed.slice(-maxConfirmed);
+    const tailProven = proven.slice(-maxConfirmed);
     const parts = [];
     if (goalBlock) {
       parts.push(goalBlock);
     }
-    parts.push("【剧情档案】");
-    parts.push(...tailConfirmed, ...pending);
+    parts.push("【证明席】");
+    if (tailProven.some((l) => /\[前提\]/.test(l))) {
+      parts.push("【前提集】");
+    }
+    parts.push(...tailProven, ...pending);
     if (attitudeBlock) {
       parts.push("", attitudeBlock.split("\n").slice(0, 3).join("\n"));
     }
@@ -157,14 +242,18 @@
   }
 
   function countLayers(plotSummary) {
-    const text = String(plotSummary || "");
-    const confirmed = (text.match(/\[已确认\]/g) || []).length;
+    const text = normalizeProofArchive(String(plotSummary || ""));
+    const premises = (text.match(/\[前提\]/g) || []).length;
+    const proven =
+      (text.match(/\[已证\]/g) || []).length +
+      (text.match(/\[已确认\]/g) || []).length;
     const pending = extractPendingLines(text).length;
+    const qed = extractQedOrders(text).size;
     const goal = extractGoal(text) ? 1 : 0;
-    return { confirmed, pending, goal };
+    return { confirmed: premises + proven, premises, proven, pending, qed, goal };
   }
 
-  /** ② 选项 user：本局态势 + 写法（不含「洋葱」术语） */
+  /** ② 选项 user：本局态势 + 写法 */
   function formatOptionsBlock(plotSummary, context) {
     const goal = extractGoal(plotSummary);
     const pending = extractPendingLines(plotSummary);
@@ -183,13 +272,13 @@
     const followupStreak = countRecentFollowupStreak(context?.session);
     const parts = ["【本局态势】"];
     if (goal) {
-      parts.push(`目标：${goal}`);
+      parts.push(`论题 G：${goal}`);
     }
     if (pending.length) {
       const pendingNote =
         pending.length === 1
-          ? `仍待弄清：${pending[0]}`
-          : `仍待弄清：${pending.map((p, i) => `#${i + 1}${p}`).join("；")}`;
+          ? `仍待证 L1：${pending[0]}`
+          : `仍待证：${pending.map((p, i) => `L${i + 1}·${p}`).join("；")}`;
       parts.push(pendingNote);
     }
     if (knowledge) {
@@ -342,7 +431,7 @@
       lines.push(`本局目标：${goal}`);
     }
     if (pending[0]) {
-      lines.push(`优先弄清：${pending[0]}`);
+      lines.push(`优先待证：${pending[0]}`);
     }
 
     return `\n【本局规则·本轮】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
@@ -634,7 +723,7 @@
   /** 排除开局种子「可作筹码」行，只算对局内新供述 */
   function gameplayConfirmedBlob(plotSummary) {
     return extractConfirmedLines(plotSummary)
-      .filter((line) => !/可作筹码/.test(line))
+      .filter((line) => !/可作筹码/.test(line) && !/\[前提\]/.test(line))
       .join("\n");
   }
 
@@ -690,6 +779,17 @@
     return "幕后主使";
   }
 
+  function formatMastermindConfirmLabel(name) {
+    const n = String(name || "").trim();
+    if (!n || n === "幕后主使") {
+      return "指使者你已说定，账本下落也该说了。";
+    }
+    if (/主使|指使|幕后/.test(n)) {
+      return `${n}、账本在他手里，你已说定。`;
+    }
+    return `${n}就是指使者，账本在他手里，你已说定。`;
+  }
+
   /** 推进选项：优先未消耗亮牌；指使者已供则确认句 */
   function pickKeypointOfferLine(session, seed, plotSummary, lastSharp) {
     const avail = getAvailableKnowledge(session, seed);
@@ -701,7 +801,7 @@
     const pending = extractPendingLines(plotSummary)[0] || "";
     if (mastermindNamedInArchive(plotSummary) || mastermindNamedInLine(line)) {
       const name = extractMastermindLabel(plotSummary, line);
-      return `${name}主使、账本在他手里，你已说定。`;
+      return formatMastermindConfirmLabel(name);
     }
     if (/指使者|幕后|主使/.test(pending) && !mastermindTrackSatisfied(blob)) {
       return "你已认了陈四，换你说他背后主使是谁。";
@@ -839,13 +939,11 @@
 
   /** 档案中同 slot 是否仍有未标记 [已推翻] 的双真值（A2.1） */
   function hasUnresolvedSlotContradiction(plotSummary, seed) {
-    const archiveMatch = String(plotSummary || "").match(
-      /(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/
-    );
-    if (!archiveMatch) {
+    const section = extractArchiveSection(plotSummary);
+    if (!section) {
       return false;
     }
-    const bodyLines = archiveMatch[1].split("\n").slice(1);
+    const bodyLines = section.split("\n").slice(1);
     const slotIds = Object.keys(seed?.goalTracks || { mastermind: {} });
     for (const slotId of slotIds) {
       const kws = seed?.goalTracks?.[slotId]?.keywords || [];
@@ -854,7 +952,7 @@
       }
       const names = [];
       for (const line of bodyLines) {
-        if (!/\[已确认\]/.test(line) || /\[已推翻\]/.test(line)) {
+        if (!/\[已证\]|\[已确认\]/.test(line) || /\[已推翻\]/.test(line)) {
           continue;
         }
         if (!kws.some((k) => line.includes(String(k).trim()))) {
@@ -898,19 +996,26 @@
     return out;
   }
 
-  /** 槽位单真值：改口则标记 [已推翻]，删占位待核实（A2） */
+  /** 槽位单真值：改口则标记 [已推翻]，删占位待证（A2） */
   function reconcileEvidenceSlots(text, seed) {
-    let result = String(text || "").trim();
+    let result = normalizeProofArchive(String(text || "").trim());
     if (!result) {
       return result;
     }
     result = result.replace(
+      /\n- \[待证#[^\]]*\]\s*[（(]?(?:无|暂无|待填|待剧情推进后填写)[）)]?[^\n]*/gi,
+      ""
+    );
+    result = result.replace(
       /\n- \[待核实#[^\]]*\]\s*[（(]?(?:无|暂无|待填|待剧情推进后填写)[）)]?[^\n]*/gi,
       ""
     );
+    result = result.replace(/\n- \[待证\]\s*[（(]?(?:无|暂无)[）)]?[^\n]*/gi, "");
     result = result.replace(/\n- \[待核实\]\s*[（(]?(?:无|暂无)[）)]?[^\n]*/gi, "");
 
-    const archiveMatch = result.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
+    const archiveMatch =
+      result.match(/(【证明席】[\s\S]*?)(?=【关系与态度】|$)/) ||
+      result.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
     if (!archiveMatch) {
       return result.trim();
     }
@@ -926,7 +1031,7 @@
       const claims = [];
       for (let i = 0; i < bodyLines.length; i++) {
         const line = bodyLines[i];
-        if (!/\[已确认\]/.test(line) || /\[已推翻\]/.test(line)) {
+        if (!/\[已证\]|\[已确认\]/.test(line) || /\[已推翻\]/.test(line)) {
           continue;
         }
         if (!kws.some((k) => line.includes(String(k).trim()))) {
@@ -945,7 +1050,7 @@
       for (const c of claims) {
         if (c.i !== keep.i && !/\[已推翻\]/.test(bodyLines[c.i])) {
           bodyLines[c.i] = bodyLines[c.i].replace(
-            /(\[已确认\])/,
+            /(\[已证\]|\[已确认\])/,
             "$1 [已推翻]"
           );
         }
@@ -958,7 +1063,7 @@
   }
 
   function stripClearablePendingLines(text) {
-    let result = String(text || "");
+    let result = normalizeProofArchive(String(text || ""));
     const pending = extractPendingLines(result);
     if (!pending.length) {
       return result;
@@ -967,11 +1072,20 @@
       if (shouldClearPendingLine(p, result)) {
         const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         result = result.replace(
+          new RegExp(`\\n- \\[待证#?\\d*\\]\\s*${escaped}`, "gi"),
+          ""
+        );
+        result = result.replace(
           new RegExp(`\\n- \\[待核实#?\\d*\\]\\s*${escaped}`, "gi"),
           ""
         );
+        result = result.replace(/\n\s*若要证[^\n]*/gi, "");
       }
     }
+    result = result.replace(/\n- \[待证#[^\]]*\][^\n]*/gi, (line) => {
+      const m = line.match(/\[待证[^\]]*\]\s*(.*)$/i);
+      return m && isVacuousPendingText(m[1]) ? "" : line;
+    });
     result = result.replace(/\n- \[待核实#[^\]]*\][^\n]*/gi, (line) => {
       const m = line.match(/\[待核实[^\]]*\]\s*(.*)$/i);
       return m && isVacuousPendingText(m[1]) ? "" : line;
@@ -1013,33 +1127,37 @@
 
   /** 压摘要后：答清指使者则删 #1；裁剪档案膨胀 */
   function reconcilePlotSummary(plotSummary, seed) {
-    let text = String(plotSummary || "").trim();
+    let text = normalizeProofArchive(String(plotSummary || "").trim());
     if (!text) {
       return text;
     }
     text = reconcileEvidenceSlots(text, seed);
     text = stripClearablePendingLines(text);
+    text = text.replace(/\n- \[已证\][^\n]*可能意在[^\n]*/gi, "");
+    text = text.replace(/\n- \[已证\][^\n]*存疑[^\n]*/gi, "");
     text = text.replace(/\n- \[已确认\][^\n]*可能意在[^\n]*/gi, "");
     text = text.replace(/\n- \[已确认\][^\n]*存疑[^\n]*/gi, "");
-    const archiveMatch = text.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
+    const archiveMatch =
+      text.match(/(【证明席】[\s\S]*?)(?=【关系与态度】|$)/) ||
+      text.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
     if (archiveMatch) {
       const head = archiveMatch[1].split("\n").slice(0, 1);
       const bodyLines = archiveMatch[1].split("\n").slice(1);
-      const confirmed = [];
+      const proven = [];
       const other = [];
       for (const line of bodyLines) {
         const t = line.trim();
         if (!t) {
           continue;
         }
-        if (/\[已确认\]/.test(t)) {
-          confirmed.push(line);
+        if (/\[已证\]|\[已确认\]/.test(t)) {
+          proven.push(line);
         } else {
           other.push(line);
         }
       }
-      const maxConfirmed = getArgumentProfile(seed).maxPremises;
-      const trimmed = confirmed.slice(-maxConfirmed);
+      const maxProven = getArgumentProfile(seed).maxPremises;
+      const trimmed = proven.slice(-maxProven);
       const newArchive = [...head, ...trimmed, ...other].join("\n");
       text = text.replace(archiveMatch[1], newArchive);
     }
@@ -1292,13 +1410,17 @@
   }
 
   function formatLayersDebug(plotSummary, seed) {
-    const { confirmed, pending, goal } = countLayers(plotSummary);
+    const { premises, proven, pending, qed, goal } = countLayers(plotSummary);
     const parts = [
-      `核心 [已确认]×${confirmed}`,
-      `中层 [待核实]×${pending}`,
+      `前提×${premises}`,
+      `已证×${proven}`,
+      `待证×${pending}`,
     ];
+    if (qed > 0) {
+      parts.push(`证毕×${qed}`);
+    }
     if (goal) {
-      parts.push("已设本局目标");
+      parts.push("论题 G 已设");
     }
     if (seed?.goalTracks) {
       const cov = slotCoverage(plotSummary, seed);
@@ -1313,13 +1435,11 @@
   }
 
   function extractConfirmedLines(text) {
-    const body = String(text || "");
-    const archiveMatch = body.match(/【剧情档案】([\s\S]*?)(?=【关系与态度】|$)/);
-    const archiveBody = archiveMatch ? archiveMatch[1] : body;
+    const archiveBody = extractArchiveBody(text) || String(text || "");
     const lines = [];
     for (const line of archiveBody.split("\n")) {
       const t = line.trim();
-      if (/\[已确认\]/.test(t)) {
+      if (/\[已证\]|\[已确认\]|\[前提\]/.test(t)) {
         lines.push(t.replace(/^[-*•]\s*/, ""));
       }
     }
@@ -1402,6 +1522,9 @@
     getMaxOpenClaims,
     getMinPremisesForEnding,
     openClaims,
+    normalizeProofArchive,
+    extractArchiveBody,
+    extractQedOrders,
     buildSeedPlotSummary,
     extractGoal,
     extractPendingLines,
