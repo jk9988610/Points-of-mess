@@ -48,7 +48,7 @@ https://jk9988610.github.io/Points-of-mess/js/version.js?v=check
 若 **Settings** 仍选 **Deploy from branch → gh-pages**：
 
 1. 本机：`./scripts/sync-gh-pages.sh`（会去掉 `.github`、写 `DEPLOY.txt`）  
-2. Actions → **Deploy to GitHub Pages** → Run workflow（`pages.yml` 已 `force_orphan: true`）  
+2. Actions → **Republish Pages (official)** → Run workflow  
 3. 在 **Settings → Pages** 看最近一次 build 是否为 **built**（不是 **errored** / 一直 **building**）
 
 ---

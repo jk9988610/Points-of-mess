@@ -168,4 +168,4 @@ evidenceSlots: [           // 程序判定用，可选
 
 ---
 
-*实现状态以 `js/version.js` 为准；与 `docs/DIALOGUE-PROMPT.md`、`docs/ROADMAP-phase2.md` 并列维护。*
+*实现状态以 `js/version.js` 为准；与 `docs/PROOF-ARCHITECTURE.md` 并列维护。*

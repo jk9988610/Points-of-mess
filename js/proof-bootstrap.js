@@ -97,7 +97,7 @@ ${hint}
       neglectPrimaryWarnAt: 3,
       neglectPrimaryFailAt: 5,
       goalTracks: { core: { keywords: poolProblem?.endingCoreKeywords || [] } },
-      sharpStatementFallbacks: [
+      proverStatementFallbacks: [
         "先把逻辑步讲实，我再补一步。",
         "逐步来，别跳步。",
       ],

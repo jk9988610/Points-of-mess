@@ -539,7 +539,7 @@
   const ACTION_RE = /带我去|领我去|帮我找|陪我去|跟我去|带我去找/;
   /** followup 选项不得含：逼开放引理 / 引理交换话术 */
   const GOAL_ADVANCE_LINE_RE =
-    /换你|换一句|换一条|谁派|幕后|凭什么|别绕|说清楚|开口|心里鬼|谁先答|引理包|账本|数据集|Λ|α|β|Ω|陈四|刘老三|老九|赵家/;
+    /换你|换一句|换一条|凭什么|别绕|说清楚|开口|谁先答|引理包|数据集|Λ|α|β|Ω/;
   const PLAYER_ASKING_RE =
     /[？?]|吗$|谁让你|谁派你|谁是|到底是谁|查我|什么关系|干什么|来意|套话/;
 
@@ -870,18 +870,25 @@
     const line = String(lastSharp || "").trim();
     const blob = extractConfirmedLines(plotSummary).join("");
     const pending = extractPendingLines(plotSummary)[0] || "";
-    if (mastermindNamedInArchive(plotSummary) || mastermindNamedInLine(line)) {
+    if (
+      seed?.goalTracks?.mastermind &&
+      (mastermindNamedInArchive(plotSummary) || mastermindNamedInLine(line))
+    ) {
       const name = extractMastermindLabel(plotSummary, line);
       return formatMastermindConfirmLabel(name);
     }
-    if (/授权者|主控|指使者|幕后|主使/.test(pending) && !mastermindTrackSatisfied(blob)) {
+    if (
+      seed?.goalTracks?.mastermind &&
+      /授权者|主控|指使者|幕后|主使/.test(pending) &&
+      !mastermindTrackSatisfied(blob)
+    ) {
       return pending ? `就「${pending.slice(0, 24)}」，换你说可核对推导步。` : "请就开放引理 L1 给出可核对推导步。";
     }
     return "";
   }
 
   function pickProgramStatementFallback(seed) {
-    const pool = seed?.sharpStatementFallbacks;
+    const pool = seed?.proverStatementFallbacks || seed?.sharpStatementFallbacks;
     if (!Array.isArray(pool) || !pool.length) {
       return "先把逻辑步讲实，我再补一步。";
     }
@@ -1242,11 +1249,16 @@
     if (!line || isDeflectReply(line)) {
       return false;
     }
-    if (!MASTERMIND_NAMED_IN_ARCHIVE_RE.test(line)) {
+    if (/\[证毕#?\d*\]/i.test(line)) {
+      return true;
+    }
+    const advanceCue =
+      /故|因此|所以|推出|得证|矛盾|不成立|否后|证得|不可能|必须|故.*假/;
+    if (!advanceCue.test(line) || line.length < 5) {
       return false;
     }
-    const blob = extractConfirmedLines(plotSummary).join("");
-    return !MASTERMIND_NAMED_IN_ARCHIVE_RE.test(blob);
+    const sig = line.slice(0, Math.min(28, line.length));
+    return !archiveBlob(plotSummary).includes(sig);
   }
 
   function pickProgramSharpReply(session, seed, replyContext) {
@@ -1304,7 +1316,7 @@
     }
     if (context?.playerConcreteReveal) {
       lines.push(
-        "须给出一条可核对推导步（奇偶/整除/等价/矛盾之一），勿同句两条"
+        "须给出一条可核对推导步（假言/否后/矛盾/选言/反证之一），勿同句两条"
       );
     }
     return lines.join("\n");
@@ -1522,10 +1534,7 @@
       return true;
     }
     const confirmed = archiveBlob(plotSummary);
-    return (
-      keywords.some((k) => confirmed.includes(String(k).trim())) ||
-      mastermindTrackSatisfied(confirmed)
-    );
+    return keywords.some((k) => confirmed.includes(String(k).trim()));
   }
 
   function hasSessionEndingProgress(session, seed, plotSummary) {
@@ -1539,31 +1548,9 @@
     }
     if (seed?.endingSpendAllKnowledge) {
       const spent = session.spentPlayerKnowledge || [];
-      if (usesDynamicPlayerEvidence(seed)) {
-        const granted = getSessionEvidenceList(session);
-        const minSpend =
-          Number(seed?.endingMinEvidenceSpent) > 0
-            ? seed.endingMinEvidenceSpent
-            : Math.min(2, granted.length);
-        const spentCount = granted.filter((e) => spent.includes(e.id)).length;
-        if (spentCount < minSpend) {
-          return false;
-        }
-      } else {
-        const play = gameplayConfirmedBlob(plotSummary);
-        const blockerOk =
-          spent.includes("blocker") ||
-          /证官供述[^。\n]{0,48}α/.test(play) ||
-          /证辩者[^。\n]{0,48}α/.test(play) ||
-          /(?:锋利|证官)供述[^。\n]{0,48}陈四/.test(play) ||
-          /(?:玩家|证辩者)供述[^。\n]{0,48}陈四/.test(play);
-        const ledgerOk =
-          spent.includes("ledger") ||
-          /证官供述[^。\n]{0,48}(?:β|Λ|数据集)/.test(play) ||
-          /证辩者[^。\n]{0,48}(?:β|Λ|数据集)/.test(play) ||
-          /(?:锋利|证官)供述[^。\n]{0,48}(?:刘老三|账本)/.test(play) ||
-          /(?:玩家|证辩者)供述[^。\n]{0,48}(?:刘老三|账本)/.test(play);
-        if (!blockerOk || !ledgerOk) {
+      const required = seed?.requireKnowledgeIds;
+      if (Array.isArray(required) && required.length) {
+        if (!required.every((id) => spent.includes(id))) {
           return false;
         }
       }

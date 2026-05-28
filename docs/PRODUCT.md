@@ -20,7 +20,7 @@
 | 页面实时更新 | **不需要**（无多人同步；本地打开即为本机状态） |
 | 运行方式 | **纯静态前端**，无需 Node；浏览器打开即可 |
 | API 密钥 | **一个密钥** 服务所有点；角色差异由设定与上下文承担，不靠多密钥 |
-| 部署 | 静态托管（如 GitHub Pages）；推送到 `main` 自动发布 `gh-pages` |
+| 部署 | 静态托管（GitHub Pages）；推送到 `main` 由 Actions 发布 |
 
 ## 对话与成本
 
@@ -46,7 +46,7 @@
 
 ```
 index.html
-styles/chat.css
+styles/map.css
 js/config.js    # API 密钥与全局配置
 js/state.js     # 状态与本地存储
 js/render.js

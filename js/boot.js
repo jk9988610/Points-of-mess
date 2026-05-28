@@ -18,7 +18,6 @@
     "dialogue.js",
     "memory-chat.js",
     "summary.js",
-    "evidence.js",
     "state.js",
     "map.js",
     "json-parse.js",

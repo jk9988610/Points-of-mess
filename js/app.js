@@ -1023,11 +1023,7 @@
     const seedForTurn = getSessionSeed(session, archetype);
 
     const apiSteps = willSummary
-      ? seedForTurn?.aiDriven
-        ? ["①reply", "②选项", "③摘要"]
-        : window.GameOnion?.usesDynamicPlayerEvidence?.(seedForTurn)
-          ? ["①reply", "②选项", "③摘要", "④引理"]
-          : ["①reply", "②选项", "③摘要"]
+      ? ["①reply", "②选项", "③摘要"]
       : ["①reply", "②选项"];
     window.PomDebug?.logLocal(
       "API 路径",
@@ -1092,27 +1088,6 @@
                 lemmaDone ? "引理栈已证毕，等待结局判定" : "摘要后无开放引理",
                 ["options-skip"]
               );
-            }
-            if (
-              window.GameEvidence?.grantPlayerEvidence &&
-              !seedForTurn?.aiDriven
-            ) {
-              try {
-                const evOk = await window.GameEvidence.grantPlayerEvidence(
-                  session,
-                  seedForTurn,
-                  signal
-                );
-                if (evOk) {
-                  persist(state);
-                }
-              } catch (e) {
-                if (e.name !== "AbortError") {
-                  window.PomDebug?.logLocalWarn("④引理赋予失败", e.message, [
-                    "evidence",
-                  ]);
-                }
-              }
             }
           }
         } catch (e) {
