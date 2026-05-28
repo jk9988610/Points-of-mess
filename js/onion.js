@@ -14,6 +14,24 @@
     return seed?.proofTheme !== false;
   }
 
+  function resolveEngineIntent(intent) {
+    if (window.GameProofIntents?.resolveEngineIntent) {
+      return window.GameProofIntents.resolveEngineIntent(intent);
+    }
+    const t = String(intent || "").trim();
+    if (t === "advance" || t === "keypoint") {
+      return "keypoint";
+    }
+    if (t === "clarify" || t === "explore" || t === "premise" || t === "followup") {
+      return "followup";
+    }
+    return t;
+  }
+
+  function isAdvancePickIntent(intent) {
+    return resolveEngineIntent(intent) === "keypoint";
+  }
+
   /** 从 seed 读取论证配置（兼容 argumentProfile 与旧字段） */
   function getArgumentProfile(seed) {
     const profile = seed?.argumentProfile || {};
@@ -305,9 +323,9 @@
     parts.push(
       "",
       "【选项写法·证明题】",
-      "keypoint（求证）：须用【玩家证据】offer 原句出示引理，或核对证官刚说的专名推导步。",
-      "followup（质询）：立场/动机/关系；禁主控链、数据集 Λ、引理交换。",
-      "禁止两条同义。"
+      "advance（推证）：须实质推进待证 Lk，给出引理交换或推导请求。",
+      "clarify（题意）/ explore（证法）/ premise（前提）：了解题面，不推进证明。",
+      "禁止多条同义；恰好一条 advance。"
     );
     if (followupStreak >= 2) {
       parts.push(
@@ -370,7 +388,7 @@
     if (!pending.length && !goal) {
       return "";
     }
-    const pickIntent = context?.pickIntent || "";
+    const pickIntent = resolveEngineIntent(context?.pickIntent || "");
     const stallTurns = context?.stallTurns ?? 0;
     const lines = [];
 
@@ -463,7 +481,7 @@
       session.lastConfirmedCount = confirmed;
       return { stallTurns: 0, confirmed };
     }
-    if (session.lastPickIntent === "followup") {
+    if (session.lastPickIntent && resolveEngineIntent(session.lastPickIntent) === "followup") {
       session.lastConfirmedCount = confirmed;
       return { stallTurns: session.stallTurns || 0, confirmed };
     }
@@ -1234,9 +1252,9 @@
       if (m.role !== "user" || m.status === "error") {
         continue;
       }
-      if (m.intent === "followup") {
+      if (m.intent && resolveEngineIntent(m.intent) === "followup") {
         n++;
-      } else if (m.intent && m.intent !== "freeform") {
+      } else if (m.intent && isAdvancePickIntent(m.intent)) {
         break;
       }
     }
@@ -1244,7 +1262,7 @@
   }
 
   function formatExchangeContract(plotSummary, context) {
-    const pickIntent = context?.pickIntent || "";
+    const pickIntent = resolveEngineIntent(context?.pickIntent || "");
     if (pickIntent !== "keypoint") {
       return "";
     }
@@ -1543,6 +1561,8 @@
   window.GameOnion = {
     getRoleLabels,
     isProofTheme,
+    resolveEngineIntent,
+    isAdvancePickIntent,
     getArgumentProfile,
     getMaxOpenClaims,
     getMinPremisesForEnding,

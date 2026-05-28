@@ -1,76 +1,49 @@
 #!/usr/bin/env node
-/** 证明题随机池：bundle 结构、摘要、开局选项 */
+/** 证明题随机池：蓝本 + intent 校验 */
 
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-function loadProofPool() {
-  const onionSrc = fs.readFileSync(path.join(__dirname, "../js/onion.js"), "utf8");
-  const poolSrc = fs.readFileSync(path.join(__dirname, "../js/proof-pool.js"), "utf8");
-  const ctx = { window: {}, console };
-  vm.runInNewContext(onionSrc, ctx);
-  vm.runInNewContext(poolSrc, ctx);
-  return ctx.window.GameProofPool;
+function load(name, ctx) {
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, `../js/${name}`), "utf8"), ctx);
 }
 
-const pool = loadProofPool();
-if (!pool?.CURATED_PROBLEMS?.length) {
-  console.error("CURATED_PROBLEMS empty");
+const ctx = { window: {}, console };
+load("proof-intents.js", ctx);
+load("onion.js", ctx);
+load("proof-pool.js", ctx);
+
+const pool = ctx.window.GameProofPool;
+const intents = ctx.window.GameProofIntents;
+
+const blueprint = pool.createTopicBlueprint();
+if (!blueprint.topicHint || !blueprint.proverName || !blueprint.system) {
+  console.error("blueprint incomplete");
   process.exit(1);
 }
 
-const bundle = pool.createSessionBundle();
-const required = [
-  "onionSeed",
-  "opening",
-  "options",
-  "proverName",
-  "system",
-  "theorem",
-];
-for (const k of required) {
-  if (!bundle[k]) {
-    console.error(`bundle missing ${k}`);
-    process.exit(1);
-  }
-}
-
-const plot = (() => {
-  const ctx2 = { window: {} };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../js/onion.js"), "utf8"), ctx2);
-  return ctx2.window.GameOnion.buildSeedPlotSummary(bundle.onionSeed);
-})();
-
-if (!plot.includes("【论证目标】") || !plot.includes("[前提]")) {
-  console.error("seed plot missing proof sections");
+const badNames = /α|β|Λ|陈四|刘老三|锋利|账本|指使者|赵爷|马奎|休庭/;
+if (badNames.test(blueprint.topicHint)) {
+  console.error("topicHint has legacy terms");
   process.exit(1);
 }
 
-const badNames = /α|β|Λ|陈四|刘老三|锋利|账本|指使者|赵爷|马奎/;
-if (badNames.test(bundle.opening)) {
-  console.error("opening contains legacy narrative terms:", bundle.opening);
-  process.exit(1);
-}
-if (badNames.test(bundle.onionSeed.goal)) {
-  console.error("goal contains legacy terms");
-  process.exit(1);
-}
-
-const kp = bundle.options.find((o) => o.intent === "keypoint");
-if (!kp?.line || kp.line.length < 4) {
-  console.error("keypoint option missing");
+const sample = intents.attachOptionIds([
+  { intent: "advance", line: "设 n 为偶数，换你说下一步" },
+  { intent: "clarify", line: "论题 G 具体指什么？" },
+  { intent: "explore", line: "这题适合反证吗？" },
+  { intent: "premise", line: "前提 P1 如何理解？" },
+]);
+const check = intents.validateProofOptions(sample);
+if (!check.ok) {
+  console.error("validateProofOptions failed", check.reason);
   process.exit(1);
 }
 
-if (!bundle.onionSeed.poolLemmaGrant || !bundle.onionSeed.lemmaPool?.length) {
-  console.error("lemmaPool not configured");
-  process.exit(1);
-}
-
-const composed = pool.composeRandomProblem();
-if (!composed.lemmaPool?.length || !composed.goal) {
-  console.error("composeRandomProblem invalid");
+const bootstrap = fs.readFileSync(path.join(__dirname, "../js/proof-bootstrap.js"), "utf8");
+if (!bootstrap.includes("advance") || !bootstrap.includes("plotSummary")) {
+  console.error("proof-bootstrap missing fields");
   process.exit(1);
 }
 

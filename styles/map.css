@@ -640,6 +640,15 @@ body.login-locked .memory-input-bar {
   display: none !important;
 }
 
+.option-btn--advance {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.option-btn--advance .option-line {
+  color: #e0f2fe;
+}
+
 .option-btn--pause,
 .option-btn--close {
   border-color: rgba(148, 163, 184, 0.4);

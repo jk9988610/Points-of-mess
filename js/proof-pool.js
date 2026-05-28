@@ -318,14 +318,47 @@
 
   function buildProverSystem(mathematician) {
     const name = mathematician.name;
-    return `你是「证官·${name}」：数学证明研讨席上的证官，说话像严谨数学家——冷静、精确。
-场景：证辩者与你对论，目标是逐步证毕论题 G；证明席由程序维护。
-回复：仅 1～2 句，总 ≤40 字。不要列表、markdown、公式编号。
+    return `你是「证官·${name}」：数学证明研讨席上的证官，说话严谨、精确。
+场景：证辩者与你对论，逐步证毕论题 G；证明席由程序维护。
+回复：仅 1～2 句，总 ≤40 字。不要列表、markdown、复杂公式。
 【硬性】只陈述/否认/顶回，禁止问句（无 ？/?，不以吗/呢 发问）。
-【交换】证辩者 keypoint 出示【玩家证据】引理后，每轮只兑现**一条**可核对推导步（等式/奇偶/整除/同余/几何关系之一），**勿同句两条**。
-禁止：查书去、别装、显然、问太多无关、随你 等空泛推托。
-- followup 轮：可质询证法/动机，可不送新引理，仍禁止问句。
+【交换】证辩者选「推证」类选项后，每轮兑现**一条**可核对逻辑推导步，勿同句两条。
+证辩者选「题意/证法/前提」类选项时，可解释概念，可不送新引理，仍禁止问句。
 勿提选项、按钮、AI。`;
+  }
+
+  function buildTopicHint(problem, mathematician) {
+    const lines = [
+      `数学家：${mathematician.name}`,
+      `定理名：${problem.theorem || problem.goal}`,
+      `证明目标：${problem.goal}`,
+      `逻辑方向：${problem.logicHint || "反证、奇偶、整除、命题推理、集合关系"}`,
+      `建议前提类型：${(problem.premises || []).slice(0, 3).join("；") || "2～3 条可核对前提"}`,
+      `开放引理方向：${(Array.isArray(problem.pending) ? problem.pending[0] : problem.pending) || "待证一步"}`,
+      "约束：偏逻辑、少计算、不用长公式；中文短句。",
+    ];
+    return lines.join("\n");
+  }
+
+  /** 仅题目蓝本，供 AI 生成 opening/摘要/选项 */
+  function createTopicBlueprint(opts) {
+    const problem = pickProblem(opts);
+    const mathematician = pickMathematician(problem);
+    const proverName = `证官·${mathematician.name}`;
+    return {
+      problemId: problem.id,
+      theorem: problem.theorem,
+      mathematician,
+      proverName,
+      displayTitle: proverName,
+      system: buildProverSystem(mathematician),
+      topicHint: buildTopicHint(problem, mathematician),
+      failureLine: "你不出示引理，这证我收不了。",
+      closeOptionLines: {
+        a: "G 已证毕，我整理证明稿。",
+        b: "论证闭合，休庭。",
+      },
+    };
   }
 
   function buildOnionSeed(problem, mathematician) {
@@ -433,50 +466,26 @@
     return pickRandom(CURATED_PROBLEMS);
   }
 
-  /** 生成本局完整 bundle（seed / opening / options / 证官名） */
+  /** 保留供验证；正常局由 AI bootstrap */
   function createSessionBundle(opts) {
-    const problem = pickProblem(opts);
-    const mathematician = pickMathematician(problem);
-    const onionSeed = buildOnionSeed(problem, mathematician);
-    const opening = buildOpening(problem, mathematician);
-    const options = buildInitialOptions(problem, onionSeed);
-    const proverName = `证官·${mathematician.name}`;
-    const system = buildProverSystem(mathematician);
-    return {
-      problemId: problem.id,
-      theorem: problem.theorem,
-      mathematician,
-      proverName,
-      displayTitle: proverName,
-      system,
-      onionSeed,
-      opening,
-      options,
-      suspendLine: "休庭，稍后继续证辩。",
-      failureLine: "你不出示引理，这证我收不了。",
-      closeOptionLines: {
-        a: "G 已证毕，我整理证明稿。",
-        b: "论证闭合，休庭。",
-      },
-    };
+    return createTopicBlueprint(opts);
   }
 
-  /**
-   * 初始化 session：写入随机证明题 bundle（每局一次）。
-   * @returns {object} bundle
-   */
   function initSession(session, archetype) {
-    if (session?.proofBundle?.onionSeed) {
+    if (session?.proofBundle?.bootstrapped) {
+      return session.proofBundle;
+    }
+    if (session?.proofBundle?.topicHint) {
       return session.proofBundle;
     }
     const usePool = archetype?.useProofPool !== false;
     if (!usePool) {
       return null;
     }
-    const bundle = createSessionBundle();
-    session.proofBundle = bundle;
-    session.proverDisplayName = bundle.proverName;
-    return bundle;
+    const blueprint = createTopicBlueprint();
+    session.proofBundle = { ...blueprint, bootstrapped: false };
+    session.proverDisplayName = blueprint.proverName;
+    return session.proofBundle;
   }
 
   function getSessionSeed(session, archetype) {
@@ -513,6 +522,7 @@
     PREMISE_BLOCKS,
     pickProblem,
     composeRandomProblem,
+    createTopicBlueprint,
     createSessionBundle,
     initSession,
     getSessionSeed,
@@ -520,8 +530,6 @@
     getSessionOptions,
     getSessionSystem,
     clearSessionProof,
-    buildOnionSeed,
-    buildOpening,
-    buildInitialOptions,
+    buildProverSystem,
   };
 })();

@@ -39,7 +39,6 @@
       system: bundle.system || archetype.system,
       opening: bundle.opening || archetype.opening,
       options: bundle.options || archetype.options,
-      suspendLine: bundle.suspendLine || archetype.suspendLine,
       failureLine: bundle.failureLine || archetype.failureLine,
       closeOptionLines: bundle.closeOptionLines || archetype.closeOptionLines,
       displayTitle: bundle.displayTitle || archetype.displayTitle,
@@ -335,11 +334,22 @@
   }
 
   const INTENT_ARIA = {
-    keypoint: "推进",
-    followup: "询问",
-    suspend: "挂起",
+    advance: "推证",
+    clarify: "题意",
+    explore: "证法",
+    premise: "前提",
+    keypoint: "推证",
+    followup: "了解",
     close: "结束对话",
   };
+
+  function placeholderProofOptions() {
+    return (window.GameProofIntents?.PROOF_OPTION_SPECS || []).map((spec) => ({
+      ...spec,
+      line: "",
+      send: "",
+    }));
+  }
 
   function renderOptionButtons(options, loading) {
     const disabled = loading || state.isStreaming || isDialogueSuspended();
@@ -353,23 +363,24 @@
         lineEl.textContent = lineText;
       }
       if (opt?.intent) {
-        const kind = INTENT_ARIA[opt.intent] || "";
+        const kind =
+          window.GameProofIntents?.ariaLabel?.(opt.intent) ||
+          INTENT_ARIA[opt.intent] ||
+          "";
         btn.setAttribute(
           "aria-label",
           kind && lineText !== "生成中…" && lineText !== "—"
             ? `${kind}：${lineText}`
             : lineText
         );
+        btn.dataset.intent = opt.intent;
       }
-      btn.classList.toggle("option-btn--pause", opt?.intent === "suspend");
+      btn.classList.toggle(
+        "option-btn--advance",
+        opt?.intent === "advance" || opt?.intent === "keypoint"
+      );
       btn.classList.toggle("option-btn--close", opt?.intent === "close");
       btn.disabled = disabled || !opt?.line || loading;
-    }
-    const btn3 = optionsBar.querySelector('[data-option-id="3"]');
-    if (btn3) {
-      const showThird = (options?.length || 0) >= 3;
-      btn3.classList.toggle("hidden", !showThird);
-      btn3.hidden = !showThird;
     }
     optionsBar.classList.toggle("options-bar--ending", options?.length === 2);
   }
@@ -471,7 +482,7 @@
     return true;
   }
 
-  function startTalking(characterId) {
+  async function startTalking(characterId) {
     const character = getCharacter(characterId);
     const archetype = getArchetype(character.archetypeId);
     if (!character || !archetype) {
@@ -489,7 +500,6 @@
     window.GameProofPool?.initSession?.(session, archetype);
     const liveArchetype = resolveArchetype(archetype, session);
     const prover = resolveProver(character, session);
-    const seed = getSessionSeed(session, archetype);
     if (!Array.isArray(session.spentPlayerKnowledge)) {
       session.spentPlayerKnowledge = [];
     }
@@ -499,92 +509,86 @@
     if (typeof session.keypointTurnCount !== "number") {
       session.keypointTurnCount = 0;
     }
-    const seeded = ensureOnionSeedPlotSummary(session, archetype);
-    if (seeded) {
-      persist(state);
-      const goal = window.GameOnion?.extractGoal?.(session.plotSummary) || "";
-      window.PomDebug?.logLocal(
-        "剧情·种子摘要已注入",
-        `${window.GameOnion.formatLayersDebug(session.plotSummary, seed)}${goal ? `\n目标：${goal}` : ""}${session.proofBundle?.theorem ? `\n题面：${session.proofBundle.theorem}` : ""}`,
-        ["summary-out"]
-      );
-    }
-    setStatus("", false);
-    window.PomDebug?.logUser("开始对话", {
-      character: prover.name,
-      problem: session.proofBundle?.problemId || "preset",
-      dialogue: "本局对白全文入 API（不裁剪）",
-      messageCount: session.messages.length,
-    });
-
-    const openingLine =
-      window.GameProofPool?.getSessionOpening?.(session, archetype) ||
-      liveArchetype.opening;
-
-    if (session.messages.length === 0) {
-      session.messages.push({
-        id: createId(),
-        role: "assistant",
-        content: openingLine,
-        createdAt: Date.now(),
-        status: "done",
-      });
-      persist(state);
-      setBubble(openingLine, false);
-    } else {
-      const last = [...session.messages]
-        .reverse()
-        .find((m) => m.role === "assistant" && m.status === "done");
-      setBubble(last?.content || openingLine, false);
-    }
-
-    state.currentOptions = presetOptions(liveArchetype);
-    window.PomDebug?.logLocal(
-      "首轮选项（预设·推进/询问，不发 API）",
-      state.currentOptions.map((o) => o.line)
-    );
-
-    if (window.GameEvidence?.bootstrapPlayerEvidence) {
-      window.GameEvidence.bootstrapPlayerEvidence(session, seed).then(
-        (granted) => {
-          if (!granted || state.talkingId !== characterId || state.isStreaming) {
-            return;
-          }
-          const kp = window.GameOnion?.pickKeypointOfferLine?.(
-            session,
-            seed,
-            session.plotSummary,
-            openingLine
-          );
-          if (kp && state.currentOptions?.length) {
-            state.currentOptions = state.currentOptions.map((o) =>
-              o.intent === "keypoint"
-                ? {
-                    ...o,
-                    line: kp,
-                    send: `[intent:keypoint] ${kp}`,
-                  }
-                : o
-            );
-            renderOptionButtons(state.currentOptions, false);
-            window.PomDebug?.logLocal(
-              "首轮 keypoint 已换为 AI 证据",
-              kp,
-              ["evidence-out"]
-            );
-          }
-          persist(state);
-        }
-      );
-    }
 
     setOptionsVisible(true);
     setMemoryInputVisible(true);
     stopButtonEl.disabled = true;
-    state.optionsLoading = false;
-    renderOptionButtons(state.currentOptions, false);
     renderMap();
     syncSpeechBubbles(false);
+
+    const needsBootstrap =
+      session.messages.length === 0 && !session.proofBundle?.bootstrapped;
+
+    if (needsBootstrap) {
+      if (!ensureApiConfig()) {
+        state.talkingId = null;
+        setOptionsVisible(false);
+        return;
+      }
+      state.optionsLoading = true;
+      state.currentOptions = placeholderProofOptions();
+      renderOptionButtons(state.currentOptions, true);
+      setStatus("证官准备论题…", false);
+      setBubble("", false);
+
+      try {
+        const boot = await window.GameProofBootstrap.bootstrapProofSession({
+          session,
+          blueprint: session.proofBundle,
+          signal: undefined,
+        });
+        const live = resolveArchetype(archetype, session);
+        session.messages.push({
+          id: createId(),
+          role: "assistant",
+          content: boot.opening,
+          createdAt: Date.now(),
+          status: "done",
+        });
+        persist(state);
+        setBubble(boot.opening, false);
+        state.currentOptions = boot.options;
+        const goal = window.GameOnion?.extractGoal?.(session.plotSummary) || "";
+        window.PomDebug?.logLocal(
+          "开局·AI 已写入",
+          `${window.GameOnion.formatLayersDebug(session.plotSummary, boot.seed)}${goal ? `\n论题：${goal}` : ""}`,
+          ["summary-out", "bootstrap"]
+        );
+        window.PomDebug?.logLocal(
+          "首轮选项（AI）",
+          state.currentOptions.map((o) => `${o.intent}: ${o.line}`)
+        );
+      } catch (e) {
+        window.PomDebug?.logLocalError("开局生成失败", e.message || String(e));
+        setStatus(e.message || "开局生成失败，请重试", true);
+        endTalking();
+        return;
+      } finally {
+        state.optionsLoading = false;
+      }
+    } else {
+      const openingLine =
+        window.GameProofPool?.getSessionOpening?.(session, archetype) ||
+        liveArchetype.opening;
+      const last = [...session.messages]
+        .reverse()
+        .find((m) => m.role === "assistant" && m.status === "done");
+      setBubble(last?.content || openingLine, false);
+      state.currentOptions =
+        session.proofBundle?.options?.length >= 4
+          ? session.proofBundle.options
+          : presetOptions(liveArchetype);
+    }
+
+    setStatus("", false);
+    window.PomDebug?.logUser("开始对话", {
+      character: prover.name,
+      problem: session.proofBundle?.problemId || "preset",
+      bootstrapped: Boolean(session.proofBundle?.bootstrapped),
+      messageCount: session.messages.length,
+    });
+
+    renderOptionButtons(state.currentOptions, false);
   }
 
   function resumeDialogueUi(reason) {
@@ -842,7 +846,6 @@
     }
 
     if (pick.intent === "suspend") {
-      handleSuspendOption();
       return;
     }
 
@@ -884,7 +887,7 @@
       ) || { shouldWarn: false, shouldFail: false };
 
     session.lastPickIntent = pick.intent;
-    if (pick.intent === "followup") {
+    if (!window.GameProofIntents?.isAdvanceIntent?.(pick.intent)) {
       window.GameOnion?.advanceInquireIndex?.(session);
     }
 
@@ -995,11 +998,14 @@
     };
 
     const willSummary = window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
+    const seedForTurn = getSessionSeed(session, archetype);
 
     const apiSteps = willSummary
-      ? window.GameOnion?.usesDynamicPlayerEvidence?.(seed)
-        ? ["①reply", "②选项", "③摘要", "④证据"]
-        : ["①reply", "②选项", "③摘要"]
+      ? seedForTurn?.aiDriven
+        ? ["①reply", "②选项", "③摘要"]
+        : window.GameOnion?.usesDynamicPlayerEvidence?.(seedForTurn)
+          ? ["①reply", "②选项", "③摘要", "④证据"]
+          : ["①reply", "②选项", "③摘要"]
       : ["①reply", "②选项"];
     window.PomDebug?.logLocal(
       "API 路径",
@@ -1047,15 +1053,18 @@
           const summaryOk = await window.GameSummary.maybeRefreshPlotSummary(
             session,
             signal,
-            seed
+            seedForTurn
           );
           if (summaryOk) {
             persist(state);
-            if (window.GameEvidence?.grantPlayerEvidence) {
+            if (
+              window.GameEvidence?.grantPlayerEvidence &&
+              !seedForTurn?.aiDriven
+            ) {
               try {
                 const evOk = await window.GameEvidence.grantPlayerEvidence(
                   session,
-                  seed,
+                  seedForTurn,
                   signal
                 );
                 if (evOk) {
@@ -1077,7 +1086,7 @@
         }
       }
 
-      if (pick.intent === "keypoint") {
+      if (window.GameProofIntents?.isAdvanceIntent?.(pick.intent)) {
         session.keypointTurnCount = (session.keypointTurnCount || 0) + 1;
       }
 

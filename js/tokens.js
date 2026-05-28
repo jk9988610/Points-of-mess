@@ -9,6 +9,9 @@
     TEMP_SUMMARY: 0.2,
     TEMP_OPTIONS: 0.4,
     TEMP_REPLY: 0.4,
+    TEMP_BOOTSTRAP: 0.45,
+    /** 开局：opening + 证明席 + 四轮选项 */
+    BOOTSTRAP: 2048,
     /** 合并：reply + 4 options */
     COMBINED: 2048,
     COMBINED_CLOSE: 768,

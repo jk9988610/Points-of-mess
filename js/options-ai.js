@@ -1,9 +1,14 @@
 (function () {
-  const OPTION_SCHEMA = [
-    { id: 1, intent: "keypoint", label: "求证" },
-    { id: 2, intent: "followup", label: "质询" },
-    { id: 3, intent: "suspend", label: "休庭" },
-  ];
+  const OPTION_SPECS =
+    window.GameProofIntents?.PROOF_OPTION_SPECS || [
+      { id: 1, intent: "advance", label: "推证" },
+      { id: 2, intent: "clarify", label: "题意" },
+      { id: 3, intent: "explore", label: "证法" },
+      { id: 4, intent: "premise", label: "前提" },
+    ];
+
+  /** @deprecated 兼容旧引用 */
+  const OPTION_SCHEMA = OPTION_SPECS;
 
   /** Phase A+：优先 [待证] / [待核实] 行 */
   function extractPendingVerification(plotSummary) {
@@ -58,79 +63,69 @@
     return `当前证明席（待证引理，供推进型选项参考）：\n${excerpt}`;
   }
 
-  function buildOptionsSystemDuo(characterName) {
+  function buildOptionsSystemProof(characterName) {
     const name = String(characterName || "证官").trim() || "证官";
-    return `你是选项撰稿人。证辩者与「${name}」对论。输出证辩者下一句（中文 ≤35 字）。
+    return `你是证明题选项撰稿人。证辩者与「${name}」对论。输出证辩者下一句（中文 ≤35 字）。
 
-【分工】
-- keypoint（求证）：唯一推进论题 G；须用【玩家证据】offer 原句出示引理，或核对证官刚说的专名推导步。
-- followup（质询）：公理基/动机/立场；禁主控链、数据集 Λ、引理交换。
+【选项类型】共 4 条，intent 各一：
+- advance（推证）：**唯一**推进论题 G / 待证 Lk；给出引理交换或推导请求，须实质推进一步
+- clarify（题意）：了解论题 G 或待证 Lk 含义，不推进证明
+- explore（证法）：了解证法结构/反证或分步思路，不推进证明
+- premise（前提）：了解某条前提为何成立或如何用，不推进证明
 
-禁止两条同义。只输出 JSON：
-{"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."}]}`;
+三条了解类语义互不重复。禁止休庭/离开。偏逻辑表述，避免复杂公式与繁琐计算。
+只输出 JSON：
+{"options":[{"intent":"advance","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."},{"intent":"premise","line":"..."}]}`;
   }
 
-  /** 仅合并 API 备用路径；挂起按钮不进模型上下文 */
+  const buildOptionsSystemDuo = buildOptionsSystemProof;
+
   function buildIntentHintsForApi() {
-    return `- keypoint（求证）
-- followup（质询）
+    return `- advance（推证）
+- clarify（题意）
+- explore（证法）
+- premise（前提）
 - 结束证辩`;
   }
 
-  function applyGoalDrivenOptions(archetype, session, duo, onionContext) {
+  function applyGoalDrivenOptions(archetype, session, parsedOptions, onionContext) {
     const seed = archetype?.onionSeed;
+    if (seed?.aiDriven) {
+      return parsedOptions;
+    }
     const plotSummary = String(onionContext?.plotSummary || "").trim();
     const lastSharp = String(onionContext?.lastAssistantLine || "").trim();
-    let keypoint = String(duo?.keypoint || "").trim();
-    let followup = String(duo?.followup || "").trim();
-
+    let advance = parsedOptions.find((o) => o.intent === "advance");
+    let others = parsedOptions.filter((o) => o.intent !== "advance");
+    if (!advance) {
+      return parsedOptions;
+    }
+    let advLine = String(advance.line || "").trim();
     const programKp = window.GameOnion?.pickKeypointOfferLine?.(
       session,
       seed,
       plotSummary,
       lastSharp
     );
-    const confirm = window.GameOnion?.pickConfirmAfterSharpLine?.(lastSharp);
-    const sharpNamedBoss = window.GameOnion?.mastermindNamedInLine?.(lastSharp);
-    if (confirm && !sharpNamedBoss) {
-      keypoint = confirm;
-    } else if (programKp) {
+    if (programKp) {
       const avail = window.GameOnion?.getAvailableKnowledge?.(session, seed) || [];
       const repeatsSpent =
         avail.length > 0 &&
-        keypoint &&
-        !avail.some((k) => keypoint.includes(k.match));
+        advLine &&
+        !avail.some((k) => advLine.includes(k.match));
       const stall = (onionContext?.stallTurns ?? 0) >= 1;
-      if (!keypoint || repeatsSpent || stall) {
-        keypoint = programKp;
-      }
-    } else {
-      const reveal = window.GameOnion?.pickProgramRevealLine?.(session, seed);
-      const stall = (onionContext?.stallTurns ?? 0) >= 2;
-      const hollow = window.GameOnion?.detectHollowTradeOffer?.(keypoint, seed);
-      const concrete = window.GameOnion?.isPlayerLineConcrete?.(keypoint, seed, session);
-      if (reveal && (stall || hollow || !concrete)) {
-        keypoint = reveal;
+      if (!advLine || repeatsSpent || stall) {
+        advLine = programKp;
       }
     }
-
-    if (window.GameOnion?.isGoalAdvancePlayerLine?.(followup)) {
-      followup = window.GameOnion.pickProgramInquireLine(session, seed);
-      window.GameOnion.advanceInquireIndex?.(session);
-    }
-
-    return { keypoint, followup };
-  }
-
-  function fixedSuspendLine(archetype) {
-    const preset = archetype.options?.find((o) => o.intent === "suspend")?.line;
-    return String(archetype.suspendLine || preset || "休庭，稍后继续证辩。").trim();
+    return parsedOptions.map((o) =>
+      o.intent === "advance" ? { ...o, line: advLine, send: `[intent:advance] ${advLine}` } : o
+    );
   }
 
   function optionRow(meta, line) {
     const text = String(line || "").trim();
-    const send =
-      meta.intent === "suspend" ? text : `[intent:${meta.intent}] ${text}`;
+    const send = `[intent:${meta.intent}] ${text}`;
     return {
       ...meta,
       line: text,
@@ -339,45 +334,48 @@
     return { reply, options: buildEndingCloseOptions(duo) };
   }
 
-  function buildHybridOptions(archetype, duo) {
-    const suspendLine = fixedSuspendLine(archetype);
-
-    return OPTION_SCHEMA.map((meta) => {
-      if (meta.intent === "keypoint") {
-        return optionRow(meta, duo.keypoint);
-      }
-      if (meta.intent === "followup") {
-        return optionRow(meta, duo.followup);
-      }
-      return optionRow(meta, suspendLine);
-    });
-  }
-
-  function parseDuoOptionsFromRaw(raw) {
+  function parseMultiOptionsFromRaw(raw) {
     const obj = extractJsonObject(raw);
     const list = Array.isArray(obj.options) ? obj.options : [];
-    let keypoint = "";
-    let followup = "";
+    const parsed = [];
     for (const item of list) {
-      if (item && typeof item === "object" && item.intent === "keypoint") {
-        keypoint = lineFromOptionItem(item);
+      const intent = window.GameProofIntents?.normalizeUiIntent?.(item?.intent) || "";
+      const line = lineFromOptionItem(item);
+      if (intent && line) {
+        parsed.push({ intent, line: line.replace(/^「+/, "").replace(/」+$/, "") });
       }
-      if (item && typeof item === "object" && item.intent === "followup") {
-        followup = lineFromOptionItem(item);
-      }
     }
-    if (!keypoint && list[0]) {
-      keypoint = lineFromOptionItem(list[0]);
+    const options = window.GameProofIntents?.attachOptionIds?.(parsed) || [];
+    const check = window.GameProofIntents?.validateProofOptions?.(options);
+    if (!check?.ok) {
+      throw new Error(check?.reason || "选项格式无效");
     }
-    if (!followup && list[1]) {
-      followup = lineFromOptionItem(list[1]);
-    }
-    keypoint = keypoint.replace(/^「+/, "").replace(/」+$/, "");
-    followup = followup.replace(/^「+/, "").replace(/」+$/, "");
-    if (!keypoint || !followup) {
-      throw new Error("缺少 keypoint 或 followup");
-    }
-    return { keypoint, followup };
+    return options;
+  }
+
+  /** @deprecated */
+  function parseDuoOptionsFromRaw(raw) {
+    const opts = parseMultiOptionsFromRaw(raw);
+    return {
+      keypoint: opts.find((o) => o.intent === "advance")?.line || "",
+      followup: opts.find((o) => o.intent === "clarify")?.line || "",
+    };
+  }
+
+  function buildProofOptionsList(parsedOptions) {
+    return parsedOptions;
+  }
+
+  /** @deprecated */
+  function buildHybridOptions(archetype, duo) {
+    return buildProofOptionsList(
+      window.GameProofIntents?.attachOptionIds?.([
+        { intent: "advance", line: duo.keypoint },
+        { intent: "clarify", line: duo.followup },
+        { intent: "explore", line: "这步证法结构是什么？" },
+        { intent: "premise", line: "前提 P1 如何理解？" },
+      ]) || []
+    );
   }
 
   function isWeakReply(text) {
@@ -449,8 +447,8 @@ ${archetype.system}
     if (!turn) {
       return `${base}
 
-非收束轮示例（options 必须是对象数组，禁止字符串数组）：
-{"reply":"没引理就别换步。","options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."},{"intent":"close","line":"..."}]}
+非收束轮示例：
+{"reply":"先把逻辑步讲实，我再补一步。","options":[{"intent":"advance","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."},{"intent":"premise","line":"..."}]}
 
 收束轮示例：
 {"reply":"G 已证毕，休庭。"}`;
@@ -475,20 +473,18 @@ ${summaryBlock}
 ${buildIntentHintsForApi()}
 
 【输出】
-${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."},{"intent":"close","line":"..."}]}。'}
-reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 intent 与 line；**keypoint/followup 不得照抄旧句**，followup 须引用本轮 reply；close 由程序固定。${closeBlock}`;
+${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"advance","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."},{"intent":"premise","line":"..."}]}。'}
+reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 4 条且 intent 各一；**advance 必须能推进证明**；了解类不得照抄旧句。${closeBlock}`;
   }
 
   function presetOptions(archetype) {
-    return OPTION_SCHEMA.map((meta) => {
-      const preset = archetype.options.find((o) => o.intent === meta.intent);
-      const line = preset?.line || meta.label;
-      return {
-        ...meta,
-        line,
-        send: preset?.send || `[intent:${meta.intent}] ${line}`,
-      };
-    });
+    const preset = archetype?.options;
+    if (Array.isArray(preset) && preset.length >= 4) {
+      return preset;
+    }
+    return OPTION_SPECS.map((meta) =>
+      optionRow(meta, meta.label)
+    );
   }
 
   function extractJsonObject(raw) {
@@ -508,8 +504,8 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
   /** 兼容 options 为字符串数组（按顺序映射 keypoint→close） */
   function optionsFromArray(items) {
     const parsed = Array.isArray(items) ? items : [];
-    if (parsed.length < OPTION_SCHEMA.length) {
-      throw new Error(`options 不足 ${OPTION_SCHEMA.length} 条`);
+    if (parsed.length < OPTION_SPECS.length) {
+      throw new Error(`options 不足 ${OPTION_SPECS.length} 条`);
     }
     const allStrings = parsed.every((p) => typeof p === "string");
     if (allStrings) {
@@ -518,7 +514,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
         "模型返回字符串数组，已按顺序映射为四类 intent"
       );
     }
-    return OPTION_SCHEMA.map((meta, i) => {
+    return OPTION_SPECS.map((meta, i) => {
       const item =
         parsed.find((p) => p && typeof p === "object" && p.intent === meta.intent) ||
         parsed[i];
@@ -710,8 +706,11 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
           ...replyContext,
           deflectFallback: true,
         }) || "";
-      if (!reply && replyContext?.pickIntent === "followup") {
-        reply = window.GameOnion?.pickProgramStatementFallback?.(seed) || "";
+      if (!reply && replyContext?.pickIntent) {
+        const engine = window.GameOnion?.resolveEngineIntent?.(replyContext.pickIntent);
+        if (engine === "followup") {
+          reply = window.GameOnion?.pickProgramStatementFallback?.(seed) || "";
+        }
       }
       if (reply) {
         window.PomDebug?.logLocal("程序兜底 reply", reply, ["reply-fallback"]);
@@ -780,7 +779,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
     const last =
       assistantLineForOptions(lastLine) || lastUsableAssistantLine(session, archetype);
 
-    const systemPrompt = buildOptionsSystemDuo(character.name);
+    const systemPrompt = buildOptionsSystemProof(character.name);
     const userContent = buildOptionsUserContent({
       character,
       last,
@@ -797,9 +796,9 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
       logTag,
     });
 
-    let duo;
+    let options;
     try {
-      duo = parseDuoOptionsFromRaw(raw);
+      options = parseMultiOptionsFromRaw(raw);
     } catch (e) {
       window.PomDebug?.logLocalWarn("选项 JSON 解析失败，重试一次", e.message);
       raw = await requestOptionsJson({
@@ -809,11 +808,12 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
         signal,
         logTag: `${logTag}（重试）`,
       });
-      duo = parseDuoOptionsFromRaw(raw);
+      options = parseMultiOptionsFromRaw(raw);
     }
 
-    if (duo.keypoint === duo.followup) {
-      window.PomDebug?.logLocalWarn("选项重复", "keypoint 与 followup 相同，重试一次");
+    const lines = options.map((o) => o.line).filter(Boolean);
+    if (new Set(lines).size < lines.length) {
+      window.PomDebug?.logLocalWarn("选项重复", "存在同义句，重试一次");
       raw = await requestOptionsJson({
         systemPrompt,
         userContent,
@@ -821,11 +821,11 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
         signal,
         logTag: `${logTag}（去重）`,
       });
-      duo = parseDuoOptionsFromRaw(raw);
+      options = parseMultiOptionsFromRaw(raw);
     }
 
-    const merged = applyGoalDrivenOptions(archetype, session, duo, onionContext);
-    return buildHybridOptions(archetype, merged);
+    const merged = applyGoalDrivenOptions(archetype, session, options, onionContext);
+    return buildProofOptionsList(merged);
   }
 
   async function callCombinedOnce({ systemPrompt, apiMessages, isClose, signal }) {
@@ -1113,8 +1113,11 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
 
   window.GameOptionsAi = {
     OPTION_SCHEMA,
+    OPTION_SPECS,
     presetOptions,
     generateOptions,
+    parseMultiOptionsFromRaw,
+    buildOptionsSystemProof,
     requestEndingSequence,
     requestFailureSequence,
     buildEndingCloseOptions,
