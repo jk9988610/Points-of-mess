@@ -1,5 +1,5 @@
 (function () {
-  /** AI 生成开局：opening + 证明席摘要 + 首轮选项 */
+  /** AI 生成开局：opening + 证明席摘要 + 首轮三推证选项 */
 
   function buildBootstrapSystem(blueprint) {
     const name = blueprint?.mathematician?.name || "证官";
@@ -14,23 +14,26 @@
 【题目蓝本（可改写，勿照抄）】
 ${hint}
 
+【L1 设计】
+- [待证#1] L1 必须是**可单步推进的引理**（如展开式、奇偶判定、同余一步）
+- **禁止**把 G 的同义重述、纯定义（「奇数即 2k+1」）当作 L1
+- 例：G 为「n 奇则 n² 奇」，L1 应为「设 n=2k+1 则 n² 形如 2m+1」而非「n 奇则 n=2k+1」
+
 【输出】只输出一个合法 JSON（无 markdown）：
 {
   "opening":"证官开场 1～2 句（≤40字，陈述式，禁止问句）",
   "plotSummary":"完整证明席（【论证目标】论题 G +【证明席】[前提]、[待证#1] L1、- [依赖] 若要证 G，则需证 L1；≤900字）",
   "options":[
-    {"intent":"advance","line":"证辩者正确推证（≤35字，须能推进待证 L1）"},
-    {"intent":"decoy","line":"似真误推（≤35字，跳步或误用前提，不可推进 L1）"},
-    {"intent":"clarify","line":"了解论题/待证含义（≤35字，含可核对线索，不推进）"},
-    {"intent":"explore","line":"了解证法结构（≤35字，含线索，不推进）"}
+    {"intent":"advance","line":"正确推证 L1（≤35字）"},
+    {"intent":"decoy","line":"似真误推 1（≤35字，不可推进 L1）"},
+    {"intent":"decoy","line":"似真误推 2（≤35字，不可推进 L1，与上句不同类错误）"}
   ]
 }
 
 【规则】
-1. options 恰好 4 条：advance、decoy、clarify、explore 各一；advance 须能推进 L1，decoy 须似真但不可推进
-2. 两了解类语义互不重复；禁止休庭/离开
-3. plotSummary 用数学证明体标记；待证至多 1 条；[依赖] 只写命题编号（G/Lk），不写引理全文
-4. 禁止【关系与态度】段`;
+1. options 恰好 3 条：advance×1 + decoy×2；advance 只推进 L1
+2. plotSummary 待证至多 1 条；[依赖] 只写命题编号（G/Lk）
+3. 禁止【关系与态度】段`;
   }
 
   function parseBootstrapRaw(raw) {
@@ -38,7 +41,7 @@ ${hint}
     const opening = String(obj.opening || "").trim();
     let plotSummary = String(obj.plotSummary || "").trim();
     const optionsRaw = Array.isArray(obj.options) ? obj.options : [];
-    if (!opening || !plotSummary || optionsRaw.length < 4) {
+    if (!opening || !plotSummary || optionsRaw.length < 3) {
       throw new Error("开局 JSON 缺少 opening/plotSummary/options");
     }
     plotSummary =

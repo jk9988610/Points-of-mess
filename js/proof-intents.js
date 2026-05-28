@@ -1,16 +1,13 @@
 (function () {
-  /** 证明题选项：两推证（一正一误，位置随机）+ 两了解 */
+  /** 证明题选项：三推证（一正两误，位置随机） */
   const PROOF_OPTION_SPECS = [
-    { id: 1, intent: "advance", label: "推证", engine: "keypoint", slot: "proofA" },
-    { id: 2, intent: "decoy", label: "推证", engine: "decoy", slot: "proofB" },
-    { id: 3, intent: "clarify", label: "题意", engine: "followup" },
-    { id: 4, intent: "explore", label: "证法", engine: "followup" },
+    { id: 1, intent: "advance", label: "推证", engine: "keypoint", slot: "proof1" },
+    { id: 2, intent: "decoy", label: "推证", engine: "decoy", slot: "proof2" },
+    { id: 3, intent: "decoy", label: "推证", engine: "decoy", slot: "proof3" },
   ];
 
   const LEGACY_MAP = {
     keypoint: "advance",
-    followup: "clarify",
-    premise: "explore",
   };
 
   const ENGINE_MAP = {
@@ -38,8 +35,7 @@
     if (ui === "advance" || ui === "decoy") {
       return "推证";
     }
-    const spec = PROOF_OPTION_SPECS.find((s) => s.intent === ui);
-    return spec?.label || ui || "";
+    return ui || "推证";
   }
 
   function isAdvanceIntent(intent) {
@@ -55,57 +51,67 @@
     return ui === "advance" || ui === "decoy";
   }
 
+  /** @deprecated 已无了解类选项 */
   function isInquireIntent(intent) {
-    const ui = normalizeUiIntent(intent);
-    return ui === "clarify" || ui === "explore" || ui === "premise";
+    return false;
+  }
+
+  function shuffleInPlace(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
   }
 
   function validateProofOptions(options) {
     const list = Array.isArray(options) ? options : [];
     const intents = list.map((o) => normalizeUiIntent(o?.intent)).filter(Boolean);
-    const required = ["advance", "decoy", "clarify", "explore"];
-    for (const req of required) {
-      const count = intents.filter((i) => i === req).length;
-      if (count !== 1) {
-        return { ok: false, reason: `${req} 应为 1 条，实际 ${count}` };
-      }
+    const advanceCount = intents.filter((i) => i === "advance").length;
+    const decoyCount = intents.filter((i) => i === "decoy").length;
+    if (advanceCount !== 1) {
+      return { ok: false, reason: `advance 应为 1 条，实际 ${advanceCount}` };
+    }
+    if (decoyCount !== 2) {
+      return { ok: false, reason: `decoy 应为 2 条，实际 ${decoyCount}` };
+    }
+    const lines = list.map((o) => String(o?.line || "").trim()).filter(Boolean);
+    if (new Set(lines).size < lines.length) {
+      return { ok: false, reason: "选项句子重复" };
     }
     return { ok: true };
   }
 
-  /** 绑定 id，并随机交换两枚推证钮位置（intent 随句迁移） */
+  /** 绑定 id，并随机排列三枚推证钮（intent 随句迁移） */
   function attachOptionIds(parsedList) {
-    const byIntent = new Map();
+    let advanceLine = "";
+    const decoyLines = [];
     for (const item of parsedList) {
-      const ui = normalizeUiIntent(item.intent);
-      if (ui && item.line) {
-        byIntent.set(ui, String(item.line).trim());
+      const ui = normalizeUiIntent(item?.intent);
+      const line = String(item?.line || "").trim();
+      if (!line) {
+        continue;
+      }
+      if (ui === "advance" && !advanceLine) {
+        advanceLine = line;
+      } else if (ui === "decoy") {
+        decoyLines.push(line);
       }
     }
-    let proofA = { intent: "advance", line: byIntent.get("advance") || "" };
-    let proofB = { intent: "decoy", line: byIntent.get("decoy") || "" };
-    if (Math.random() < 0.5) {
-      const tmp = proofA;
-      proofA = proofB;
-      proofB = tmp;
-    }
-    const ordered = [
-      proofA,
-      proofB,
-      { intent: "clarify", line: byIntent.get("clarify") || "" },
-      { intent: "explore", line: byIntent.get("explore") || "" },
-    ];
+    const triple = shuffleInPlace([
+      { intent: "advance", line: advanceLine, isCorrect: true },
+      { intent: "decoy", line: decoyLines[0] || "", isCorrect: false },
+      { intent: "decoy", line: decoyLines[1] || "", isCorrect: false },
+    ]);
     return PROOF_OPTION_SPECS.map((spec, i) => {
-      const item = ordered[i];
-      const ui = item.intent;
-      const line = item.line;
+      const item = triple[i];
       return {
         id: spec.id,
-        intent: ui,
-        label: ui === "advance" || ui === "decoy" ? "推证" : spec.label,
-        isCorrect: ui === "advance",
-        line,
-        send: `[intent:${ui}] ${line}`,
+        intent: item.intent,
+        label: "推证",
+        isCorrect: item.isCorrect,
+        line: item.line,
+        send: `[intent:${item.intent}] ${item.line}`,
       };
     });
   }

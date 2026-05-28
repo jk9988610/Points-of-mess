@@ -65,26 +65,24 @@
 
   function buildOptionsSystemProof(characterName) {
     const name = String(characterName || "证官").trim() || "证官";
-    return `你是证明题选项撰稿人。证辩者与「${name}」对论。输出证辩者下一句（中文 ≤35 字）。
+    const pendingNote = "须阅读【证明态势】中的开放引理 Lk；advance 只推进该 Lk，decoy 不得推进该 Lk。";
+    return `你是证明题选项撰稿人。证辩者与「${name}」对论。输出证辩者下一句推证（中文 ≤35 字）。
 
-【选项类型】共 4 条，intent 各一：
-- advance（正确推证）：须实质推进当前待证 Lk / 论题 G
-- decoy（误推证）：表面像推证，但跳步、误用前提或方向错误，**不可**推进 Lk
-- clarify（题意）：了解论题 G 或 Lk 含义；给出可核对线索，不推进证明
-- explore（证法）：了解证法结构/反证或分步思路；给出可核对线索，不推进证明
+【选项类型】共 3 条，intent 固定：
+- advance ×1：唯一正确推证，须实质推进**当前**待证 Lk（不可跳步直证 G）
+- decoy ×2：似真误推（跳步、循环论证、误用前提、证错命题、把结论当理由等），不可推进 Lk
 
-decoy 与 advance 语气同为推证请求，难度相近，便于 A/B 辨伪。两了解类互不重复。禁止休庭/离开。偏逻辑，少公式。
+三句均为推证口吻、难度相近。禁止问句、禁止休庭。偏逻辑，少公式。
+${pendingNote}
 只输出 JSON：
-{"options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."}]}`;
+{"options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"decoy","line":"..."}]}`;
   }
 
   const buildOptionsSystemDuo = buildOptionsSystemProof;
 
   function buildIntentHintsForApi() {
-    return `- advance（正确推证）
-- decoy（误推证）
-- clarify（题意）
-- explore（证法）
+    return `- advance（正确推证，×1）
+- decoy（误推证，×2）
 - 结束证辩`;
   }
 
@@ -372,8 +370,7 @@ decoy 与 advance 语气同为推证请求，难度相近，便于 A/B 辨伪。
       window.GameProofIntents?.attachOptionIds?.([
         { intent: "advance", line: duo.keypoint },
         { intent: "decoy", line: "这步似可跳过 L1，直接证 G？" },
-        { intent: "clarify", line: duo.followup },
-        { intent: "explore", line: "这步证法结构是什么？" },
+        { intent: "decoy", line: "由结论反推前提，故 L1 成立。" },
       ]) || []
     );
   }
@@ -448,7 +445,7 @@ ${archetype.system}
       return `${base}
 
 非收束轮示例：
-{"reply":"先把逻辑步讲实，我再补一步。","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."}]}
+{"reply":"先把逻辑步讲实，我再补一步。","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"decoy","line":"..."}]}
 
 收束轮示例：
 {"reply":"G 已证毕，休庭。"}`;
@@ -473,8 +470,8 @@ ${summaryBlock}
 ${buildIntentHintsForApi()}
 
 【输出】
-${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."}]}。'}
-reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 4 条且 intent 各一；**advance 正确、decoy 误推**；了解类含线索、不得照抄旧句。${closeBlock}`;
+${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"decoy","line":"..."}]}。'}
+reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 3 条（1 advance + 2 decoy）；advance 只推进当前 Lk。${closeBlock}`;
   }
 
   function presetOptions(archetype) {
@@ -772,6 +769,15 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 4 条且 int
     plotSummary = "",
     onionContext = null,
   }) {
+    const pending = window.GameOnion?.extractPendingLines?.(plotSummary) || [];
+    if (!pending.length) {
+      window.PomDebug?.logLocal(
+        "选项跳过",
+        "证明席无开放引理，不生成推证选项",
+        ["options-skip"]
+      );
+      return null;
+    }
     const { lastLine, priorText } = window.GameDialogue.formatRecentDialogueForOptions(
       session.messages,
       { characterName: character.name }

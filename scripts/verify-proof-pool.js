@@ -32,8 +32,7 @@ if (badNames.test(blueprint.topicHint)) {
 const sample = intents.attachOptionIds([
   { intent: "advance", line: "设 n 为偶数，换你说 n² 的表达式" },
   { intent: "decoy", line: "直接断言 n² 偶，跳过 L1" },
-  { intent: "clarify", line: "论题 G 具体指什么？" },
-  { intent: "explore", line: "这题适合反证吗？" },
+  { intent: "decoy", line: "由结论反推，故前提成立" },
 ]);
 const check = intents.validateProofOptions(sample);
 if (!check.ok) {

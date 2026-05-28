@@ -41,22 +41,16 @@
 
 **禁止** `【关系与态度】`：程序 `normalizeProofArchive` 会剥离；摘要/开局 prompt 亦禁止模型输出。
 
-## 3. 选项模型（A/B 推证 + 两了解）
+## 3. 选项模型（三推证辨伪）
 
-每轮 4 条选项，intent 固定集合：
+每轮 **3 条**，均为推证口吻：
 
-| intent | UI | 引擎路由 | 作用 |
-|--------|-----|----------|------|
-| `advance` | 推证 | `keypoint` | **正确**推证步，可推进 Lk |
-| `decoy` | 推证 | `decoy` | **误推**步，似真但跳步/误用前提 |
-| `clarify` | 题意 | `followup` | 了解 G/Lk，给可核对线索 |
-| `explore` | 证法 | `followup` | 了解证法结构，给线索 |
+| intent | 数量 | 作用 |
+|--------|------|------|
+| `advance` | 1 | **正确**推证，推进当前 Lk |
+| `decoy` | 2 | **误推**，似真但不可推进 Lk |
 
-`attachOptionIds` 在写入 session 前**随机交换** advance/decoy 的按钮位置（id 1/2），玩家需结合了解类选项与证官回复辨伪。
-
-- 选 **advance**：`keypointTurnCount++`，可触发摘要压缩与结局判定
-- 选 **decoy**：证官指出错误，**不**计推证轮、**不**消耗引理池
-- 选 **clarify/explore**：只获取信息，不推进证明
+`attachOptionIds` **随机排列**三钮位置。
 
 ## 4. 单回合 API 流水线
 

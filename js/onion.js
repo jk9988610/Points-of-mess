@@ -87,6 +87,8 @@
     s = s.replace(/\[待核实#(\d+)\]/gi, "[待证#$1]");
     s = s.replace(/\[待核实\]/gi, "[待证#1]");
     s = s.replace(/【关系与态度】[\s\S]*$/g, "").trim();
+    s = s.replace(/\n- \[证毕\]\s*G[^\n]*/gi, "");
+    s = s.replace(/\n- \[证毕#G\][^\n]*/gi, "");
     const lines = [];
     for (const raw of s.split("\n")) {
       let line = raw;
@@ -353,10 +355,9 @@
     parts.push(
       "",
       "【选项写法】",
-      "advance（正确推证）与 decoy（似真误推）：两条推证句外观同为「推证」，程序随机排布 A/B。",
-      "decoy 须似真但不可推进当前 Lk（跳步、误用前提、方向反了等）。",
-      "clarify / explore：帮助证辩者理解论题或证法，不推进证明；应含可核对线索。",
-      "恰好一条 advance、一条 decoy；两了解类互不重复。"
+      "共 3 条推证句：1 条 advance（正确，须实质推进当前 Lk）+ 2 条 decoy（似真误推，不可推进 Lk）。",
+      "decoy 类型：跳步、循环论证、误用前提、证错命题、把定义当推导等。",
+      "三句难度相近；程序随机排列按钮位置。"
     );
     if (inquireStreak >= 2) {
       parts.push("连续多轮未选 advance：本轮 advance 须直指待证 Lk。");
@@ -420,9 +421,7 @@
 
     if (pickIntent === "followup") {
       lines.push(
-        "【了解轮】证辩者询问题意/证法；用陈述解释，禁止问句",
-        "本句可不给出新推导步，但须给出可核对线索，帮助判断哪条推证更稳",
-        "禁止推托「去查手册」或反咬证辩者"
+        "【了解轮】（旧 intent）用陈述解释，禁止问句"
       );
       if (countRecentFollowupStreak(context?.session) >= 2) {
         lines.push("证辩者多轮了解：可加一句可核对推导步破冰，仍用陈述");

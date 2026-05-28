@@ -577,7 +577,7 @@
         .find((m) => m.role === "assistant" && m.status === "done");
       setBubble(last?.content || openingLine, false);
       state.currentOptions =
-        session.proofBundle?.options?.length >= 4
+        session.proofBundle?.options?.length >= 3
           ? session.proofBundle.options
           : presetOptions(liveArchetype);
     }
@@ -1079,6 +1079,16 @@
           );
           if (summaryOk) {
             persist(state);
+            const pendingAfter =
+              window.GameOnion?.extractPendingLines?.(session.plotSummary) || [];
+            if (!pendingAfter.length) {
+              state.currentOptions = null;
+              window.PomDebug?.logLocal(
+                "选项清空",
+                "摘要后无开放引理",
+                ["options-skip"]
+              );
+            }
             if (
               window.GameEvidence?.grantPlayerEvidence &&
               !seedForTurn?.aiDriven

@@ -37,14 +37,17 @@ ${lemmaBlock}
 2. 每个 [待证#k] 后须单独一行命题间依赖，格式：- [依赖] 若要证 A，则需证 B。A、B 为不同命题编号（G / Lk / Lk.j），**不写** Lk 全文或冒号后复述。
 3. 拆分子引理时写 - [依赖] 若要证 Lk，则需证 Lk.1（仍为命题间依赖，非单句内因果）。
 4. 对话说定 → 写入 [已证] Sk；引理 Lk 被推导步充分确立 → 删 [待证#k]、[依赖] 行 + 写 [证毕#k]。
-5. 改口 → 旧 [已证] 标 [已推翻]；以最新供述为准（槽位单真值）。
-6. [已证] 须可核对专名；禁止「可能/存疑/空换」入 [已证]。
-7. 禁止用「无/待填」占 [待证]；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown；**禁止**【关系与态度】段。`;
+5. **一轮摘要至多新增 1 条 [证毕#k]**；仍有 [待证#k] 时禁止写 [证毕] G（G 只在【论证目标】，证明席不写 G 证毕行）。
+6. 证官最近一句若为纠错/「先证 Lk」/未接受，则**不得** [证毕#k]，[待证#k] 须保留。
+7. 禁止「视为已确立」「无需推导」等跳步表述入 [证毕]。
+8. 改口 → 旧 [已证] 标 [已推翻]；以最新供述为准（槽位单真值）。
+9. [已证] 须可核对专名；禁止「可能/存疑/空换」入 [已证]。
+10. 禁止用「无/待填」占 [待证]；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown；**禁止**【关系与态度】段。`;
   }
 
   function buildSummaryUserPrefix(seed) {
     const maxOpen = window.GameOnion?.getMaxOpenClaims?.(seed) ?? 1;
-    return `自检：新事实进 [已证]；Lk 得证则 [证毕#k] 并删 [待证#k] 与对应 [依赖]；待证至多 ${maxOpen} 条；[依赖] 只写命题编号不写引理全文。只输出【证明席】。
+    return `自检：新事实进 [已证]；Lk 得证则 [证毕#k] 并删 [待证#k]（须与证官已接受一致）；一轮至多 1 个 [证毕#k]；禁止 [证毕] G；待证至多 ${maxOpen} 条。只输出【证明席】。
 
 `;
   }
@@ -161,6 +164,40 @@ ${lemmaBlock}
     return { optionTurns, toSummarize, mergedProtected, keepRecent };
   }
 
+  function enforceOneLemmaProgressPerSummary(prev, next) {
+    const prevText = String(prev || "").trim();
+    let text = String(next || "").trim();
+    if (!text || !prevText) {
+      return text;
+    }
+    const prevPending = window.GameOnion?.extractPendingLines?.(prevText)?.length || 0;
+    if (prevPending === 0) {
+      return text;
+    }
+    const prevQed = window.GameOnion?.extractQedOrders?.(prevText)?.size || 0;
+    const nextQed = window.GameOnion?.extractQedOrders?.(text)?.size || 0;
+    if (nextQed - prevQed <= 1) {
+      return text;
+    }
+    window.PomDebug?.logLocalWarn(
+      "摘要越权",
+      `一轮新增 ${nextQed - prevQed} 个 [证毕#k]，已裁剪为 1 个`,
+      ["summary"]
+    );
+    let added = 0;
+    const lines = [];
+    for (const line of text.split("\n")) {
+      if (/\[证毕#\d+\]/i.test(line)) {
+        if (added >= 1) {
+          continue;
+        }
+        added += 1;
+      }
+      lines.push(line);
+    }
+    return lines.join("\n").trim();
+  }
+
   async function maybeRefreshPlotSummary(session, signal, seed) {
     const skip = summarySkipReason(session);
     if (skip) {
@@ -209,6 +246,7 @@ ${lemmaBlock}
       session.plotSummary,
       String(summary || "").trim()
     );
+    text = enforceOneLemmaProgressPerSummary(session.plotSummary, text);
     if (text.length > SUMMARY_MAX_CHARS) {
       window.PomDebug?.logLocalWarn(
         "摘要超长已截断",
