@@ -71,13 +71,29 @@
 
   function applyGoalDrivenOptions(archetype, session, duo, onionContext) {
     const seed = archetype?.onionSeed;
+    const plotSummary = String(onionContext?.plotSummary || "").trim();
     const lastSharp = String(onionContext?.lastAssistantLine || "").trim();
     let keypoint = String(duo?.keypoint || "").trim();
     let followup = String(duo?.followup || "").trim();
 
+    const programKp = window.GameOnion?.pickKeypointOfferLine?.(
+      session,
+      seed,
+      plotSummary
+    );
     const confirm = window.GameOnion?.pickConfirmAfterSharpLine?.(lastSharp);
     if (confirm) {
       keypoint = confirm;
+    } else if (programKp) {
+      const avail = window.GameOnion?.getAvailableKnowledge?.(session, seed) || [];
+      const repeatsSpent =
+        avail.length > 0 &&
+        keypoint &&
+        !avail.some((k) => keypoint.includes(k.match));
+      const stall = (onionContext?.stallTurns ?? 0) >= 1;
+      if (!keypoint || repeatsSpent || stall) {
+        keypoint = programKp;
+      }
     } else {
       const reveal = window.GameOnion?.pickProgramRevealLine?.(session, seed);
       const stall = (onionContext?.stallTurns ?? 0) >= 2;
@@ -370,6 +386,10 @@
       window.PomDebug?.logLocalWarn("角色问句已拒", t.slice(0, 80), ["reply"]);
       return "";
     }
+    if (window.GameOnion?.isDeflectReply?.(t)) {
+      window.PomDebug?.logLocalWarn("角色敷衍已拒", t.slice(0, 80), ["reply"]);
+      return "";
+    }
     return t;
   }
 
@@ -626,6 +646,8 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
     plotSummary,
     debugLabel,
     replyContext,
+    session,
+    archetype,
   }) {
     const replySystem = `${roleStyleFromSystem(systemPrompt)}${plotSummaryBlock(plotSummary, replyContext)}
 只输出角色的一句台词：1～2 句中文，≤40 字。${CHARACTER_REPLY_RULE} 不要 JSON、markdown、解释。`;
@@ -639,7 +661,20 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
       debugLabel: debugLabel || "拆分·①reply",
     });
 
-    const reply = replyFromRaw(raw);
+    let reply = replyFromRaw(raw);
+    const seed = archetype?.onionSeed;
+    const needExchange =
+      replyContext?.pickIntent === "keypoint" &&
+      replyContext?.playerConcreteReveal;
+    if (!reply && needExchange && session && seed) {
+      reply = window.GameOnion?.pickProgramSharpReply?.(session, seed, {
+        ...replyContext,
+        deflectFallback: true,
+      });
+      if (reply) {
+        window.PomDebug?.logLocal("程序兜底 reply", reply, ["reply-fallback"]);
+      }
+    }
     if (reply) {
       return reply;
     }
@@ -794,6 +829,7 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
       emptyPromiseCount: session?.emptyPromiseCount ?? 0,
       session,
       seed: archetype?.onionSeed,
+      plotSummary: session.plotSummary,
       lastAssistantLine: lastSharp,
     };
     const retry = window.PomApiRetry?.withApiRetries;
@@ -809,6 +845,8 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
               plotSummary: session.plotSummary,
               debugLabel: "拆分·①reply",
               replyContext,
+              session,
+              archetype,
             }),
           { signal }
         )
@@ -819,6 +857,8 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
           plotSummary: session.plotSummary,
           debugLabel: "拆分·①reply",
           replyContext,
+          session,
+          archetype,
         });
 
     const sessionWithReply = {
@@ -979,6 +1019,8 @@ reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 int
           plotSummary: session.plotSummary,
           debugLabel: "备用·①reply",
           replyContext,
+          session,
+          archetype,
         });
       } catch {
         /* use empty */

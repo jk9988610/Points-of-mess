@@ -132,4 +132,11 @@ node scripts/verify-trade-onion.js
 - `goalTracks` 去掉陈四/刘老三（玩家筹码≠锋利供述）
 - `extractGoal` 只读 `-` 条，不再把「（唯一，仅此一条）」拼进 API
 
-*最后更新：2026-05 · v0.5.35*
+## 12. v0.5.37（交换契约 · 反兜圈）
+
+- 详见 `docs/DIALOGUE-PROMPT.md`
+- 交换：`formatExchangeContract` + `sharpReveals` 程序兜底
+- 拒敷衍：`isDeflectReply`；keypoint 纠偏：`pickKeypointOfferLine`
+- 摘要：[已确认]≤8，关系≤2 条
+
+*最后更新：2026-05 · v0.5.37*

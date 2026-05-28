@@ -137,6 +137,12 @@
     const stallTurns = context?.stallTurns ?? 0;
     const knowledge = formatPlayerKnowledgeForOptions(context?.session, context?.seed);
     const lastSharp = String(context?.lastAssistantLine || "").trim();
+    const programKp = pickKeypointOfferLine(
+      context?.session,
+      context?.seed,
+      plotSummary
+    );
+    const followupStreak = countRecentFollowupStreak(context?.session);
     const parts = ["【本局态势】"];
     if (goal) {
       parts.push(`目标：${goal}`);
@@ -147,16 +153,24 @@
     if (knowledge) {
       parts.push(knowledge);
     }
+    if (programKp) {
+      parts.push(`本轮回合 keypoint 建议原句：「${programKp}」`);
+    }
     if (lastSharp) {
       parts.push(`锋利上一句：${lastSharp}`);
     }
     parts.push(
       "",
       "【选项写法】",
-      "推进(keypoint)：唯一推进目标。须用【玩家可亮牌】offer，或核对上一句专名（例：「B 就是指使者，物证 X 在哪？」）。",
-      "询问(followup)：来意/态度/关系；禁核心密语、亮牌交换句、互怼逼供。",
+      "推进(keypoint)：必须用上方建议 offer 或【玩家可亮牌】未消耗句；禁止重复已亮过的筹码。",
+      "询问(followup)：来意/态度；禁指使者/账本/亮牌交换。",
       "禁止两条同义。"
     );
+    if (followupStreak >= 2) {
+      parts.push(
+        `玩家已连续 ${followupStreak} 轮旁询无推进：followup 仍可为旁询，但 keypoint 必须用建议句。`
+      );
+    }
     if (/指使者|就是指使者|是.+派|主使/.test(lastSharp)) {
       parts.push(
         "锋利已点名指使者：keypoint 须确认并追问仍缺的事实（如下落），勿再空换循环。"
@@ -214,12 +228,20 @@
     const stallTurns = context?.stallTurns ?? 0;
     const lines = [];
 
+    const exchange = formatExchangeContract(plotSummary, context);
+    if (exchange) {
+      lines.push(exchange);
+    }
+
     if (pickIntent === "followup") {
       lines.push(
-        "【旁询】玩家本轮仅打听来意/态度/关系，不追本局核心目标",
-        "用陈述顶回（冷淡/讽刺均可）；**禁止向玩家发问**",
-        "勿逼玩家交代核心秘密；本句可不提供新线索"
+        "【旁询】玩家打听来意/态度；用陈述顶回，禁止问句",
+        "本句可不送新线索，但禁止心里清楚、甩锅陈四、反咬玩家可疑"
       );
+      if (countRecentFollowupStreak(context?.session) >= 2) {
+        lines.push("玩家已多轮旁询：可加一句可核对事实破冰，仍用陈述");
+      }
+      lines.push("角色台词：只答不问");
       return `\n【本局规则·本轮】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
     }
 
@@ -459,7 +481,7 @@
     for (const re of patterns) {
       const m = t.match(re);
       if (m?.[1]) {
-        return `${m[1]}就是指使者，账本现在在哪？`;
+        return `${m[1]}就是指使者，账本下落也该说了。`;
       }
     }
     return "";
@@ -503,6 +525,88 @@
   function pickProgramRevealLine(session, seed) {
     const next = getAvailableKnowledge(session, seed)[0];
     return next?.offerLine || "";
+  }
+
+  const DEFLECT_REPLY_RE =
+    /你心里|别装|你该去问|去问陈四|问太多|反倒可疑|爱信不信|不护谁|疑心太重|随你|误事|少说|废话|挡话|栽我身上/;
+
+  function isDeflectReply(text) {
+    return DEFLECT_REPLY_RE.test(String(text || "").trim());
+  }
+
+  /** 推进选项：优先未消耗亮牌；否则逼供待证 */
+  function pickKeypointOfferLine(session, seed, plotSummary) {
+    const avail = getAvailableKnowledge(session, seed);
+    if (avail[0]?.offerLine) {
+      return avail[0].offerLine;
+    }
+    const blob = extractConfirmedLines(plotSummary).join("");
+    const pending = extractPendingLines(plotSummary)[0] || "";
+    if (/指使者|幕后|主使/.test(pending) && !/老九|主使|指使.{0,8}是/.test(blob)) {
+      return "你已认了陈四，换你说他背后主使是谁。";
+    }
+    return "";
+  }
+
+  function pickProgramSharpReply(session, seed, replyContext) {
+    const reveals = seed?.sharpReveals;
+    if (!Array.isArray(reveals) || !reveals.length) {
+      return "";
+    }
+    const spent = session?.spentPlayerKnowledge || [];
+    for (let i = spent.length - 1; i >= 0; i--) {
+      const hit = reveals.find((r) => r.afterKnowledge === spent[i]);
+      if (hit?.line) {
+        return String(hit.line).trim();
+      }
+    }
+    if ((replyContext?.stallTurns ?? 0) >= 2 || replyContext?.deflectFallback) {
+      const idx = session?.sharpRevealIndex ?? 0;
+      if (session) {
+        session.sharpRevealIndex = idx + 1;
+      }
+      return String(reveals[idx % reveals.length].line || "").trim();
+    }
+    return String(reveals[0]?.line || "").trim();
+  }
+
+  function countRecentFollowupStreak(session) {
+    if (!session?.messages) {
+      return 0;
+    }
+    let n = 0;
+    for (let i = session.messages.length - 1; i >= 0; i--) {
+      const m = session.messages[i];
+      if (m.role !== "user" || m.status === "error") {
+        continue;
+      }
+      if (m.intent === "followup") {
+        n++;
+      } else if (m.intent && m.intent !== "freeform") {
+        break;
+      }
+    }
+    return n;
+  }
+
+  function formatExchangeContract(plotSummary, context) {
+    const pickIntent = context?.pickIntent || "";
+    if (pickIntent !== "keypoint") {
+      return "";
+    }
+    const pending = extractPendingLines(plotSummary)[0];
+    const lines = [
+      "【交换·本回合】玩家亮牌 → 锋利须兑现一条新专名事实，禁止敷衍",
+    ];
+    if (pending) {
+      lines.push(`须直接推进：${pending}`);
+    }
+    if (context?.playerConcreteReveal) {
+      lines.push(
+        "须供述：指使者姓名（2～4字）或账本现下落；禁心里清楚、去问陈四、疑心太重"
+      );
+    }
+    return lines.join("\n");
   }
 
   function markKnowledgeSpent(session, playerLine, seed) {
@@ -747,6 +851,11 @@
     getPlayerKnowledgeList,
     getAvailableKnowledge,
     pickProgramRevealLine,
+    pickKeypointOfferLine,
+    pickProgramSharpReply,
+    isDeflectReply,
+    countRecentFollowupStreak,
+    formatExchangeContract,
     pickProgramInquireLine,
     advanceInquireIndex,
     isGoalAdvancePlayerLine,
