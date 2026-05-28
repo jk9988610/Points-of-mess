@@ -20,12 +20,24 @@ ${hint}
 
 【输出】只输出合法 JSON（无 markdown）：
 {
-  "plotSummary":"完整证明席（【论证目标】论题 G +【证明席】[前提]、[待证#1] L1、- [依赖] 若要证 G，则需证 L1；≤900字）"
+  "plotSummary":"…见下方格式示例…"
 }
 
+【plotSummary 格式示例·必须照此结构】
+【论证目标】
+- 论题 G：……
+【证明席】
+【前提集】
+- [前提] P1：……
+- [前提] P2：……
+【证明进程】
+- [待证#1] L1：……（单步可证的引理，禁止写完整证明）
+- [依赖] 若要证 G，则需证 L1
+
 【规则】
-1. plotSummary 待证至多 1 条；[依赖] 只写命题编号（G/Lk）
-2. 禁止【关系与态度】段`;
+1. 必须用 - [前提]、- [待证#1]、- [依赖] 行首标记；禁止「前提 P1」「【待证#1】」、禁止「证明过程」段
+2. 待证至多 1 条；不得把 G 的完整证明写进档案
+3. 禁止【关系与态度】段`;
   }
 
   function buildBootstrapOpeningSystem(blueprint, plotSummary) {
@@ -62,7 +74,29 @@ ${goal ? `论题 G：${goal}` : ""}
       throw new Error("开局档案 JSON 缺少 plotSummary");
     }
     plotSummary =
-      window.GameOnion?.normalizeProofArchive?.(plotSummary) || plotSummary;
+      window.GameOnion?.repairBootstrapPlotArchive?.(plotSummary) ||
+      window.GameOnion?.normalizeProofArchive?.(plotSummary) ||
+      plotSummary;
+    const pending =
+      window.GameOnion?.extractPendingLines?.(plotSummary) || [];
+    if (!pending.length) {
+      const problemId = blueprint?.problemId || "";
+      const l1 =
+        window.GameProofPool?.getLemmaAtChainIndex?.(problemId, 0) || "";
+      if (l1) {
+        plotSummary =
+          window.GameOnion?.appendOpenLemmaToArchive?.(plotSummary, 1, l1, "G") ||
+          plotSummary;
+        window.PomDebug?.logLocalWarn(
+          "开局·档案",
+          "AI 档案无待证行，已从题池补挂 L1",
+          ["bootstrap"]
+        );
+      }
+    }
+    if (!window.GameOnion?.extractPendingLines?.(plotSummary)?.length) {
+      throw new Error("开局档案缺少可解析的 [待证#1]");
+    }
     return plotSummary;
   }
 
@@ -73,7 +107,10 @@ ${goal ? `论题 G：${goal}` : ""}
     characterName,
   }) {
     const systemPrompt = buildBootstrapOpeningSystem(blueprint, plotSummary);
-    const userContent = `证辩者入席。请以「证官·${characterName || blueprint.proverName || "证官"}」身份开场。`;
+    const proverLabel = String(characterName || blueprint.proverName || "证官")
+      .replace(/^证官·+/u, "")
+      .trim();
+    const userContent = `证辩者入席。请以「证官·${proverLabel}」身份开场。`;
     const raw = await window.ChatApi.completeChat({
       systemPrompt,
       messages: [{ role: "user", content: userContent }],
@@ -126,7 +163,7 @@ ${goal ? `论题 G：${goal}` : ""}
       neglectPrimaryWarnAt: 3,
       neglectPrimaryFailAt: 5,
       goalTracks: { core: { keywords: poolProblem?.endingCoreKeywords || [] } },
-      proverStatementFallbacks: [
+      sharpStatementFallbacks: [
         "先把逻辑步讲实，我再补一步。",
         "逐步来，别跳步。",
       ],
