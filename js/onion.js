@@ -107,6 +107,16 @@
         }
       } else if (/^\s*-\s*\[依赖\]\s*/.test(line)) {
         line = line.replace(/^\s*-\s*\[依赖\]\s*/, "- [依赖] ");
+      } else if (/^\s*前提\s*P(\d+)\s*[：:]/i.test(line.trim())) {
+        const pm = line.trim().match(/^前提\s*P(\d+)\s*[：:]\s*(.+)$/i);
+        if (pm) {
+          line = `- [前提] P${pm[1]}：${pm[2].trim()}`;
+        }
+      } else if (/^\s*待证#?(\d+)\s+L\1\s*[：:]/i.test(line.trim())) {
+        const tm = line.trim().match(/^待证#?(\d+)\s+L\1\s*[：:]\s*(.+)$/i);
+        if (tm) {
+          line = `- [待证#${tm[1]}] L${tm[1]}：${tm[2].trim()}`;
+        }
       }
       lines.push(line);
     }
@@ -187,6 +197,10 @@
         orderKey: "1",
         text: trimmed.replace(/^[-*•]\s*\[待核实\]\s*/i, "").trim(),
       };
+    }
+    m = trimmed.match(/^[-*•]?\s*待证#?([\da-z]+)?\s+L\1[：:]\s*(.*)$/i);
+    if (m) {
+      return { orderKey: m[1] || "1", text: (`L${m[1] || "1"}：` + (m[2] || "")).trim() };
     }
     return null;
   }
@@ -1204,6 +1218,33 @@
     return true;
   }
 
+
+  /** 已有 [证毕#k] 时删同号 [待证#k] 与紧随的 [依赖] */
+  function removePendingSupersededByQed(text) {
+    let result = String(text || "");
+    const qed = extractQedOrders(result);
+    if (!qed.size) {
+      return result;
+    }
+    const lines = [];
+    let skipDep = false;
+    for (const raw of result.split("\n")) {
+      const trimmed = raw.trim();
+      const pending = parsePendingFromLine(trimmed);
+      if (pending && qed.has(pending.orderKey)) {
+        skipDep = true;
+        continue;
+      }
+      if (skipDep && (/^\s*-\s*\[依赖\]/.test(trimmed) || /^\s*若要证/.test(trimmed))) {
+        skipDep = false;
+        continue;
+      }
+      skipDep = false;
+      lines.push(raw);
+    }
+    return lines.join("\n").trim();
+  }
+
   /** 压摘要后：待证 Lk 闭合则删 #1；裁剪档案膨胀 */
   function reconcilePlotSummary(plotSummary, seed) {
     let text = normalizeProofArchive(String(plotSummary || "").trim());
@@ -1211,6 +1252,7 @@
       return text;
     }
     text = reconcileEvidenceSlots(text, seed);
+    text = removePendingSupersededByQed(text);
     text = stripClearablePendingLines(text);
     text = text.replace(/\n- \[已证\][^\n]*可能意在[^\n]*/gi, "");
     text = text.replace(/\n- \[已证\][^\n]*存疑[^\n]*/gi, "");
@@ -1541,8 +1583,12 @@
     if (!session) {
       return false;
     }
-    const minKp =
+    let minKp =
       Number(seed?.endingMinKeypointTurns) > 0 ? seed.endingMinKeypointTurns : 2;
+    if (seed?.aiDriven) {
+      const lemmaSteps = getMinLemmaStepsForEnding(seed);
+      minKp = Math.min(minKp, lemmaSteps);
+    }
     if ((session.keypointTurnCount || 0) < minKp) {
       return false;
     }
@@ -1591,7 +1637,11 @@
     if (fromPool > 0) {
       return fromPool;
     }
-    return 2;
+    const chainLen = window.GameProofPool?.getLemmaChain?.(seed?.problemId)?.length || 0;
+    if (chainLen > 0) {
+      return chainLen;
+    }
+    return seed?.aiDriven ? 1 : 2;
   }
 
   function appendOpenLemmaToArchive(plotSummary, order, body, dependsOn = "G") {
@@ -1640,7 +1690,10 @@
       return false;
     }
     const qed = extractQedOrders(plotSummary).size;
-    if (qed < getMinLemmaStepsForEnding(seed)) {
+    const minSteps = getMinLemmaStepsForEnding(seed);
+    const chainLen = window.GameProofPool?.getLemmaChain?.(seed?.problemId)?.length || 0;
+    const requiredSteps = chainLen > 0 ? chainLen : minSteps;
+    if (qed < requiredSteps) {
       return false;
     }
     const keywords = seed?.endingCoreKeywords;
