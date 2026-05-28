@@ -395,8 +395,22 @@
   const CHARACTER_REPLY_RULE =
     "角色 reply 只能陈述/供述/否认/顶回，**禁止问句**（无 ？/?，不以吗/呢 发问）。";
 
+  function sanitizeRhetoricalQuestion(text) {
+    let t = String(text || "").trim();
+    if (!t) {
+      return t;
+    }
+    if (/^我护谁[？?]/.test(t)) {
+      t = t.replace(/^我护谁[？?]\s*/, "我只护真相，");
+    }
+    if (/^谁[？?]$/.test(t)) {
+      t = "与你无关。";
+    }
+    return t.replace(/[？?]/g, "。");
+  }
+
   function filterCharacterReply(reply) {
-    const t = String(reply || "").trim();
+    let t = sanitizeRhetoricalQuestion(String(reply || "").trim());
     if (!t || isWeakReply(t)) {
       return "";
     }

@@ -177,6 +177,9 @@
         "锋利已点名指使者：keypoint 须确认并追问仍缺的事实（如下落），勿再空换循环。"
       );
     }
+    if (window.GameOnion?.shouldClearPendingBlock?.(plotSummary)) {
+      parts.push("主使已供述：keypoint 用确认句收束，勿再「换你说指使者」。");
+    }
     if (stallTurns >= 2) {
       parts.push("连续无进展：亮牌必须用【玩家可亮牌】中未用过的 offer 句。");
     }
@@ -544,16 +547,59 @@
   const MASTERMIND_NAMED_IN_ARCHIVE_RE =
     /(?:赵二爷|赵爷|老九|赵家|二爷).{0,16}(?:主使|指使|幕后|听命|指使者)|(?:主使|指使|指使者).{0,12}(?:赵二爷|赵爷|老九|二爷)|听命于(?:赵二爷|赵爷|老九)/;
 
+  const MASTERMIND_FINAL_CLAIM_RE =
+    /唯一主使|就是主使|乃是主使|主使.{0,10}没有别人|没有更高层|否认有更高|没有别人/;
+
+  function archiveBlob(plotSummary) {
+    return extractConfirmedLines(plotSummary).join("\n");
+  }
+
+  /** 档案中主使链已闭合（不绑死赵爷/老九，认模型供出的专名） */
+  function mastermindTrackSatisfied(blob) {
+    const text = String(blob || "");
+    if (!text) {
+      return false;
+    }
+    if (MASTERMIND_NAMED_IN_ARCHIVE_RE.test(text)) {
+      return true;
+    }
+    if (/锋利供述[：:][^。\n]{0,48}(?:指使|指使者|主使)/.test(text)) {
+      return true;
+    }
+    if (MASTERMIND_FINAL_CLAIM_RE.test(text)) {
+      return true;
+    }
+    if (
+      /(?:指使|指使者|主使|幕后).{0,16}[\u4e00-\u9fa5]{2,6}|[\u4e00-\u9fa5]{2,6}.{0,12}(?:指使|指使者|主使)/.test(
+        text
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   function isDeflectReply(text) {
     return DEFLECT_REPLY_RE.test(String(text || "").trim());
   }
 
   function extractMastermindLabel(plotSummary, lastSharp) {
-    const blob = `${extractConfirmedLines(plotSummary).join("")}\n${lastSharp || ""}`;
-    const m =
-      blob.match(/指使者(?:是|乃|为)([\u4e00-\u9fa5]{2,6})/) ||
-      blob.match(/(赵二爷|赵爷|老九|二爷)/);
-    return m?.[1] || "幕后主使";
+    const blob = `${archiveBlob(plotSummary)}\n${lastSharp || ""}`;
+    const patterns = [
+      /指使者(?:是|乃|为)(?:账房总管)?([\u4e00-\u9fa5]{2,6})/,
+      /指使(?:者)?(?:是|乃|为)(?:账房总管)?([\u4e00-\u9fa5]{2,6})/,
+      /背后是(?:账房总管)?([\u4e00-\u9fa5]{2,6})/,
+      /(账房总管[\u4e00-\u9fa5]{2,4})/,
+      /([\u4e00-\u9fa5]{2,6})(?:就是|乃是)?(?:唯一)?主使/,
+      /(赵二爷|赵爷|老九|二爷|[\u4e00-\u9fa5]{2,4}德柱)/,
+    ];
+    for (const re of patterns) {
+      const m = blob.match(re);
+      if (m?.[1]) {
+        return m[1].trim();
+      }
+    }
+    return "幕后主使";
   }
 
   /** 推进选项：优先未消耗亮牌；指使者已供则确认句 */
@@ -565,14 +611,11 @@
     const line = String(lastSharp || "").trim();
     const blob = extractConfirmedLines(plotSummary).join("");
     const pending = extractPendingLines(plotSummary)[0] || "";
-    if (
-      mastermindNamedInArchive(plotSummary) ||
-      MASTERMIND_NAMED_IN_ARCHIVE_RE.test(line)
-    ) {
+    if (mastermindNamedInArchive(plotSummary) || mastermindNamedInLine(line)) {
       const name = extractMastermindLabel(plotSummary, line);
       return `${name}主使、账本在他手里，你已说定。`;
     }
-    if (/指使者|幕后|主使/.test(pending) && !MASTERMIND_NAMED_IN_ARCHIVE_RE.test(blob)) {
+    if (/指使者|幕后|主使/.test(pending) && !mastermindTrackSatisfied(blob)) {
       return "你已认了陈四，换你说他背后主使是谁。";
     }
     return "";
@@ -587,13 +630,24 @@
   }
 
   function mastermindNamedInArchive(plotSummary) {
-    return MASTERMIND_NAMED_IN_ARCHIVE_RE.test(
-      extractConfirmedLines(plotSummary).join("\n")
-    );
+    return mastermindTrackSatisfied(archiveBlob(plotSummary));
   }
 
   function mastermindNamedInLine(line) {
-    return MASTERMIND_NAMED_IN_ARCHIVE_RE.test(String(line || "").trim());
+    const t = String(line || "").trim();
+    if (!t) {
+      return false;
+    }
+    if (MASTERMIND_NAMED_IN_ARCHIVE_RE.test(t)) {
+      return true;
+    }
+    if (/指使|指使者|主使|幕后|听命/.test(t) && /[\u4e00-\u9fa5]{2,6}/.test(t)) {
+      return true;
+    }
+    if (MASTERMIND_FINAL_CLAIM_RE.test(t)) {
+      return true;
+    }
+    return false;
   }
 
   function pendingIsResolvedMeta(pendingText, plotSummary) {
@@ -601,10 +655,23 @@
     if (!p) {
       return false;
     }
-    if (!mastermindNamedInArchive(plotSummary)) {
+    const blob = archiveBlob(plotSummary);
+    if (!mastermindTrackSatisfied(blob) && !MASTERMIND_FINAL_CLAIM_RE.test(blob)) {
       return false;
     }
-    return /是否|需核实|矛盾|身份与|实际在/.test(p);
+    return /是否|需核实|矛盾|身份与|实际在|最终指使者|更高层|另有/.test(p);
+  }
+
+  function shouldClearPendingBlock(plotSummary) {
+    if (!extractPendingLines(plotSummary).length) {
+      return false;
+    }
+    const blob = archiveBlob(plotSummary);
+    return (
+      mastermindTrackSatisfied(blob) ||
+      MASTERMIND_FINAL_CLAIM_RE.test(blob) ||
+      pendingIsResolvedMeta(extractPendingLines(plotSummary)[0], plotSummary)
+    );
   }
 
   /** 压摘要后：答清指使者则删 #1；裁剪档案膨胀 */
@@ -613,16 +680,12 @@
     if (!text) {
       return text;
     }
-    const pending = extractPendingLines(text);
-    if (
-      pending.length > 0 &&
-      (pendingIsResolvedMeta(pending[0], text) || mastermindNamedInArchive(text))
-    ) {
-      if (mastermindNamedInArchive(text)) {
-        text = text.replace(/\n- \[待核实#1\][^\n]*/gi, "");
-        text = text.replace(/\n- \[待核实\][^\n]*/gi, "");
-      }
+    if (shouldClearPendingBlock(text)) {
+      text = text.replace(/\n- \[待核实#1\][^\n]*/gi, "");
+      text = text.replace(/\n- \[待核实\][^\n]*/gi, "");
     }
+    text = text.replace(/\n- \[已确认\][^\n]*可能意在[^\n]*/gi, "");
+    text = text.replace(/\n- \[已确认\][^\n]*存疑[^\n]*/gi, "");
     const archiveMatch = text.match(/(【剧情档案】[\s\S]*?)(?=【关系与态度】|$)/);
     if (archiveMatch) {
       const head = archiveMatch[1].split("\n").slice(0, 1);
@@ -776,8 +839,11 @@
     if (!tracks || typeof tracks !== "object") {
       return null;
     }
-    const confirmed = extractConfirmedLines(plotSummary).join("\n");
+    const confirmed = archiveBlob(plotSummary);
     for (const key of Object.keys(tracks)) {
+      if (key === "mastermind" && mastermindTrackSatisfied(confirmed)) {
+        continue;
+      }
       const kws = tracks[key]?.keywords;
       if (!Array.isArray(kws) || kws.length === 0) {
         continue;
@@ -914,11 +980,14 @@
     if (!Array.isArray(keywords) || keywords.length === 0) {
       return true;
     }
-    const confirmed = extractConfirmedLines(plotSummary).join("\n");
-    return keywords.some((k) => confirmed.includes(String(k).trim()));
+    const confirmed = archiveBlob(plotSummary);
+    return (
+      keywords.some((k) => confirmed.includes(String(k).trim())) ||
+      mastermindTrackSatisfied(confirmed)
+    );
   }
 
-  function hasSessionEndingProgress(session, seed) {
+  function hasSessionEndingProgress(session, seed, plotSummary) {
     if (!session) {
       return false;
     }
@@ -928,9 +997,15 @@
       return false;
     }
     if (seed?.endingSpendAllKnowledge) {
-      const ids = getPlayerKnowledgeList(seed).map((k) => k.id);
       const spent = session.spentPlayerKnowledge || [];
-      if (ids.length && !ids.every((id) => spent.includes(id))) {
+      const blob = archiveBlob(plotSummary);
+      const blockerOk =
+        spent.includes("blocker") ||
+        (/陈四/.test(blob) && /指使|指使者|主使/.test(blob));
+      const ledgerOk =
+        spent.includes("ledger") ||
+        (/刘老三/.test(blob) && /账本|经手|藏/.test(blob));
+      if (!blockerOk || !ledgerOk) {
         return false;
       }
     }
@@ -965,7 +1040,7 @@
   function isReadyForEnding(plotSummary, seed, session) {
     return (
       isPlotReadyForEnding(plotSummary, seed) &&
-      hasSessionEndingProgress(session, seed)
+      hasSessionEndingProgress(session, seed, plotSummary)
     );
   }
 
@@ -1009,6 +1084,8 @@
     reconcilePlotSummary,
     mastermindNamedInArchive,
     mastermindNamedInLine,
+    mastermindTrackSatisfied,
+    shouldClearPendingBlock,
     isDeflectReply,
     countRecentFollowupStreak,
     formatExchangeContract,
