@@ -140,7 +140,8 @@
     const programKp = pickKeypointOfferLine(
       context?.session,
       context?.seed,
-      plotSummary
+      plotSummary,
+      lastSharp
     );
     const followupStreak = countRecentFollowupStreak(context?.session);
     const parts = ["【本局态势】"];
@@ -541,24 +542,37 @@
     /你心里|心里清楚|别装|你该去问|去问陈四|问太多|反倒可疑|爱信不信|不护谁|疑心太重|随你|误事|少说|废话|挡话|栽我身上/;
 
   const MASTERMIND_NAMED_IN_ARCHIVE_RE =
-    /(?:赵爷|老九|赵家).{0,16}(?:主使|指使|幕后|听命)|(?:主使|指使).{0,12}(?:赵爷|老九)|听命于(?:赵爷|老九)/;
+    /(?:赵二爷|赵爷|老九|赵家|二爷).{0,16}(?:主使|指使|幕后|听命|指使者)|(?:主使|指使|指使者).{0,12}(?:赵二爷|赵爷|老九|二爷)|听命于(?:赵二爷|赵爷|老九)/;
 
   function isDeflectReply(text) {
     return DEFLECT_REPLY_RE.test(String(text || "").trim());
   }
 
-  /** 推进选项：优先未消耗亮牌；否则逼供待证 */
-  function pickKeypointOfferLine(session, seed, plotSummary) {
+  function extractMastermindLabel(plotSummary, lastSharp) {
+    const blob = `${extractConfirmedLines(plotSummary).join("")}\n${lastSharp || ""}`;
+    const m =
+      blob.match(/指使者(?:是|乃|为)([\u4e00-\u9fa5]{2,6})/) ||
+      blob.match(/(赵二爷|赵爷|老九|二爷)/);
+    return m?.[1] || "幕后主使";
+  }
+
+  /** 推进选项：优先未消耗亮牌；指使者已供则确认句 */
+  function pickKeypointOfferLine(session, seed, plotSummary, lastSharp) {
     const avail = getAvailableKnowledge(session, seed);
     if (avail[0]?.offerLine) {
       return avail[0].offerLine;
     }
+    const line = String(lastSharp || "").trim();
     const blob = extractConfirmedLines(plotSummary).join("");
     const pending = extractPendingLines(plotSummary)[0] || "";
-    if (mastermindNamedInArchive(plotSummary)) {
-      return "赵爷主使、账本在他手里，你已说定。";
+    if (
+      mastermindNamedInArchive(plotSummary) ||
+      MASTERMIND_NAMED_IN_ARCHIVE_RE.test(line)
+    ) {
+      const name = extractMastermindLabel(plotSummary, line);
+      return `${name}主使、账本在他手里，你已说定。`;
     }
-    if (/指使者|幕后|主使/.test(pending) && !/老九|赵爷|主使|指使.{0,8}是/.test(blob)) {
+    if (/指使者|幕后|主使/.test(pending) && !MASTERMIND_NAMED_IN_ARCHIVE_RE.test(blob)) {
       return "你已认了陈四，换你说他背后主使是谁。";
     }
     return "";
@@ -576,6 +590,10 @@
     return MASTERMIND_NAMED_IN_ARCHIVE_RE.test(
       extractConfirmedLines(plotSummary).join("\n")
     );
+  }
+
+  function mastermindNamedInLine(line) {
+    return MASTERMIND_NAMED_IN_ARCHIVE_RE.test(String(line || "").trim());
   }
 
   function pendingIsResolvedMeta(pendingText, plotSummary) {
@@ -708,7 +726,7 @@
     }
     if (context?.playerConcreteReveal) {
       lines.push(
-        "须供述：指使者姓名（2～4字）或账本现下落；禁心里清楚、去问陈四、疑心太重"
+        "须供述：本句只给一条——指使者姓名（2～4字）或账本现下落，勿同句两条；禁心里清楚、去问陈四"
       );
     }
     return lines.join("\n");
@@ -900,8 +918,27 @@
     return keywords.some((k) => confirmed.includes(String(k).trim()));
   }
 
-  /** 3 推 1：待核实#1 须清空；双轨/核心词齐备后方可结局 */
-  function isReadyForEnding(plotSummary, seed) {
+  function hasSessionEndingProgress(session, seed) {
+    if (!session) {
+      return false;
+    }
+    const minKp =
+      Number(seed?.endingMinKeypointTurns) > 0 ? seed.endingMinKeypointTurns : 2;
+    if ((session.keypointTurnCount || 0) < minKp) {
+      return false;
+    }
+    if (seed?.endingSpendAllKnowledge) {
+      const ids = getPlayerKnowledgeList(seed).map((k) => k.id);
+      const spent = session.spentPlayerKnowledge || [];
+      if (ids.length && !ids.every((id) => spent.includes(id))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** 3 推 1：待证清空 + 双轨齐备 + 局内推进次数/亮牌消耗 */
+  function isPlotReadyForEnding(plotSummary, seed) {
     const goal = extractGoal(plotSummary);
     if (!goal) {
       return false;
@@ -925,6 +962,13 @@
     return true;
   }
 
+  function isReadyForEnding(plotSummary, seed, session) {
+    return (
+      isPlotReadyForEnding(plotSummary, seed) &&
+      hasSessionEndingProgress(session, seed)
+    );
+  }
+
   window.GameOnion = {
     buildSeedPlotSummary,
     extractGoal,
@@ -935,6 +979,9 @@
     formatReplyHint,
     formatLayersDebug,
     isReadyForEnding,
+    isPlotReadyForEnding,
+    hasSessionEndingProgress,
+    extractMastermindLabel,
     hasCoreGoalAchieved,
     extractConfirmedLines,
     normalizePlayerLineForApi,
@@ -961,6 +1008,7 @@
     pickProgramStatementFallback,
     reconcilePlotSummary,
     mastermindNamedInArchive,
+    mastermindNamedInLine,
     isDeflectReply,
     countRecentFollowupStreak,
     formatExchangeContract,

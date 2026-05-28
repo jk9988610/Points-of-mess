@@ -79,10 +79,12 @@
     const programKp = window.GameOnion?.pickKeypointOfferLine?.(
       session,
       seed,
-      plotSummary
+      plotSummary,
+      lastSharp
     );
     const confirm = window.GameOnion?.pickConfirmAfterSharpLine?.(lastSharp);
-    if (confirm) {
+    const sharpNamedBoss = window.GameOnion?.mastermindNamedInLine?.(lastSharp);
+    if (confirm && !sharpNamedBoss) {
       keypoint = confirm;
     } else if (programKp) {
       const avail = window.GameOnion?.getAvailableKnowledge?.(session, seed) || [];
@@ -182,7 +184,23 @@
       signal,
       debugLabel: "结局·①宣布",
     });
-    const reply = replyFromRaw(raw);
+    function filterEndingReply(text) {
+      let t = String(text || "").trim();
+      t = t.replace(/^([\u4e00-\u9fa5]{2,8})[？?]/, "$1，");
+      t = t.replace(/[？?]/g, "。");
+      if (!t || isWeakReply(t) || window.GameOnion?.isDeflectReply?.(t)) {
+        return "";
+      }
+      return t;
+    }
+
+    let reply = filterEndingReply(replyFromRaw(raw));
+    if (!reply) {
+      reply = String(archetype?.onionSeed?.endingEpilogueFallback || "").trim();
+      if (reply) {
+        window.PomDebug?.logLocal("结局兜底台词", reply, ["reply-fallback"]);
+      }
+    }
     if (reply && !isWeakReply(reply)) {
       return reply;
     }

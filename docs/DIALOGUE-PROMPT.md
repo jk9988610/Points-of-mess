@@ -82,7 +82,14 @@ node scripts/verify-goal-driven.js
 # 新局：keypoint 亮陈四 → 锋利须含「老九」或走兜底；[待核实#1]  eventually 清除
 ```
 
-## 9. v0.5.38 补丁（赵爷已供仍卡 #1）
+## 9. v0.5.39（节奏：两轮推进再结局）
+
+- 不在玩家选选项时跳过 reply；**本轮回合 ①②③ 完成后**再判结局
+- `endingMinKeypointTurns: 2` + `endingSpendAllKnowledge: true`
+- keypoint 每轮只兑现**一条**新事实
+- 结局台词：`刘老三？` 类改逗号兜底，避免「无法解析结局」
+
+## 10. v0.5.38 补丁（赵爷已供仍卡 #1）
 
 - `reconcilePlotSummary`：档案已写明指使者姓名 → **程序删除** `[待核实#1]`，禁止「是否赵爷」元问题
 - `goalTracks` 增加 **赵爷**；兜底供述与种子一致

@@ -48,7 +48,7 @@ function hasGoalTracksAchieved(plotSummary, seed) {
   return true;
 }
 
-function isReadyForEnding(plotSummary, seed) {
+function isPlotReadyForEnding(plotSummary, seed) {
   if (!extractGoal(plotSummary)) return false;
   if (extractPendingLines(plotSummary).length > 0) return false;
   const confirmed = (plotSummary.match(/\[已确认\]/g) || []).length;
@@ -60,19 +60,41 @@ function isReadyForEnding(plotSummary, seed) {
   return true;
 }
 
-const seed = { endingMinConfirmed: 2, endingCoreKeywords: ["幕后"] };
+function hasSessionEndingProgress(session, seed) {
+  const minKp = seed?.endingMinKeypointTurns ?? 0;
+  if ((session?.keypointTurnCount || 0) < minKp) return false;
+  if (seed?.endingSpendAllKnowledge) {
+    const spent = session?.spentPlayerKnowledge || [];
+    if (!spent.includes("blocker") || !spent.includes("ledger")) return false;
+  }
+  return true;
+}
+
+function isReadyForEnding(plotSummary, seed, session) {
+  return (
+    isPlotReadyForEnding(plotSummary, seed) &&
+    hasSessionEndingProgress(session, seed)
+  );
+}
+
+const sessionOpen = { keypointTurnCount: 0, spentPlayerKnowledge: [] };
+const seed = {
+  endingMinConfirmed: 2,
+  endingCoreKeywords: ["幕后"],
+  endingMinKeypointTurns: 0,
+};
 const pending = `【本局目标】\n- 查明幕后\n【剧情档案】\n- [已确认] a\n- [待核实#1] x`;
 const readyNoCore = `【本局目标】\n- 查明幕后\n【剧情档案】\n- [已确认] a\n- [已确认] b`;
 const ready = `${readyNoCore}\n- [已确认] 老李幕后指使阻拦并转移账本`;
-if (isReadyForEnding(pending, seed)) {
+if (isReadyForEnding(pending, seed, sessionOpen)) {
   console.error("should not be ready with pending");
   process.exit(1);
 }
-if (isReadyForEnding(readyNoCore, seed)) {
+if (isReadyForEnding(readyNoCore, seed, sessionOpen)) {
   console.error("should need core keyword");
   process.exit(1);
 }
-if (!isReadyForEnding(ready, seed)) {
+if (!isReadyForEnding(ready, seed, sessionOpen)) {
   console.error("should be ready");
   process.exit(1);
 }
@@ -80,6 +102,7 @@ if (!isReadyForEnding(ready, seed)) {
 const trackSeed = {
   endingMinConfirmed: 2,
   endingCoreKeywords: ["指使"],
+  endingMinKeypointTurns: 0,
   goalTracks: {
     mastermind: { keywords: ["老九"] },
     ledger: { keywords: ["经手"] },
@@ -90,7 +113,7 @@ const tracksWithPending = `【本局目标】\n- 查明幕后
 - [已确认] 老九指使陈四
 - [已确认] 账本经手为刘老三
 - [待核实#1] 细节未清`;
-if (isReadyForEnding(tracksWithPending, trackSeed)) {
+if (isReadyForEnding(tracksWithPending, trackSeed, sessionOpen)) {
   console.error("3推1: should not end while [待核实#1] remains");
   process.exit(1);
 }
@@ -99,7 +122,7 @@ const tracksReady = `【本局目标】\n- 查明幕后
 【剧情档案】
 - [已确认] 老九指使陈四阻拦
 - [已确认] 账本经手为刘老三`;
-if (!isReadyForEnding(tracksReady, trackSeed)) {
+if (!isReadyForEnding(tracksReady, trackSeed, sessionOpen)) {
   console.error("goalTracks: should be ready when pending cleared");
   process.exit(1);
 }
@@ -107,6 +130,9 @@ if (!isReadyForEnding(tracksReady, trackSeed)) {
 const sharpSeed = {
   endingMinConfirmed: 3,
   endingCoreKeywords: ["指使", "幕后", "操控", "主使"],
+  endingMinKeypointTurns: 2,
+  endingSpendAllKnowledge: true,
+  requireIds: ["blocker", "ledger"],
   goalTracks: {
     mastermind: { keywords: ["指使", "幕后", "老九", "主使", "派我", "赵家"] },
     ledger: { keywords: ["账本", "经手", "保管", "手里", "转移", "下落"] },
@@ -119,8 +145,12 @@ const openingPlot = `【本局目标】（唯一，仅此一条）
 - [已确认] 阻拦者为陈四（玩家已知，可作筹码）
 - [已确认] 账本最后经手人为刘老三（玩家已知，可作筹码）
 - [待核实#1] 陈四的指使者是谁（直指幕后操控者）`;
-if (isReadyForEnding(openingPlot, sharpSeed)) {
-  console.error("opening seed must not trigger ending on turn 1");
+if (isPlotReadyForEnding(openingPlot, sharpSeed)) {
+  console.error("opening plot must not be plot-ready");
+  process.exit(1);
+}
+if (isReadyForEnding(openingPlot, sharpSeed, sessionOpen)) {
+  console.error("opening session must not trigger full ending");
   process.exit(1);
 }
 if (!extractGoal(openingPlot).includes("操控")) {

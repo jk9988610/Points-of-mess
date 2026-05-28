@@ -69,21 +69,35 @@ assert(
   G.hasGoalTracksAchieved(dualTrack, seed) === true,
   "双轨 keyword 齐应达成"
 );
+const sessionDone = {
+  keypointTurnCount: 2,
+  spentPlayerKnowledge: ["blocker", "ledger"],
+};
 assert(
-  !G.isReadyForEnding(dualTrack, {
-    ...seed,
-    endingMinConfirmed: 2,
-    endingCoreKeywords: ["指使"],
-  }),
+  !G.isReadyForEnding(
+    dualTrack,
+    {
+      ...seed,
+      endingMinConfirmed: 2,
+      endingCoreKeywords: ["指使"],
+      endingMinKeypointTurns: 0,
+    },
+    sessionDone
+  ),
   "3推1：有待核实#1 不得结局"
 );
 const dualTrackDone = dualTrack.replace(/- \[待核实#1\][^\n]*\n?/, "");
 assert(
-  G.isReadyForEnding(dualTrackDone, {
-    ...seed,
-    endingMinConfirmed: 2,
-    endingCoreKeywords: ["指使"],
-  }),
+  G.isReadyForEnding(
+    dualTrackDone,
+    {
+      ...seed,
+      endingMinConfirmed: 2,
+      endingCoreKeywords: ["指使"],
+      endingMinKeypointTurns: 0,
+    },
+    sessionDone
+  ),
   "待核实清空且双轨齐备方可结局"
 );
 

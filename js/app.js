@@ -452,6 +452,9 @@
     if (!Array.isArray(session.spentPlayerKnowledge)) {
       session.spentPlayerKnowledge = [];
     }
+    if (typeof session.keypointTurnCount !== "number") {
+      session.keypointTurnCount = 0;
+    }
     const seeded = ensureOnionSeedPlotSummary(session, archetype);
     if (seeded) {
       persist(state);
@@ -563,6 +566,7 @@
     session.spentPlayerKnowledge = [];
     session.inquireLineIndex = 0;
     session.lastPickIntent = "";
+    session.keypointTurnCount = 0;
   }
 
   function finishEpisodeAfterFailure() {
@@ -904,19 +908,11 @@
       emptyPromiseCount,
     };
 
-    const goalEnding =
-      !session.endingOffered &&
-      !session.inEndingCloseChoices &&
-      window.GameOnion?.isReadyForEnding?.(session.plotSummary, archetype.onionSeed);
+    const willSummary = window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
 
-    const willSummary =
-      !goalEnding && window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
-
-    const apiSteps = goalEnding
-      ? ["结局·①宣布", "结局·②close×2"]
-      : willSummary
-        ? ["①reply", "②选项", "③摘要"]
-        : ["①reply", "②选项"];
+    const apiSteps = willSummary
+      ? ["①reply", "②选项", "③摘要"]
+      : ["①reply", "②选项"];
     window.PomDebug?.logLocal(
       "API 路径",
       `串行 · ${apiSteps.join(" → ")}${willSummary ? "（③在 assistant 写入后）" : ""}`,
@@ -927,37 +923,23 @@
       let reply;
       let options;
 
-      if (goalEnding) {
-        session.endingOffered = true;
-        const ending = await requestEndingSequence({
+      const turn = await requestCombinedTurn({
+        character,
+        archetype,
+        session,
+        apiMessages,
+        turn: {
           character,
-          archetype,
-          session,
-          apiMessages,
-          signal,
-        });
-        reply = ending.reply;
-        options = ending.options;
-        session.inEndingCloseChoices = true;
-      } else {
-        const turn = await requestCombinedTurn({
-          character,
-          archetype,
-          session,
-          apiMessages,
-          turn: {
-            character,
-            options: optionsSnapshot,
-            pick,
-            isClose: false,
-            onionExtra,
-          },
+          options: optionsSnapshot,
+          pick,
           isClose: false,
-          signal,
-        });
-        reply = turn.reply;
-        options = turn.options;
-      }
+          onionExtra,
+        },
+        isClose: false,
+        signal,
+      });
+      reply = turn.reply;
+      options = turn.options;
 
       session.messages.push({
         id: createId(),
@@ -968,7 +950,7 @@
       });
       persist(state);
       setBubble(reply, false, { thinking: false });
-      setStatus(goalEnding ? "选一句离场结束本局。" : "", false);
+      setStatus("", false);
 
       state.currentOptions = options;
 
@@ -987,6 +969,41 @@
             window.PomDebug?.logLocalWarn("剧情摘要失败", e.message, ["summary"]);
           }
         }
+      }
+
+      if (pick.intent === "keypoint") {
+        session.keypointTurnCount = (session.keypointTurnCount || 0) + 1;
+      }
+
+      if (
+        !session.endingOffered &&
+        !session.inEndingCloseChoices &&
+        window.GameOnion?.isReadyForEnding?.(
+          session.plotSummary,
+          archetype.onionSeed,
+          session
+        )
+      ) {
+        session.endingOffered = true;
+        const ending = await requestEndingSequence({
+          character,
+          archetype,
+          session,
+          apiMessages: getHistoryForApi(session.messages),
+          signal,
+        });
+        session.messages.push({
+          id: createId(),
+          role: "assistant",
+          content: ending.reply,
+          createdAt: Date.now(),
+          status: "done",
+        });
+        persist(state);
+        setBubble(`${reply}\n\n${ending.reply}`, false, { thinking: false });
+        state.currentOptions = ending.options;
+        session.inEndingCloseChoices = true;
+        setStatus("目标已达成，选一句离场结束本局。", false);
       }
 
       const stall = window.GameOnion?.updateStallCounters?.(session, session.plotSummary);

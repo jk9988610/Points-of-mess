@@ -54,6 +54,7 @@
           spentPlayerKnowledge: [],
           inquireLineIndex: 0,
           lastPickIntent: "",
+          keypointTurnCount: 0,
         };
       }
       return state.sessions[characterId];
