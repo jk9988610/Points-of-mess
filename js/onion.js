@@ -412,7 +412,9 @@
       }
       if (/\[依赖\]|^\s*若要证\s+(G|L[\d.]+)\s*，\s*则需证/.test(t)) {
         deps.push(t.replace(/^[-*•]\s*/, ""));
-      } else if (/\[已证\]|\[已确认\]|\[前提\]/.test(t)) {
+      } else if (
+        /\[已证\]|\[已确认\]|\[前提\]|\[提示\]|\[已证部分\]/.test(t)
+      ) {
         proven.push(t);
       } else if (/\[待证|\[待核实/.test(t)) {
         pending.push(t);
@@ -437,10 +439,38 @@
     const proven =
       (text.match(/\[已证\]/g) || []).length +
       (text.match(/\[已确认\]/g) || []).length;
+    const hints = (text.match(/\[提示\]/g) || []).length;
+    const partial = (text.match(/\[已证部分\]/g) || []).length;
     const pending = extractPendingLines(text).length;
     const qed = extractQedOrders(text).size;
     const goal = extractGoal(text) ? 1 : 0;
-    return { confirmed: premises + proven, premises, proven, pending, qed, goal };
+    return {
+      confirmed: premises + proven,
+      premises,
+      proven,
+      hints,
+      partial,
+      pending,
+      qed,
+      goal,
+    };
+  }
+
+  /** 僵局计数：仅实质 [已证]/[已确认]/前提；不含 [提示]、[已证部分] */
+  function countStallProgress(plotSummary) {
+    const text = normalizeProofArchive(String(plotSummary || ""));
+    let proven = 0;
+    for (const line of text.split("\n")) {
+      const t = line.trim();
+      if (/\[提示\]|\[已证部分\]/.test(t)) {
+        continue;
+      }
+      if (/\[已证\]|\[已确认\]/.test(t)) {
+        proven += 1;
+      }
+    }
+    const premises = (text.match(/\[前提\]/g) || []).length;
+    return premises + proven;
   }
 
   /** ② 选项 user：本局态势 + 写法 */
@@ -557,7 +587,11 @@
       lines.push(
         "证辩者选了**错误推证**（decoy）；回复**必须以**「错误：<谬误名称>。正确应使用<正确规则>。」起首",
         "示例：错误：肯定后件。正确应使用否后律。",
-        "指出谬误后不给新 [已证] 进展；用陈述句，禁止问句"
+        "指出谬误后不给新 [已证] 进展；书记员将把「正确应使用…」记入 [提示]；用陈述句，禁止问句"
+      );
+    } else if (context?.recordMethodHint) {
+      lines.push(
+        "证官已给出正确推理方法/规则；书记员应写入 [提示]（如「假言三段论适用」），**勿**写 [证毕#k]"
       );
     } else if (context?.playerConcreteReveal && pickIntent === "keypoint") {
       lines.push(
@@ -596,7 +630,7 @@
     } else if (stallTurns >= 2) {
       lines.push(
         "连续无进展：须给出正确推理的**一半**（如「否后律：若 P1 则地湿，现地不湿，则未下雨。」），要求证辩者确认下一步",
-        "禁止向证辩者发问；禁止空耗"
+        "书记员可将半推记入 [已证部分]，[待证#k] 仍保留；禁止向证辩者发问"
       );
     } else if (pickIntent === "keypoint" && !context?.playerConcreteReveal) {
       if (isGoalAdvancePlayerLine(context?.playerLine)) {
@@ -622,18 +656,20 @@
     if (!session) {
       return { stallTurns: 0, confirmed: 0 };
     }
-    const confirmed = countLayers(plotSummary).confirmed;
-    const prev = session.lastConfirmedCount ?? 0;
+    const confirmed = countStallProgress(plotSummary);
+    const prev = session.lastStallProgressCount ?? session.lastConfirmedCount ?? 0;
     const lastAssistant = [...(session.messages || [])]
       .reverse()
       .find((m) => m.role === "assistant" && m.status === "done");
     if (assistantReplyAdvancesPlot(lastAssistant?.content, plotSummary)) {
       session.stallTurns = 0;
-      session.lastConfirmedCount = confirmed;
+      session.lastStallProgressCount = confirmed;
+      session.lastConfirmedCount = countLayers(plotSummary).confirmed;
       return { stallTurns: 0, confirmed };
     }
     if (session.lastPickIntent && resolveEngineIntent(session.lastPickIntent) === "followup") {
-      session.lastConfirmedCount = confirmed;
+      session.lastStallProgressCount = confirmed;
+      session.lastConfirmedCount = countLayers(plotSummary).confirmed;
       return { stallTurns: session.stallTurns || 0, confirmed };
     }
     if (confirmed > prev) {
@@ -643,7 +679,8 @@
     } else {
       session.stallTurns = (session.stallTurns || 0) + 1;
     }
-    session.lastConfirmedCount = confirmed;
+    session.lastStallProgressCount = confirmed;
+    session.lastConfirmedCount = countLayers(plotSummary).confirmed;
     return { stallTurns: session.stallTurns, confirmed };
   }
 
@@ -1333,10 +1370,12 @@
       .toLowerCase();
   }
 
-  /** 逻辑等价 [证毕#k] / [已证] 去重（保留首条，后续同结论跳过） */
+  /** 逻辑等价 [证毕#k] / [已证] / [提示] / [已证部分] 去重 */
   function dedupeLogicalProofEntries(text) {
     const seenQed = new Set();
     const seenProven = new Set();
+    const seenHint = new Set();
+    const seenPartial = new Set();
     const out = [];
     for (const line of String(text || "").split("\n")) {
       const t = line.trim();
@@ -1356,9 +1395,177 @@
         }
         seenProven.add(key);
       }
+      const hintM = t.match(/\[提示\]\s*H\d+[：:]\s*(.+)$/i);
+      if (hintM) {
+        const key = normalizeDedupeConclusion(hintM[1]);
+        if (seenHint.has(key)) {
+          continue;
+        }
+        seenHint.add(key);
+      }
+      const partM = t.match(/\[已证部分\][^：:]*[：:]\s*(.+)$/i);
+      if (partM) {
+        const key = normalizeDedupeConclusion(partM[1]);
+        if (seenPartial.has(key)) {
+          continue;
+        }
+        seenPartial.add(key);
+      }
       out.push(line);
     }
     return out.join("\n").trim();
+  }
+
+  function nextArchiveLineIndex(text, tag, letter) {
+    const re = new RegExp(`\\[${tag}\\]\\s*${letter}(\\d+)`, "gi");
+    let max = 0;
+    for (const m of String(text || "").matchAll(re)) {
+      const n = parseInt(m[1], 10);
+      if (n > max) {
+        max = n;
+      }
+    }
+    return max + 1;
+  }
+
+  function appendLineToProofProcess(text, line) {
+    const body = String(line || "").trim();
+    if (!body) {
+      return text;
+    }
+    const prefixed = body.startsWith("-") ? body : `- ${body}`;
+    const marker = "【证明进程】";
+    const idx = String(text || "").indexOf(marker);
+    if (idx >= 0) {
+      const insertAt = idx + marker.length;
+      return `${String(text).slice(0, insertAt)}\n${prefixed}${String(text).slice(insertAt)}`.trim();
+    }
+    return `${String(text || "").trim()}\n\n${marker}\n${prefixed}`.trim();
+  }
+
+  function archiveHasSimilarProgressLine(text, kind, gist) {
+    const key = normalizeDedupeConclusion(gist);
+    if (!key) {
+      return false;
+    }
+    const tag = kind === "hint" ? "提示" : "已证部分";
+    for (const line of String(text || "").split("\n")) {
+      if (!line.includes(`[${tag}]`)) {
+        continue;
+      }
+      if (normalizeDedupeConclusion(line).includes(key) || key.includes(normalizeDedupeConclusion(line).slice(0, 12))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function extractMethodRuleFromAssistant(line) {
+    const t = String(line || "").trim();
+    const m1 = t.match(/正确应使用([^。；;！!？?]+)/);
+    if (m1) {
+      return m1[1].trim();
+    }
+    const m2 = t.match(/(?:依|用|采用)([^。；;，,]{2,12}(?:律|规则|三段论|推理|反证|选言))/);
+    if (m2) {
+      return m2[1].trim();
+    }
+    return "";
+  }
+
+  function extractPartialFromAssistant(line) {
+    const t = String(line || "").trim();
+    const m = t.match(/(?:否后律|假言)[：:]\s*([^。]+)/);
+    if (m) {
+      return m[1].trim().slice(0, 80);
+    }
+    if (/若.+则.+/.test(t) && t.length >= 8) {
+      return t.replace(/^[^：:]*[：:]\s*/, "").slice(0, 80);
+    }
+    return "";
+  }
+
+  /**
+   * ③摘要后：把证官纠错/半推/部分正确写入 [提示]、[已证部分]（不证毕 Lk）
+   */
+  function captureMidProgressFromTurn(session, plotSummary, seed, opts) {
+    let text = normalizeProofArchive(String(plotSummary || "").trim());
+    if (!text || opts?.optionTurns === 0) {
+      return text;
+    }
+    const messages = session?.messages || [];
+    const lastAsst = [...messages]
+      .reverse()
+      .find((m) => m.role === "assistant" && m.status === "done");
+    const lastUser = [...messages]
+      .reverse()
+      .find((m) => m.role === "user" && m.status === "done");
+    if (!lastAsst?.content) {
+      return text;
+    }
+    const asst = String(lastAsst.content).trim();
+    const pending = extractPendingLines(text);
+    const turn = opts?.optionTurns ?? 0;
+
+    const rule = extractMethodRuleFromAssistant(asst);
+    if (
+      rule &&
+      (opts?.wrongProofPick ||
+        isDecoyPickIntent(lastUser?.intent) ||
+        /错误[:：]/.test(asst))
+    ) {
+      const gist = `${rule}适用`;
+      if (!archiveHasSimilarProgressLine(text, "hint", gist)) {
+        const n = nextArchiveLineIndex(text, "提示", "H");
+        text = appendLineToProofProcess(
+          text,
+          `[提示] H${n}：${gist}（证官纠错·轮${turn || "?"})`
+        );
+      }
+    }
+
+    const partial = extractPartialFromAssistant(asst);
+    if (
+      partial &&
+      pending.length > 0 &&
+      !/\[证毕|论证结束|L1\s*成立|得证完毕/i.test(asst) &&
+      ((opts?.stallTurns ?? session?.stallTurns ?? 0) >= 2 ||
+        /^正确[。.!]?/.test(asst) ||
+        /半|补全|下一步/.test(asst))
+    ) {
+      const gist = partial;
+      if (!archiveHasSimilarProgressLine(text, "partial", gist)) {
+        const n = nextArchiveLineIndex(text, "已证部分", "P");
+        const lk = pending.length === 1 ? "L1" : "Lk";
+        text = appendLineToProofProcess(
+          text,
+          `[已证部分] P${n}（${lk}）：${gist}（证官半推·待补全·轮${turn || "?"})`
+        );
+      }
+    }
+
+    if (
+      rule &&
+      !opts?.wrongProofPick &&
+      isAdvancePickIntent(lastUser?.intent) &&
+      pending.length > 0 &&
+      !/\[证毕|论证结束/i.test(asst)
+    ) {
+      const gist = `${rule}适用`;
+      if (!archiveHasSimilarProgressLine(text, "hint", gist)) {
+        const hn = nextArchiveLineIndex(text, "提示", "H");
+        text = appendLineToProofProcess(
+          text,
+          `[提示] H${hn}：${gist}（证官认可方法·轮${turn || "?"})`
+        );
+      }
+    }
+
+    return dedupeLogicalProofEntries(text);
+  }
+
+  function isDecoyPickIntent(intent) {
+    return window.GameProofIntents?.isDecoyIntent?.(intent) || resolveEngineIntent(intent) === "decoy";
   }
 
   function applyStallForceQedToArchive(plotSummary, seed) {
@@ -1718,16 +1925,24 @@
       emptyPromiseBankrupt: bankrupt,
       emptyPromiseCount: emptyCount,
       wrongProofPick: Boolean(extra?.wrongProofPick),
+      recordMethodHint: Boolean(extra?.recordMethodHint),
     };
   }
 
   function formatLayersDebug(plotSummary, seed) {
-    const { premises, proven, pending, qed, goal } = countLayers(plotSummary);
+    const { premises, proven, hints, partial, pending, qed, goal } =
+      countLayers(plotSummary);
     const parts = [
       `前提×${premises}`,
       `已证×${proven}`,
       `待证×${pending}`,
     ];
+    if (hints > 0) {
+      parts.push(`提示×${hints}`);
+    }
+    if (partial > 0) {
+      parts.push(`部分×${partial}`);
+    }
     if (qed > 0) {
       parts.push(`证毕×${qed}`);
     }
@@ -1921,6 +2136,8 @@
     extractGoal,
     extractPendingLines,
     countLayers,
+    countStallProgress,
+    captureMidProgressFromTurn,
     compactPlotSummaryForApi,
     formatOptionsBlock,
     formatReplyHint,

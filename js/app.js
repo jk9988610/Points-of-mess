@@ -1125,6 +1125,8 @@
       emptyPromiseBankrupt,
       emptyPromiseCount,
       wrongProofPick,
+      recordMethodHint:
+        wrongProofPick || (session.stallTurns ?? 0) >= 2,
     };
 
     const willSummary = window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);
@@ -1179,7 +1181,11 @@
           const summaryOk = await window.GameSummary.maybeRefreshPlotSummary(
             session,
             signal,
-            seedForTurn
+            seedForTurn,
+            {
+              wrongProofPick,
+              stallTurns: session.stallTurns ?? 0,
+            }
           );
           if (summaryOk) {
             persist(state);

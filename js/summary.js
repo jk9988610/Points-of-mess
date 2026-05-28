@@ -30,6 +30,8 @@ ${dep}`;
 【证明进程】
 ${lemmaBlock}
 - [已证] S1：…（依据：证官供述/证辩者出示引理/对话，可注轮次）
+- [提示] H1：…适用（证官指出正确规则/方法；**不**触发 [证毕]）
+- [已证部分] P1（L1）：…（中间结论已得，Lk 仍开放；**不**写 [证毕#k]）
 - [证毕#1] L1：…（L1 得证后写此行，并删除对应 [待证#1] 及其 [依赖] 行）
 
 【证明规则】
@@ -44,13 +46,16 @@ ${lemmaBlock}
 9. [已证] 须可核对专名；禁止「可能/存疑/空换」入 [已证]。
 10. 禁止用「无/待填」占 [待证]；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown；**禁止**【关系与态度】段。
 11. 证官明确指出跳步/错误的证辩者句**不得**入 [已证]；仅写入证官认可后的推导步。
-12. 【去重】新增 [已证]/[证毕#k] 前检查是否已有逻辑等价条目（同前提、同结论、同推理规则）；若有则**不新增**，仅在原条目的【依据】后追加轮次编号。
-13. 开局首轮（仅有前提与 [待证#k]、尚无证官认可推导）时**禁止**预写 [已证] 或 [证毕]。`;
+12. 【去重】新增 [已证]/[证毕#k]/[提示]/[已证部分] 前检查逻辑等价；已存在则不追加，仅可在【依据】后补轮次。
+13. 开局首轮（仅有前提与 [待证#k]）时**禁止**预写 [已证]、[证毕]、[提示]、[已证部分]。
+14. 证官台词含「正确应使用…」或指出推理规则 → 写 [提示]（如「否后律适用」），**不得**因此 [证毕#k]。
+15. 证官给出中间推导但未宣告 Lk 证毕 → 写 [已证部分]，保留 [待证#k]。
+16. [提示]/[已证部分] 仅记录进度可见性；玩家仍须选 advance 才能 [证毕]。`;
   }
 
   function buildSummaryUserPrefix(seed) {
     const maxOpen = window.GameOnion?.getMaxOpenClaims?.(seed) ?? 1;
-    return `自检：新事实进 [已证]；Lk 得证则 [证毕#k] 并删 [待证#k]（须与证官已接受一致）；一轮至多 1 个 [证毕#k]；禁止 [证毕] G；待证至多 ${maxOpen} 条。只输出【证明席】。
+    return `自检：证官纠错/给方法 → [提示]；中间步未证毕 → [已证部分]；实质推导 → [已证]；Lk 充分确立才 [证毕#k] 并删 [待证#k]；一轮至多 1 个 [证毕#k]；禁止 [证毕] G；待证至多 ${maxOpen} 条。只输出【证明席】。
 
 `;
   }
@@ -307,6 +312,27 @@ ${lemmaBlock}
           "③摘要 · 引理链",
           "已自动挂下一待证，论题 G 未闭合",
           ["lemma-chain"]
+        );
+      }
+    }
+
+    if (window.GameOnion?.captureMidProgressFromTurn) {
+      const withMid = window.GameOnion.captureMidProgressFromTurn(
+        session,
+        text,
+        seed,
+        {
+          optionTurns,
+          wrongProofPick: Boolean(opts?.wrongProofPick),
+          stallTurns: session?.stallTurns ?? 0,
+        }
+      );
+      if (withMid !== text) {
+        text = withMid;
+        window.PomDebug?.logLocal(
+          "③摘要 · 中间进度",
+          "已写入 [提示]/[已证部分]（程序补全）",
+          ["summary", "mid-progress"]
         );
       }
     }
