@@ -437,7 +437,7 @@
 
     if (context?.wrongProofPick) {
       lines.push(
-        "证辩者选了**错误推证**（decoy）；指出逻辑谬误（肯定后件、逆命题、跳步、循环论证等），不给新进展",
+        "证辩者选了**错误推证**（decoy）；指出跳步/误用前提/方向错误，不给新进展",
         "用陈述句，禁止问句"
       );
     } else if (context?.playerConcreteReveal && pickIntent === "keypoint") {
@@ -774,7 +774,15 @@
     /唯一主使|就是主使|乃是主使|主使.{0,10}没有别人|没有更高层|否认有更高|没有别人/;
 
   function archiveBlob(plotSummary) {
-    return extractConfirmedLines(plotSummary).join("\n");
+    const lines = extractConfirmedLines(plotSummary);
+    const body = extractArchiveBody(plotSummary) || "";
+    for (const line of body.split("\n")) {
+      const t = line.trim();
+      if (/\[证毕#?[\da-z]*\]/i.test(t)) {
+        lines.push(t.replace(/^[-*•]\s*/, ""));
+      }
+    }
+    return lines.join("\n");
   }
 
   /** 排除开局种子「可作筹码」行，只算对局内新供述 */
@@ -1584,18 +1592,82 @@
     return extractQedOrders(plotSummary).size > 0;
   }
 
-  function isReadyForEnding(plotSummary, seed, session) {
-    if (seed?.aiDriven && isLemmaStackComplete(plotSummary, seed)) {
-      const kp = session?.keypointTurnCount || 0;
-      const { confirmed } = countLayers(plotSummary);
-      if (kp >= 1 && confirmed >= 2) {
-        return true;
-      }
+  function getMinLemmaStepsForEnding(seed) {
+    const fromSeed = Number(seed?.minLemmaStepsForEnding);
+    if (fromSeed > 0) {
+      return fromSeed;
     }
-    return (
-      isPlotReadyForEnding(plotSummary, seed) &&
-      hasSessionEndingProgress(session, seed, plotSummary)
+    const fromPool = window.GameProofPool?.getMinLemmaStepsForEnding?.(seed?.problemId);
+    if (fromPool > 0) {
+      return fromPool;
+    }
+    return 2;
+  }
+
+  function appendOpenLemmaToArchive(plotSummary, order, body, dependsOn = "G") {
+    const text = normalizeProofArchive(String(plotSummary || "").trim());
+    if (!text || !body) {
+      return text;
+    }
+    const n = Number(order) > 0 ? Number(order) : 1;
+    const lemmaLine = `- [待证#${n}] L${n}：${String(body).trim()}`;
+    const depLine = formatDependencyLine(dependsOn, `L${n}`);
+    const marker = "【证明进程】";
+    const idx = text.indexOf(marker);
+    if (idx >= 0) {
+      const insertAt = idx + marker.length;
+      const chunk = `\n${lemmaLine}\n${depLine}`;
+      return `${text.slice(0, insertAt)}${chunk}${text.slice(insertAt)}`.trim();
+    }
+    return `${text}\n\n${marker}\n${lemmaLine}\n${depLine}`.trim();
+  }
+
+  function ensureOpenLemmaTowardGoal(plotSummary, seed) {
+    if (!seed?.aiDriven || !extractGoal(plotSummary)) {
+      return plotSummary;
+    }
+    if (extractPendingLines(plotSummary).length > 0) {
+      return plotSummary;
+    }
+    const qedCount = extractQedOrders(plotSummary).size;
+    const minSteps = getMinLemmaStepsForEnding(seed);
+    if (qedCount >= minSteps) {
+      return plotSummary;
+    }
+    const nextBody = window.GameProofPool?.getLemmaAtChainIndex?.(
+      seed?.problemId,
+      qedCount
     );
+    if (!nextBody) {
+      return plotSummary;
+    }
+    const nextOrder = qedCount + 1;
+    return appendOpenLemmaToArchive(plotSummary, nextOrder, nextBody, "G");
+  }
+
+  function isAiDrivenProofComplete(plotSummary, seed) {
+    if (!isLemmaStackComplete(plotSummary, seed)) {
+      return false;
+    }
+    const qed = extractQedOrders(plotSummary).size;
+    if (qed < getMinLemmaStepsForEnding(seed)) {
+      return false;
+    }
+    const keywords = seed?.endingCoreKeywords;
+    if (Array.isArray(keywords) && keywords.length > 0) {
+      return hasCoreGoalAchieved(plotSummary, seed);
+    }
+    return true;
+  }
+
+  function isReadyForEnding(plotSummary, seed, session) {
+    if (!hasSessionEndingProgress(session, seed, plotSummary)) {
+      return false;
+    }
+    if (seed?.aiDriven) {
+      return isAiDrivenProofComplete(plotSummary, seed);
+    }
+    return isPlotReadyForEnding(plotSummary, seed);
   }
 
   window.GameOnion = {
@@ -1625,6 +1697,10 @@
     isPlotReadyForEnding,
     isArgumentClosed,
     isLemmaStackComplete,
+    isAiDrivenProofComplete,
+    getMinLemmaStepsForEnding,
+    ensureOpenLemmaTowardGoal,
+    appendOpenLemmaToArchive,
     usesDynamicPlayerEvidence,
     getSessionEvidenceList,
     getSeedKnowledgeList,

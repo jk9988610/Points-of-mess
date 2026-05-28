@@ -269,6 +269,17 @@ ${lemmaBlock}
     ) {
       window.PomDebug?.logLocal("③摘要 · reconcile", "引理 Lk 已证毕", ["summary"]);
     }
+    if (window.GameOnion?.ensureOpenLemmaTowardGoal) {
+      const continued = window.GameOnion.ensureOpenLemmaTowardGoal(text, seed);
+      if (continued !== text) {
+        text = continued;
+        window.PomDebug?.logLocal(
+          "③摘要 · 引理链",
+          "已自动挂下一待证，论题 G 未闭合",
+          ["lemma-chain"]
+        );
+      }
+    }
 
     session.plotSummary = text;
     session.lastSummaryAtOptionTurn = optionTurns;
