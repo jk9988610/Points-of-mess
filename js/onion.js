@@ -32,16 +32,18 @@
   }
 
   function extractGoal(text) {
-    const body = String(text || "");
-    const m = body.match(/【本局目标】\s*([\s\S]*?)(?=【|$)/);
-    if (!m) {
+    const block = String(text || "").match(/【本局目标】[\s\S]*?(?=【|$)/)?.[0];
+    if (!block) {
       return "";
     }
-    return m[1]
-      .split("\n")
-      .map((l) => l.replace(/^[-*•]\s*/, "").trim())
-      .filter(Boolean)
-      .join("；");
+    const items = [];
+    for (const line of block.split("\n")) {
+      const m = line.trim().match(/^[-*•]\s+(.+)$/);
+      if (m) {
+        items.push(m[1].trim());
+      }
+    }
+    return items.join("；");
   }
 
   function extractPendingLines(text) {
@@ -687,10 +689,14 @@
     return keywords.some((k) => confirmed.includes(String(k).trim()));
   }
 
-  /** 目标子轨齐备或（旧）待核实清空 → 可进入结局 */
+  /** 3 推 1：待核实#1 须清空；双轨/核心词齐备后方可结局 */
   function isReadyForEnding(plotSummary, seed) {
     const goal = extractGoal(plotSummary);
     if (!goal) {
+      return false;
+    }
+    const pending = extractPendingLines(plotSummary);
+    if (pending.length > 0) {
       return false;
     }
     const minConfirmed = Number(seed?.endingMinConfirmed) > 0 ? seed.endingMinConfirmed : 2;
@@ -702,14 +708,10 @@
       return false;
     }
     const tracksOk = hasGoalTracksAchieved(plotSummary, seed);
-    if (tracksOk === true) {
-      return true;
-    }
     if (tracksOk === false) {
       return false;
     }
-    const pending = extractPendingLines(plotSummary);
-    return pending.length === 0;
+    return true;
   }
 
   window.GameOnion = {

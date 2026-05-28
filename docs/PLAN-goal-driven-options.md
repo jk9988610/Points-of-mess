@@ -68,7 +68,7 @@ goalTracks: {
 |------|------|
 | `GameOnion.pickProgramRevealLine` | 取下一条未用 `offerLine` |
 | `GameOnion.markKnowledgeSpent` | 玩家台词含 `match` 时标记消耗 |
-| `GameOnion.isReadyForEnding` | 若存在 `goalTracks`：双轨 keyword 均命中 `[已确认]` + `endingMinConfirmed` + `endingCoreKeywords`；**允许仍有 [待核实]** |
+| `GameOnion.isReadyForEnding` | **须无 [待核实]**（3 推 1）；且 `goalTracks` 双轨齐备 + `endingCoreKeywords` + `endingMinConfirmed` |
 | `bumpNeglectBeforeReply` | 若 `goalTracks`：仅推账本线 / 亮牌**不**累加回避 #1 |
 | `formatOptionsBlock` | 写明亮牌/施压分工 + 可用 `playerKnowledge` 列表 |
 | `generateOptions` 后 | `applyGoalDrivenOptions`：僵局或空头 keypoint → 替换为程序亮牌句 |
@@ -126,4 +126,10 @@ node scripts/verify-trade-onion.js
 - 压摘要后程序 **preserveGoalBlock** 保留目标段
 - API 约束块示例去真实人名（玩法仍用预设专名）
 
-*最后更新：2026-05 · v0.5.34*
+## 11. v0.5.35（修复开局误进结局）
+
+- `isReadyForEnding`：**有待核实#1 一律不结局**（goalTracks 不再绕过）
+- `goalTracks` 去掉陈四/刘老三（玩家筹码≠锋利供述）
+- `extractGoal` 只读 `-` 条，不再把「（唯一，仅此一条）」拼进 API
+
+*最后更新：2026-05 · v0.5.35*

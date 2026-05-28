@@ -70,12 +70,21 @@ assert(
   "双轨 keyword 齐应达成"
 );
 assert(
-  G.isReadyForEnding(dualTrack, {
+  !G.isReadyForEnding(dualTrack, {
     ...seed,
     endingMinConfirmed: 2,
     endingCoreKeywords: ["指使"],
   }),
-  "有待核实也可结局（goalTracks）"
+  "3推1：有待核实#1 不得结局"
+);
+const dualTrackDone = dualTrack.replace(/- \[待核实#1\][^\n]*\n?/, "");
+assert(
+  G.isReadyForEnding(dualTrackDone, {
+    ...seed,
+    endingMinConfirmed: 2,
+    endingCoreKeywords: ["指使"],
+  }),
+  "待核实清空且双轨齐备方可结局"
 );
 
 if (failed) {
