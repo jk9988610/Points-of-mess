@@ -10,6 +10,19 @@
     });
   }
 
+  function displayText(message) {
+    if (!message) {
+      return "";
+    }
+    if (message.role === "user") {
+      const line = String(
+        message.displayLine || message.pickedLine || message.content || ""
+      ).trim();
+      return line.replace(/^\[intent:\w+\]\s*/i, "");
+    }
+    return String(message.content || "").trim();
+  }
+
   function render(container, messages, labels) {
     if (!container) {
       return;
@@ -22,11 +35,15 @@
       container.scrollHeight - container.scrollTop - container.clientHeight < 48;
 
     const list = Array.isArray(messages)
-      ? messages.filter(
-          (m) =>
-            (m.role === "user" || m.role === "assistant") &&
-            (m.content || m.status === "streaming")
-        )
+      ? messages.filter((m) => {
+          if (m.role !== "user" && m.role !== "assistant") {
+            return false;
+          }
+          if (m.status === "streaming") {
+            return true;
+          }
+          return Boolean(displayText(m));
+        })
       : [];
 
     container.innerHTML = "";
@@ -65,8 +82,11 @@
       bubble.className = "dialogue-log__bubble";
       const text = document.createElement("p");
       text.className = "dialogue-log__text";
-      text.textContent =
-        message.content || (message.status === "streaming" ? "…" : "");
+      const body =
+        message.status === "streaming" && !displayText(message)
+          ? "…"
+          : displayText(message);
+      text.textContent = body;
       bubble.appendChild(text);
 
       if (message.status === "streaming") {
@@ -87,6 +107,7 @@
 
   window.GameDialogueLog = {
     formatTime,
+    displayText,
     render,
   };
 })();

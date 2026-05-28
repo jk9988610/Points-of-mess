@@ -187,8 +187,9 @@
       return;
     }
     const model = parseProofBoardModel(plotSummary);
-    bodyEl.innerHTML = renderProofBoardHtml(model);
-    panel.classList.toggle("hidden", !model);
+    bodyEl.innerHTML = model
+      ? renderProofBoardHtml(model)
+      : '<p class="proof-board__empty">论证席载入中…</p>';
     panel.classList.toggle("proof-blackboard--active", Boolean(model));
   }
 

@@ -83,23 +83,31 @@
   const dialogueLogEl = document.getElementById("dialogueLog");
   const dialogueLogScrollEl = document.getElementById("dialogueLogScroll");
 
+  function syncLayoutMode() {
+    document
+      .querySelector(".app-shell")
+      ?.classList.toggle("app-shell--dialogue", Boolean(state.talkingId));
+  }
+
   function syncProofBlackboard() {
+    syncLayoutMode();
     if (!proofBlackboardEl) {
       return;
     }
-    const session = state.talkingId ? getSession(state, state.talkingId) : null;
-    const plot = session?.plotSummary || "";
-    const show = Boolean(state.talkingId && String(plot).trim());
-    if (!show) {
+    if (!state.talkingId) {
       proofBlackboardEl.classList.add("hidden");
       proofBlackboardEl.classList.remove("proof-blackboard--active");
       const body = document.getElementById("proofBlackboardBody");
       if (body) {
         body.innerHTML = "";
       }
-    } else {
-      window.GameProofBoard?.updateProofBoard?.(proofBlackboardEl, plot);
+      syncDialogueLog();
+      return;
     }
+    proofBlackboardEl.classList.remove("hidden");
+    const session = getSession(state, state.talkingId);
+    const plot = String(session?.plotSummary || "").trim();
+    window.GameProofBoard?.updateProofBoard?.(proofBlackboardEl, plot);
     syncDialogueLog();
   }
 
@@ -120,20 +128,21 @@
     const seed = getSessionSeed(session, archetype);
     const playerLabel = seed?.playerRoleLabel || "证辩者";
     const npcLabel = prover.name || seed?.roleLabel || "证官";
-    const messages = [...(session.messages || [])];
+    const messages = (session.messages || []).map((m) => ({ ...m }));
     if (state.isStreaming && state.bubbleText) {
+      const live = String(state.bubbleText).trim();
       const last = messages[messages.length - 1];
       if (last?.role === "assistant" && last.status !== "done") {
         messages[messages.length - 1] = {
           ...last,
-          content: state.bubbleText,
+          content: live,
           status: "streaming",
         };
-      } else if (!last || last.role !== "assistant") {
+      } else if (live) {
         messages.push({
           id: "streaming-live",
           role: "assistant",
-          content: state.bubbleText,
+          content: live,
           createdAt: Date.now(),
           status: "streaming",
         });
@@ -1104,6 +1113,7 @@
       id: createId(),
       role: "user",
       content: apiLine,
+      displayLine: rawLine,
       intent: pick.intent,
       createdAt: Date.now(),
       status: "done",

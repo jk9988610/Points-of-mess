@@ -31,12 +31,22 @@ body {
     minmax(48px, 14vh)
     minmax(0, 1fr)
     auto
-    minmax(88px, 22vh)
-    auto
     auto
     auto;
   height: 100%;
   max-height: 100dvh;
+}
+
+.app-shell.app-shell--dialogue {
+  grid-template-rows:
+    auto
+    minmax(48px, 14vh)
+    minmax(0, 1fr)
+    minmax(48px, 14vh)
+    minmax(48px, 14vh)
+    auto
+    auto
+    auto;
 }
 
 .debug-panel {
@@ -392,12 +402,12 @@ body.login-locked .memory-input-bar {
   min-height: 0;
 }
 
-/* 论证黑板：与调试/对话栏同宽对齐 */
+/* 论证黑板：固定高度与调试区一致，内容区内滚动 */
 .proof-blackboard {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: min(28vh, 220px);
+  height: 100%;
   margin: 0;
   padding: 0 var(--layout-gutter);
   border-top: 1px solid rgba(120, 140, 90, 0.35);
@@ -554,11 +564,12 @@ body.login-locked .memory-input-bar {
   }
 }
 
-/* 对话记录：黑板下方、选项上方 */
+/* 对话记录：黑板下方、选项上方，高度与调试区一致 */
 .dialogue-log {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: 100%;
   padding: 0 var(--layout-gutter) 4px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(15, 23, 42, 0.88);
