@@ -1,316 +1,249 @@
 /**
- * 数学证明题随机池：数学家、真实/组合证明题、开局 opening/摘要/选项。
- * 每局从池抽取论题 G，按序授予证辩者引理（lemmaPool）。
+ * 逻辑推理论证题池：仅命题结构论证（假言、三段论、反证、鸽巢等）。
+ * 禁止代数展开、求和公式、同余链、几何算角等公式推导型论题。
  */
 (function () {
   const MATHEMATICIANS = [
-    { id: "euclid", name: "欧几里得", title: "几何原本" },
-    { id: "gauss", name: "高斯", title: "数论" },
-    { id: "euler", name: "欧拉", title: "分析" },
-    { id: "fermat", name: "费马", title: "数论" },
-    { id: "cauchy", name: "柯西", title: "分析严格化" },
-    { id: "cantor", name: "康托尔", title: "集合论" },
+    { id: "aristotle", name: "亚里士多德", title: "形式逻辑" },
+    { id: "euclid", name: "欧几里得", title: "演绎论证" },
+    { id: "cauchy", name: "柯西", title: "命题分析" },
+    { id: "cantor", name: "康托尔", title: "集合与计数" },
+    { id: "gauss", name: "高斯", title: "理证结构" },
   ];
 
-  /** 可组合前提片段（用于 composeRandomProblem） */
+  /** 可组合前提（纯命题，无算式） */
   const PREMISE_BLOCKS = [
-    { id: "n-int", text: "设 n 为正整数" },
-    { id: "n-even-sq", text: "若 n² 为偶数，则 n 为偶数" },
-    { id: "n-odd-sq", text: "若 n² 为奇数，则 n 为奇数" },
-    { id: "coprime", text: "既约分数 p/q 中 p、q 互素" },
-    { id: "div-trans", text: "若 a|b 且 b|c，则 a|c" },
-    { id: "prime-def", text: "大于 1 的整数若仅有 1 与自身为因子，则称为素数" },
-    { id: "tri-sum", text: "三角形内角之和为 180°" },
-    { id: "p-odd-even", text: "整数或为偶数或为奇数，二者必居其一" },
+    { id: "if-then", text: "若 P 则 Q（P 真则 Q 必真）" },
+    { id: "not-both", text: "P 与 ¬P 不能同真" },
+    { id: "trans", text: "若 P 则 Q，且若 Q 则 R，则若 P 则 R" },
+    { id: "either", text: "P 与 ¬P 必居其一" },
+    { id: "subset", text: "若 x∈A 则 x∈B（A 包含于 B）" },
+    { id: "or-excl", text: "P 或 Q 至少一真，且 P、Q 不能同假" },
+    { id: "finite-pigeon", text: "物体多于容器时，必有两物同容器" },
   ];
 
-  /** 可组合结论模板 */
+  /** 可组合论题模板（仅逻辑结构） */
   const CONCLUSION_TEMPLATES = [
     {
-      id: "comp-even-impl",
-      theorem: "偶数的平方仍为偶数",
-      goal: "证明：若 n 为偶数，则 n² 为偶数",
-      pending: ["由 n=2k 推出 n²=4k² 为偶数"],
-      lemmaPool: [
-        {
-          id: "c1",
-          match: "偶数",
-          text: "设 n=2k（k 为整数）",
-          offerLine: "设 n=2k，换你说 n² 的表达式",
-        },
-        {
-          id: "c2",
-          match: "4k²",
-          text: "n²=(2k)²=4k²",
-          offerLine: "n²=4k²，换你说 4k² 的奇偶性",
-        },
+      id: "comp-modus-tollens",
+      logicHint: "假言推理、否后否前",
+      theorem: "否后必否前",
+      goal: "证明：若 P 则 Q，且 Q 不成立，则 P 不成立",
+      lemmaChain: [
+        "已知 Q 为假，推断 P 不能为真",
+        "故 P 为假，否后否前成立",
       ],
-      sharpReveals: [
-        { afterKnowledge: "c1", line: "则 n²=(2k)²。" },
-        { afterKnowledge: "c2", line: "4k² 可被 2 整除，故 n² 为偶数。" },
-      ],
-      endingCoreKeywords: ["偶数", "4k²", "整除"],
-      goalTracks: { core: { keywords: ["偶数", "4k²", "2k"] } },
-      endingEpilogueFallback: "G 证毕：偶数的平方仍为偶数。",
+      endingCoreKeywords: ["否后", "否前", "P 假"],
+      endingEpilogueFallback: "G 证毕：否后否前成立。",
     },
     {
-      id: "comp-odd-square",
-      theorem: "奇数的平方仍为奇数",
-      goal: "证明：若 n 为奇数，则 n² 为奇数",
-      pending: ["由 n=2k+1 推出 n² 为奇数"],
-      lemmaPool: [
-        {
-          id: "o1",
-          match: "奇数",
-          text: "设 n=2k+1（k 为整数）",
-          offerLine: "设 n=2k+1，换你说 n² 展开式",
-        },
-        {
-          id: "o2",
-          match: "4k",
-          text: "n²=4k²+4k+1=2(2k²+2k)+1",
-          offerLine: "n²=2(2k²+2k)+1，换你说 n² 的奇偶",
-        },
+      id: "comp-transitivity",
+      logicHint: "假言传递、三段论",
+      theorem: "假言链传递",
+      goal: "证明：若 P 则 Q，且若 Q 则 R，则若 P 则 R",
+      lemmaChain: [
+        "由 P 真经若 P 则 Q 得 Q 真",
+        "由 Q 真经若 Q 则 R 得 R 真，故若 P 则 R",
       ],
-      sharpReveals: [
-        { afterKnowledge: "o1", line: "展开得 n²=4k²+4k+1。" },
-        { afterKnowledge: "o2", line: "形如 2m+1，故 n² 为奇数。" },
+      endingCoreKeywords: ["传递", "若 P 则 R"],
+      endingEpilogueFallback: "G 证毕：假言传递成立。",
+    },
+    {
+      id: "comp-disjunctive",
+      logicHint: "选言推理、排除法",
+      theorem: "选言三段论",
+      goal: "证明：P 或 Q 为真，且 P 为假，则 Q 为真",
+      lemmaChain: [
+        "P 假时，P 或 Q 要求 Q 为真",
+        "故 Q 必真，选言推理成立",
       ],
-      endingCoreKeywords: ["奇数", "2k+1", "2m+1"],
-      goalTracks: { core: { keywords: ["奇数", "2k+1"] } },
-      endingEpilogueFallback: "G 证毕：奇数的平方仍为奇数。",
+      endingCoreKeywords: ["选言", "Q 真"],
+      endingEpilogueFallback: "G 证毕：选言推理成立。",
     },
   ];
 
-  /** 完整 curated 证明题 */
+  /** 精选逻辑论证题（每题含 lemmaChain，供程序续挂待证） */
   const CURATED_PROBLEMS = [
     {
-      id: "sqrt2-irrational",
-      mathematicianIds: ["euclid"],
-      theorem: "√2 是无理数",
-      goal: "证明 √2 不能表为既约分数 p/q",
-      premises: [
-        "若 n² 为偶数，则 n 为偶数",
-        "既约分数 p/q 中 p、q 互素（无公因子）",
-      ],
-      pending: ["推出 p、q 均为偶数，与互素矛盾"],
-      lemmaPool: [
-        {
-          id: "s1",
-          match: "既约",
-          text: "设 √2=p/q，且 p/q 既约",
-          offerLine: "设 √2=p/q 既约，换你说 p² 的奇偶",
-        },
-        {
-          id: "s2",
-          match: "p²",
-          text: "由 2q²=p² 得 p² 为偶数",
-          offerLine: "2q²=p²，换你说 p 的奇偶",
-        },
-        {
-          id: "s3",
-          match: "q偶",
-          text: "p 偶则 q² 偶，故 q 偶",
-          offerLine: "p 偶故 q 偶，换你说与互素的矛盾",
-        },
-      ],
-      sharpReveals: [
-        { afterKnowledge: "s1", line: "平方得 2q²=p²。" },
-        { afterKnowledge: "s2", line: "p² 偶故 p 偶，可写 p=2k。" },
-        { afterKnowledge: "s3", line: "代入得 q²=2k²，q 亦偶，与互素矛盾。" },
-      ],
-      endingCoreKeywords: ["无理", "矛盾", "互素", "偶数"],
-      goalTracks: { core: { keywords: ["矛盾", "互素", "偶数", "无理"] } },
-      endingEpilogueFallback: "G 证毕：√2 无理。",
+      id: "rain-wet-ground",
+      logicHint: "假言推理、否后否前",
+      mathematicianIds: ["aristotle", "euclid"],
+      theorem: "地不湿则可断定未下雨",
+      goal: "由「若下雨则地湿」与「地不湿」推出未下雨",
+      premises: ["若下雨，则地面会湿", "地面不湿"],
       lemmaChain: [
-        "若 √2 = p/q（既约），则 p² 为偶数",
-        "若 p² 为偶数，则 p 为偶数",
-        "若 p 偶且 2q²=p²，则 q 为偶数",
-        "p、q 均为偶数，与互素矛盾，故 √2 非有理数",
+        "后件「地湿」为假",
+        "若下雨则地湿下，前件「下雨」不能为真",
+        "故未下雨，论题 G 成立",
       ],
-      inquireLines: [
-        "你采用反证还是直接构造？",
-        "互素条件打算在哪一步用？",
-        "奇偶性是你本步的关键吗？",
-      ],
+      endingCoreKeywords: ["否后", "未下雨", "地不湿"],
+      endingEpilogueFallback: "G 证毕：未下雨。",
+      inquireLines: ["勿把因果颠倒；你用的是否后否前吗？"],
     },
     {
-      id: "infinitude-primes",
-      mathematicianIds: ["euclid"],
-      theorem: "素数有无穷多个",
-      goal: "证明：任意有限素数表均遗漏某素数",
-      premises: [
-        "大于 1 的整数若仅有 1 与自身为因子，则称为素数",
-        "任意整数 n>1 必有素因子",
-      ],
-      pending: ["构造 N+1 并说明其素因子不在原表中"],
-      lemmaPool: [
-        {
-          id: "p1",
-          match: "有限",
-          text: "设 p₁,…,p_k 为全部素数（反设）",
-          offerLine: "设素数仅有限个，换你说 N 的构造",
-        },
-        {
-          id: "p2",
-          match: "N+1",
-          text: "令 N=p₁…p_k+1",
-          offerLine: "令 N=各素数乘积+1，换你说 N 的素因子",
-        },
-      ],
-      sharpReveals: [
-        { afterKnowledge: "p1", line: "有限表必可编号。" },
-        { afterKnowledge: "p2", line: "N 与表中各素数余 1，故其素因子不在表中。" },
-      ],
-      endingCoreKeywords: ["无穷", "素数", "素因子", "矛盾"],
-      goalTracks: { core: { keywords: ["素数", "素因子", "无穷"] } },
-      endingEpilogueFallback: "G 证毕：素数无穷。",
+      id: "syllogism-barbara",
+      logicHint: "三段论、全称命题",
+      mathematicianIds: ["aristotle"],
+      theorem: "经典三段论有效",
+      goal: "证明：所有人皆会死，苏格拉底是人，故苏格拉底会死",
+      premises: ["所有人皆会死", "苏格拉底是人"],
       lemmaChain: [
-        "设素数仅有限个 p₁,…,p_k，可构造 N",
-        "N 的素因子不在原有限表中，故素数无穷",
+        "苏格拉底属于「人」",
+        "人皆会死适用于苏格拉底",
+        "故苏格拉底会死",
       ],
-      inquireLines: [
-        "反设有限后，你的构造是什么？",
-        "N+1 与表中素数有何同余关系？",
-      ],
-    },
-    {
-      id: "sum-formula",
-      mathematicianIds: ["gauss"],
-      theorem: "1+2+…+n = n(n+1)/2",
-      goal: "证明前 n 个正整数之和公式",
-      premises: [
-        "设 S=1+2+…+n",
-        "正整数 n 给定",
-      ],
-      pending: ["配对求和得到 S=n(n+1)/2"],
-      lemmaPool: [
-        {
-          id: "g1",
-          match: "配对",
-          text: "将 S 写为 (1+n)+(2+(n-1))+…",
-          offerLine: "用首尾配对写 S，换你说每对之和",
-        },
-        {
-          id: "g2",
-          match: "n+1",
-          text: "共有 n/2 对，每对和为 n+1",
-          offerLine: "共 n/2 对、每对 n+1，换你说 S 的表达式",
-        },
-      ],
-      sharpReveals: [
-        { afterKnowledge: "g1", line: "首尾配对，每对和为 n+1。" },
-        { afterKnowledge: "g2", line: "故 S=n(n+1)/2。" },
-      ],
-      endingCoreKeywords: ["n(n+1)", "配对", "求和"],
-      goalTracks: { core: { keywords: ["n(n+1)", "配对", "求和"] } },
-      endingEpilogueFallback: "G 证毕：求和公式成立。",
-      inquireLines: [
-        "你打算用配对还是归纳？",
-        "n 奇偶是否影响配对个数？",
-      ],
+      endingCoreKeywords: ["三段论", "苏格拉底", "会死"],
+      endingEpilogueFallback: "G 证毕：三段论结论成立。",
+      inquireLines: ["中间项「人」在哪一步接入？"],
     },
     {
       id: "no-largest-int",
+      logicHint: "反证、秩序、矛盾",
       mathematicianIds: ["euclid", "cauchy"],
       theorem: "不存在最大整数",
-      goal: "证明：对任意整数 n，存在 n+1>n",
-      premises: ["整数的序关系：若 m=n+1 则 m>n"],
-      pending: ["说明不存在上界最大的整数"],
-      lemmaPool: [
-        {
-          id: "l1",
-          match: "最大",
-          text: "反设 N 为最大整数",
-          offerLine: "设 N 最大，换你说 N+1 与 N 的大小",
-        },
-        {
-          id: "l2",
-          match: "N+1",
-          text: "N+1 为整数且 N+1>N",
-          offerLine: "N+1>N，换你说与最大的矛盾",
-        },
-      ],
-      sharpReveals: [
-        { afterKnowledge: "l1", line: "最大元假设下仍有后继。" },
-        { afterKnowledge: "l2", line: "N+1>N 与 N 最大矛盾。" },
+      goal: "证明：不存在上界最大的整数",
+      premises: ["对任意整数 n，总存在 n+1 且 n+1>n"],
+      lemmaChain: [
+        "反设存在最大整数 N",
+        "N+1 仍为正整数且 N+1>N，与 N 最大矛盾",
+        "故不存在最大整数",
       ],
       endingCoreKeywords: ["矛盾", "最大", "N+1"],
-      goalTracks: { core: { keywords: ["矛盾", "最大", "N+1"] } },
       endingEpilogueFallback: "G 证毕：整数无上界。",
+      inquireLines: ["反设之后，你构造了哪个后继？"],
+    },
+    {
+      id: "pigeonhole-simple",
+      logicHint: "鸽巢原理、反证、有限分类",
+      mathematicianIds: ["cantor", "euclid"],
+      theorem: "十物九巢必同巢",
+      goal: "证明：10 只鸽子放入 9 个巢，必有两只同巢",
+      premises: [
+        "每只鸽子恰在一个巢中",
+        "巢的个数少于鸽子只数",
+      ],
       lemmaChain: [
-        "反设 N 为最大整数",
-        "N+1 为整数且 N+1>N，与最大矛盾",
+        "反设每巢至多一鸽，则最多容纳 9 只",
+        "无法容纳第 10 只，与已知矛盾",
+        "故必有两鸽同巢",
       ],
-      inquireLines: ["反设最大元后，你的关键一步是什么？"],
+      endingCoreKeywords: ["鸽巢", "矛盾", "同巢"],
+      endingEpilogueFallback: "G 证毕：必有两鸽同巢。",
+      inquireLines: ["反设后你数的是「至多几只」？"],
     },
     {
-      id: "fermat-little",
-      mathematicianIds: ["fermat", "euler"],
-      theorem: "若 p 为素数且 p∤a，则 a^(p-1)≡1 (mod p)",
-      goal: "证明费马小定理（陈述层面：同余结论）",
-      premises: [
-        "p 为素数，a 为整数且 p 不整除 a",
-        "模 p 下非零元关于乘法封闭",
+      id: "not-both-p-and-notp",
+      logicHint: "矛盾律、排中",
+      mathematicianIds: ["aristotle", "cauchy"],
+      theorem: "P 与 ¬P 不能同真",
+      goal: "证明：同一命题 P 不能既真又假",
+      premises: ["真命题与它的否定互斥", "判定须一致，不可两可"],
+      lemmaChain: [
+        "设 P 与 ¬P 同真，则 P 真且 P 假",
+        "同一命题不能既真又假，矛盾",
+        "故 P 与 ¬P 不能同真",
       ],
-      pending: ["说明 a^(p-1) 模 p 余 1 的推理链"],
-      lemmaPool: [
-        {
-          id: "f1",
-          match: "素数",
-          text: "考虑集合 {a,2a,…,(p-1)a} 模 p",
-          offerLine: "取 a 的倍数码 p，换你说它们是否两两不同余",
-        },
-        {
-          id: "f2",
-          match: "同余",
-          text: "上述 p-1 个余数恰为 1,…,p-1 的排列",
-          offerLine: "倍数为 1..p-1 的排列，换你说乘积同余",
-        },
-      ],
-      sharpReveals: [
-        { afterKnowledge: "f1", line: "p∤a 时倍数码 p 两两不同余。" },
-        { afterKnowledge: "f2", line: "乘积同余得 a^(p-1)≡1 (mod p)。" },
-      ],
-      endingCoreKeywords: ["同余", "素数", "费马"],
-      goalTracks: { core: { keywords: ["同余", "模 p", "素数"] } },
-      endingEpilogueFallback: "G 证毕：费马小定理成立。",
-      inquireLines: ["你用的是乘法群还是组合计数？"],
+      endingCoreKeywords: ["矛盾", "不能同真"],
+      endingEpilogueFallback: "G 证毕：矛盾律成立。",
+      inquireLines: ["矛盾出在「同真」还是「同假」？"],
     },
     {
-      id: "triangle-angle-sum",
-      mathematicianIds: ["euclid"],
-      theorem: "三角形内角和为 180°",
-      goal: "证明：任意三角形三内角之和为平角",
+      id: "contrapositive-equiv",
+      logicHint: "逆否命题、等价",
+      mathematicianIds: ["euclid", "gauss"],
+      theorem: "原命题与逆否命题同真同假",
+      goal: "证明：若 P 则 Q 与 若 ¬Q 则 ¬P 等价",
       premises: [
-        "过顶点作对边的平行线",
-        "平行线截线产生同位角相等",
+        "若 P 则 Q 表示 P 真时 Q 必真",
+        "逆否命题为：若 Q 不真则 P 不真",
       ],
-      pending: ["用同位角将三内角拼成平角"],
-      lemmaPool: [
-        {
-          id: "t1",
-          match: "平行",
-          text: "过顶点 A 作 BC 的平行线",
-          offerLine: "作平行线过 A，换你说同位角关系",
-        },
-        {
-          id: "t2",
-          match: "同位角",
-          text: "同位角相等，三角拼成平角",
-          offerLine: "三内角同位拼接，换你说角度和",
-        },
+      lemmaChain: [
+        "设若 P 则 Q 真且 Q 假，则 P 必假（否后否前）",
+        "设若 ¬Q 则 ¬P 真且 P 真，则 Q 必真，与 Q 假矛盾",
+        "故两命题同真同假",
       ],
-      sharpReveals: [
-        { afterKnowledge: "t1", line: "平行线给出两对同位角相等。" },
-        { afterKnowledge: "t2", line: "三角拼成平角，和为 180°。" },
+      endingCoreKeywords: ["逆否", "等价", "同真同假"],
+      endingEpilogueFallback: "G 证毕：原命题与逆否等价。",
+      inquireLines: ["你证的是等价还是只证一个方向？"],
+    },
+    {
+      id: "student-exam-pass",
+      logicHint: "全称例化、三段论",
+      mathematicianIds: ["aristotle", "gauss"],
+      theorem: "及格者必已交卷",
+      goal: "证明：凡交卷者皆及格，小明交卷，故小明及格",
+      premises: ["凡交卷者皆及格", "小明已交卷"],
+      lemmaChain: [
+        "小明属于「交卷者」",
+        "全称命题「凡交卷者皆及格」适用于小明",
+        "故小明及格",
       ],
-      endingCoreKeywords: ["180", "平角", "同位角"],
-      goalTracks: { core: { keywords: ["180", "平角", "同位角"] } },
-      endingEpilogueFallback: "G 证毕：三角形内角和 180°。",
-      inquireLines: ["辅助平行线作在哪条边？"],
+      endingCoreKeywords: ["小明", "及格", "交卷"],
+      endingEpilogueFallback: "G 证毕：小明及格。",
+      inquireLines: ["全称命题在哪一步例化到个体？"],
+    },
+    {
+      id: "knights-truth-one",
+      logicHint: "真假话、矛盾",
+      mathematicianIds: ["euclid", "cauchy"],
+      theorem: "两人至多一真",
+      goal: "证明：甲说「乙说谎」、乙说「甲说谎」，不能两人皆真",
+      premises: [
+        "说真话者陈述为真，说谎者陈述为假",
+        "甲、乙陈述不能同真同假而不一致",
+      ],
+      lemmaChain: [
+        "设甲乙皆真，则乙说谎且甲说谎，互相矛盾",
+        "设甲乙皆假，则乙说真话且甲说真话，亦矛盾",
+        "故不能两人皆真，至多一真",
+      ],
+      endingCoreKeywords: ["矛盾", "说谎", "至多一真"],
+      endingEpilogueFallback: "G 证毕：不能两人皆真。",
+      inquireLines: ["你分了几种互斥情形？"],
+    },
+    {
+      id: "subset-transitivity",
+      logicHint: "集合包含、传递",
+      mathematicianIds: ["cantor", "gauss"],
+      theorem: "包含关系传递",
+      goal: "证明：若 A⊆B 且 B⊆C，则 A⊆C",
+      premises: [
+        "x∈A 则 x∈B；x∈B 则 x∈C",
+        "要证：任意 x，若 x∈A 则 x∈C",
+      ],
+      lemmaChain: [
+        "设 x∈A，由 A⊆B 得 x∈B",
+        "由 x∈B 与 B⊆C 得 x∈C",
+        "故 A⊆C",
+      ],
+      endingCoreKeywords: ["包含", "传递", "A⊆C"],
+      endingEpilogueFallback: "G 证毕：包含传递成立。",
+      inquireLines: ["任意 x 从哪条前提进入链？"],
+    },
+    {
+      id: "finite-no-injection",
+      logicHint: "反证、一一对应、有限",
+      mathematicianIds: ["cantor"],
+      theorem: "有限集不能与其真子集一一对应",
+      goal: "证明：有限集 A 与其真子集 B 不能建立双射",
+      premises: [
+        "双射意味着 A、B 元素个数相同",
+        "B 为 A 的真子集则元素更少",
+      ],
+      lemmaChain: [
+        "反设 A 与真子集 B 有双射",
+        "双射要求元素个数相同，与真子集更少矛盾",
+        "故不能建立双射",
+      ],
+      endingCoreKeywords: ["双射", "矛盾", "真子集"],
+      endingEpilogueFallback: "G 证毕：不能与真子集双射。",
+      inquireLines: ["矛盾来自「个数」还是「真子集」定义？"],
     },
   ];
+
+  /** 池中禁止出现的公式推导痕迹（用于自检） */
+  const FORMULA_DERIVATION_RE =
+    /[²³√∫∑∏≡≠≤≥]|n\(n\+1\)|2k|2q²|p²|mod\s*p|180°|费马|同余|展开式|配對求和/i;
 
   function pickRandom(list) {
     return list[Math.floor(Math.random() * list.length)];
@@ -326,29 +259,44 @@
 
   function buildProverSystem(mathematician) {
     const name = mathematician.name;
-    return `你是「证官·${name}」：数学证明研讨席上的证官，说话严谨、精确。
-场景：证辩者与你对论，逐步证毕论题 G；证明席由程序维护。
-回复：仅 1～2 句，总 ≤40 字。不要列表、markdown、复杂公式。
-【硬性】只陈述/否认/顶回，禁止问句（无 ？/?，不以吗/呢 发问）。
-【交换】证辩者选「推证」类选项后，每轮兑现**一条**可核对逻辑推导步，勿同句两条。
-证辩者选「题意/证法/前提」类选项时，可解释概念，可不送新引理，仍禁止问句。
+    return `你是「证官·${name}」：逻辑推理论证席上的证官，像断案推理。
+场景：证辩者用命题结构（若…则…、故、否则、矛盾）逐步证毕论题 G。
+回复：仅 1～2 句，≤40 字。禁止列表、markdown、算式与符号堆砌。
+【硬性】只陈述/否认/顶回，禁止问句。
+【交换】证辩者选「推证」后，兑现一条可核对逻辑推断，勿心算、勿长公式。
 勿提选项、按钮、AI。`;
   }
 
   function buildTopicHint(problem, mathematician) {
+    const chain = (problem.lemmaChain || []).slice(0, 4).join(" → ");
     const lines = [
-      `数学家：${mathematician.name}`,
-      `定理名：${problem.theorem || problem.goal}`,
+      `证官：${mathematician.name}`,
+      `论题：${problem.theorem || problem.goal}`,
       `证明目标：${problem.goal}`,
-      `逻辑方向：${problem.logicHint || "反证、奇偶、整除、命题推理、集合关系"}`,
-      `建议前提类型：${(problem.premises || []).slice(0, 3).join("；") || "2～3 条可核对前提"}`,
-      `开放引理方向：${(Array.isArray(problem.pending) ? problem.pending[0] : problem.pending) || "待证一步"}`,
-      "约束：偏逻辑、少计算、不用长公式；中文短句。",
+      `逻辑类型：${problem.logicHint || "命题推理"}`,
+      `建议前提：${(problem.premises || []).slice(0, 3).join("；")}`,
+      chain ? `引理链提示：${chain}` : "",
+      "硬性：本题为逻辑推理题；选项与引理仅用日常/命题语言；禁止算式、展开、求和、几何角度计算。",
     ];
-    return lines.join("\n");
+    return lines.filter(Boolean).join("\n");
   }
 
-  /** 仅题目蓝本，供 AI 生成 opening/摘要/选项 */
+  function assertLogicOnlyPool() {
+    const all = [...CURATED_PROBLEMS, ...CONCLUSION_TEMPLATES];
+    for (const p of all) {
+      const blob = [
+        p.theorem,
+        p.goal,
+        ...(p.premises || []),
+        ...(p.lemmaChain || []),
+        ...(p.lemmaPool || []).map((x) => x.text + x.offerLine),
+      ].join(" ");
+      if (FORMULA_DERIVATION_RE.test(blob)) {
+        window.PomDebug?.logLocalWarn?.("论题池", `疑似公式题：${p.id}`, ["pool"]);
+      }
+    }
+  }
+
   function createTopicBlueprint(opts) {
     const problem = pickProblem(opts);
     const mathematician = pickMathematician(problem);
@@ -369,15 +317,11 @@
     };
   }
 
-  /** 从前提块 + 结论模板组合一题（约 30% 概率或显式调用） */
   function composeRandomProblem() {
     const template = pickRandom(CONCLUSION_TEMPLATES);
     const extraPremise = pickRandom(PREMISE_BLOCKS);
     const mathematician = pickMathematician(template);
-    const premises = [
-      extraPremise.text,
-      ...(template.premises || PREMISE_BLOCKS.slice(0, 1).map((p) => p.text)),
-    ].slice(0, 3);
+    const premises = [extraPremise.text, ...(template.premises || [])].slice(0, 3);
     return {
       ...template,
       id: `composed-${template.id}-${Date.now().toString(36).slice(-4)}`,
@@ -393,7 +337,6 @@
     return pickRandom(CURATED_PROBLEMS);
   }
 
-  /** 保留供验证；正常局由 AI bootstrap */
   function createSessionBundle(opts) {
     return createTopicBlueprint(opts);
   }
@@ -442,7 +385,6 @@
     delete session.proverDisplayName;
   }
 
-
   function findProblemById(problemId) {
     const id = String(problemId || "").trim();
     if (!id) {
@@ -486,11 +428,14 @@
     return 2;
   }
 
+  assertLogicOnlyPool();
+
   window.GameProofPool = {
     MATHEMATICIANS,
     CURATED_PROBLEMS,
     CONCLUSION_TEMPLATES,
     PREMISE_BLOCKS,
+    FORMULA_DERIVATION_RE,
     pickProblem,
     composeRandomProblem,
     createTopicBlueprint,

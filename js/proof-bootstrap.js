@@ -4,27 +4,32 @@
   function buildBootstrapSystem(blueprint) {
     const name = blueprint?.mathematician?.name || "证官";
     const hint = String(blueprint?.topicHint || "").trim();
-    return `你是「证官·${name}」主持的**逻辑证明题**开局设计师。
+    return `你是「证官·${name}」主持的**逻辑推理论证题**开局设计师（断案式推理，不是数学题）。
 
 【题型要求】
-- 纯逻辑推理：反证、奇偶、整除、命题等价、集合包含、有限/无穷等
-- **禁止**繁琐数值计算、长公式链、微积分/矩阵/级数
-- 用中文短句表述，单步可核对；论题 G 与前提 P 须自洽
+- 只允许：假言/三段论、否后否前、选言、反证、矛盾律、鸽巢计数、集合包含、真假话等
+- **严禁**：代数式、平方展开、求和、同余、模运算、几何角度、微积分、根号、分数运算链
+- 论题 G、前提 P、选项均用命题或日常语句；单步可核对
 
 【题目蓝本（可改写，勿照抄）】
 ${hint}
 
 【L1 设计】
-- [待证#1] L1 必须是**可单步推进的引理**（如展开式、奇偶判定、同余一步）
-- **禁止**把 G 的同义重述、纯定义（「奇数即 2k+1」）当作 L1
-- 例：G 为「n 奇则 n² 奇」，L1 应为「设 n=2k+1 则 n² 形如 2m+1」而非「n 奇则 n=2k+1」
+- L1 须是一步**逻辑推断**（如「后件假故前件假」「反设导致矛盾」）
+- **禁止**算式推导、符号堆砌、把 G 同义重述当 L1
+- 好例：「地不湿，故按若下雨则地湿，下雨不成立」
+- 坏例：「p²=2q²」「n²=4k²」「a^(p-1)≡1」
+
+【选项口吻】
+- 三句皆像逻辑题选项：「若…则…」「故」「否则」「与…矛盾」
+- decoy：肯定后件、否定前件、逆命题、跳步直证 G、循环论证
 
 【输出】只输出一个合法 JSON（无 markdown）：
 {
   "opening":"证官开场 1～2 句（≤40字，陈述式，禁止问句）",
   "plotSummary":"完整证明席（【论证目标】论题 G +【证明席】[前提]、[待证#1] L1、- [依赖] 若要证 G，则需证 L1；≤900字）",
   "options":[
-    {"intent":"advance","line":"正确推证 L1（≤35字）"},
+    {"intent":"advance","line":"正确逻辑推断 L1（≤35字）"},
     {"intent":"decoy","line":"似真误推 1（≤35字，不可推进 L1）"},
     {"intent":"decoy","line":"似真误推 2（≤35字，不可推进 L1，与上句不同类错误）"}
   ]
@@ -87,10 +92,11 @@ ${hint}
         minKeypointTurns: 2,
       },
       endingSpendAllKnowledge: false,
-      endingEpilogueFallback: "G 证毕，论证闭合。",
+      endingEpilogueFallback:
+        poolProblem?.endingEpilogueFallback || "G 证毕，论证闭合。",
       neglectPrimaryWarnAt: 3,
       neglectPrimaryFailAt: 5,
-      goalTracks: { core: { keywords: [] } },
+      goalTracks: { core: { keywords: poolProblem?.endingCoreKeywords || [] } },
       sharpStatementFallbacks: [
         "先把逻辑步讲实，我再补一步。",
         "逐步来，别跳步。",
@@ -107,7 +113,7 @@ ${hint}
 
     window.PomDebug?.logLocal(
       "开局·AI 生成",
-      `${blueprint.theorem || blueprint.problemId || "逻辑证明题"}`,
+      `${blueprint.theorem || blueprint.problemId || "逻辑推理题"}`,
       ["bootstrap"]
     );
 

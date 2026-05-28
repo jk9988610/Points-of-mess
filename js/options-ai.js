@@ -66,13 +66,13 @@
   function buildOptionsSystemProof(characterName) {
     const name = String(characterName || "证官").trim() || "证官";
     const pendingNote = "须阅读【证明态势】中的开放引理 Lk；advance 只推进该 Lk，decoy 不得推进该 Lk。";
-    return `你是证明题选项撰稿人。证辩者与「${name}」对论。输出证辩者下一句推证（中文 ≤35 字）。
+    return `你是**逻辑推理论证题**选项撰稿人。证辩者与「${name}」对论。输出下一句逻辑推断（≤35 字）。
 
-【选项类型】共 3 条，intent 固定：
-- advance ×1：唯一正确推证，须实质推进**当前**待证 Lk（不可跳步直证 G）
-- decoy ×2：似真误推（跳步、循环论证、误用前提、证错命题、把结论当理由等），不可推进 Lk
+【选项类型】共 3 条：
+- advance ×1：唯一正确逻辑推断，实质推进当前 Lk（不可跳步直证 G）
+- decoy ×2：似真误推（肯定后件、否定前件、逆命题、跳步、循环论证等），不可推进 Lk
 
-三句均为推证口吻、难度相近。禁止问句、禁止休庭。偏逻辑，少公式。
+【写法】用「若…则…」「故」「否则」「矛盾」；禁止算式、符号链、心算。禁止问句。
 ${pendingNote}
 只输出 JSON：
 {"options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"decoy","line":"..."}]}`;
@@ -173,7 +173,7 @@ ${pendingNote}
     const goal = window.GameOnion?.extractGoal?.(plotSummary) || "";
     const name = character.name;
     const epilogueSystem = `${roleStyleFromSystem(archetype.system)}${plotSummaryBlock(plotSummary)}
-【结局轮·宣布】论证目标已达成：${goal}
+【结局轮·宣布】本局目标已达成：${goal}
 你是「${name}」。用 1～2 句中文（≤40 字）向证辩者**点明证毕**（论题 G 已闭合、证明如何收束）。${CHARACTER_REPLY_RULE}
 只输出角色台词，不要 JSON。`;
 
@@ -185,28 +185,10 @@ ${pendingNote}
       signal,
       debugLabel: "结局·①宣布",
     });
-    function clampEndingReplyLength(text, maxLen = 40) {
-      let t = String(text || "").trim();
-      if (!t || t.length <= maxLen) {
-        return t;
-      }
-      const cut = t.slice(0, maxLen);
-      const lastStop = Math.max(
-        cut.lastIndexOf("。"),
-        cut.lastIndexOf("，"),
-        cut.lastIndexOf("；")
-      );
-      if (lastStop >= 8) {
-        return cut.slice(0, lastStop + 1);
-      }
-      return `${cut}…`;
-    }
-
     function filterEndingReply(text) {
       let t = String(text || "").trim();
       t = t.replace(/^([\u4e00-\u9fa5]{2,8})[？?]/, "$1，");
       t = t.replace(/[？?]/g, "。");
-      t = clampEndingReplyLength(t, 40);
       if (!t || isWeakReply(t) || window.GameOnion?.isDeflectReply?.(t)) {
         return "";
       }
@@ -398,7 +380,7 @@ ${pendingNote}
     return !t || /^[.…·\s]+$/.test(t) || t.length < 2;
   }
 
-  /** 证官 reply 不得向证辩者发问 */
+  /** 角色 reply 不得向玩家发问 */
   function isCharacterReplyQuestion(text) {
     const t = String(text || "").trim();
     if (!t) {
@@ -470,7 +452,7 @@ ${archetype.system}
     }
 
     const closeBlock = turn.isClose
-      ? "\n【收束轮】证辩者 intent=close。只输出 {\"reply\":\"...\"}，不要 options。"
+      ? "\n【收束轮】玩家 intent=close。只输出 {\"reply\":\"...\"}，不要 options。"
       : "";
 
     const summaryBlock = turn.plotSummary?.trim()
