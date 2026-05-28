@@ -83,31 +83,22 @@
   const dialogueLogEl = document.getElementById("dialogueLog");
   const dialogueLogScrollEl = document.getElementById("dialogueLogScroll");
 
-  function syncLayoutMode() {
-    document
-      .querySelector(".app-shell")
-      ?.classList.toggle("app-shell--dialogue", Boolean(state.talkingId));
-  }
-
   function syncProofBlackboard() {
-    syncLayoutMode();
     if (!proofBlackboardEl) {
       return;
     }
-    if (!state.talkingId) {
-      proofBlackboardEl.classList.add("hidden");
-      proofBlackboardEl.classList.remove("proof-blackboard--active");
-      const body = document.getElementById("proofBlackboardBody");
-      if (body) {
-        body.innerHTML = "";
-      }
-      syncDialogueLog();
-      return;
-    }
-    proofBlackboardEl.classList.remove("hidden");
-    const session = getSession(state, state.talkingId);
+    const body = document.getElementById("proofBlackboardBody");
+    const session = state.talkingId ? getSession(state, state.talkingId) : null;
     const plot = String(session?.plotSummary || "").trim();
-    window.GameProofBoard?.updateProofBoard?.(proofBlackboardEl, plot);
+    if (!state.talkingId || !plot) {
+      if (body) {
+        body.innerHTML =
+          '<p class="proof-board__empty">靠近证官开始对论后，论证席显示于此。</p>';
+      }
+      proofBlackboardEl.classList.remove("proof-blackboard--active");
+    } else {
+      window.GameProofBoard?.updateProofBoard?.(proofBlackboardEl, plot);
+    }
     syncDialogueLog();
   }
 
@@ -116,11 +107,11 @@
       return;
     }
     if (!state.talkingId) {
-      dialogueLogEl.classList.add("hidden");
-      dialogueLogScrollEl.innerHTML = "";
+      window.GameDialogueLog?.render(dialogueLogScrollEl, [], {
+        emptyText: "靠近证官开始对论后，对话记录显示于此。",
+      });
       return;
     }
-    dialogueLogEl.classList.remove("hidden");
     const session = getSession(state, state.talkingId);
     const character = getCharacter(state.talkingId);
     const archetype = resolveArchetype(getArchetype(character.archetypeId), session);
@@ -163,6 +154,7 @@
   state.dialogueHungUp = false;
   state.episodeAwaitingRestart = false;
   state.playerBubbleText = "";
+  state.bubbleThinkingHint = "";
 
   let abortController = null;
   let lastFrame = performance.now();
@@ -298,11 +290,17 @@
 
     bubbleEl.classList.toggle("streaming", Boolean(streaming) && !thinking);
     bubbleEl.classList.toggle("thinking", thinking);
+    if (thinking) {
+      const hint = state.bubbleThinkingHint || "思考中…";
+      bubbleEl.style.setProperty("--thinking-hint", `"${hint}"`);
+    } else {
+      bubbleEl.style.removeProperty("--thinking-hint");
+    }
 
     const showNpc =
       Boolean(state.talkingId) &&
       active &&
-      (state.bubbleText || (streaming && !thinking));
+      (thinking || state.bubbleText || (streaming && !thinking));
     const showPlayer =
       Boolean(state.talkingId) && active && Boolean(state.playerBubbleText);
 
@@ -323,14 +321,7 @@
           state.optionsLoading ||
           !state.talkingId;
       }
-      if (!state.optionsLoading) {
-        setOptionsVisible(shouldShowOptionsBar());
-        if (shouldShowOptionsBar()) {
-          renderOptionButtons(state.currentOptions, false);
-        }
-      } else {
-        setOptionsVisible(false);
-      }
+      refreshOptionsBar();
     }
 
     syncProofBlackboard();
@@ -367,6 +358,9 @@
 
   function setBubble(text, streaming, options) {
     const thinking = Boolean(options?.thinking);
+    state.bubbleThinkingHint = thinking
+      ? String(options?.thinkingHint || "思考中…").trim()
+      : "";
     state.bubbleText = text;
     syncSpeechBubbles(streaming, { thinking });
   }
@@ -393,25 +387,24 @@
     }
   }
 
-  function setOptionsVisible(visible) {
-    optionsBar.classList.toggle("hidden", !visible);
-  }
-
-  function shouldShowOptionsBar() {
-    if (!state.talkingId || !isDialogueUiActive()) {
-      return false;
-    }
-    if (state.optionsLoading) {
-      return false;
-    }
-    const opts = state.currentOptions;
-    return Array.isArray(opts) && opts.length > 0;
-  }
-
   function refreshOptionsBar() {
-    setOptionsVisible(shouldShowOptionsBar());
-    if (shouldShowOptionsBar()) {
-      renderOptionButtons(state.currentOptions, false);
+    optionsBar.classList.remove("hidden");
+    const canPick =
+      state.talkingId &&
+      isDialogueUiActive() &&
+      !state.isStreaming &&
+      !state.optionsLoading;
+    const opts =
+      state.currentOptions?.length > 0
+        ? state.currentOptions
+        : state.talkingId
+          ? placeholderProofOptions()
+          : placeholderProofOptions();
+    renderOptionButtons(opts, state.optionsLoading);
+    if (!canPick || !state.currentOptions?.length) {
+      for (const btn of optionsBar.querySelectorAll(".option-btn")) {
+        btn.disabled = true;
+      }
     }
   }
 
@@ -552,7 +545,7 @@
     state.playerBubbleText = "";
     state.bubbleText = "";
     setBubble("");
-    setOptionsVisible(false);
+    refreshOptionsBar();
     setMemoryInputVisible(false);
     if (memoryInputEl) {
       memoryInputEl.value = "";
@@ -618,7 +611,7 @@
       session.keypointTurnCount = 0;
     }
 
-    setOptionsVisible(false);
+    refreshOptionsBar();
     setMemoryInputVisible(true);
     stopButtonEl.disabled = true;
     renderMap();
@@ -630,14 +623,13 @@
     if (needsBootstrap) {
       if (!ensureApiConfig()) {
         state.talkingId = null;
-        setOptionsVisible(false);
+        refreshOptionsBar();
         return;
       }
       state.optionsLoading = true;
       state.currentOptions = null;
-      setOptionsVisible(false);
-      setStatus("证官准备论题…", false);
-      setBubble("", false);
+      refreshOptionsBar();
+      setBubble("", false, { thinking: true, thinkingHint: "证官准备论题…" });
 
       try {
         const proverForBoot = resolveProver(character, session);
@@ -744,7 +736,7 @@
     }
     state.episodeAwaitingRestart = true;
     state.dialogueHungUp = true;
-    setOptionsVisible(false);
+    refreshOptionsBar();
     setMemoryInputVisible(false);
     setStatus("本局已结束。靠近证官可继续下一题。", false);
     renderMap();
@@ -781,7 +773,7 @@
     }
     state.episodeAwaitingRestart = true;
     state.dialogueHungUp = true;
-    setOptionsVisible(false);
+    refreshOptionsBar();
     setMemoryInputVisible(false);
     setStatus("本局失败。靠近证官可继续下一题。", false);
     renderMap();
@@ -832,9 +824,8 @@
     state.isStreaming = true;
     state.optionsLoading = true;
     state.currentOptions = null;
-    setOptionsVisible(false);
-    setStatus("同一论题重开论证…", false);
-    setBubble("", false);
+    refreshOptionsBar();
+    setBubble("", false, { thinking: true, thinkingHint: "同一论题重开论证…" });
 
     try {
       const prover = resolveProver(character, session);
@@ -914,10 +905,9 @@
 
     state.isStreaming = true;
     setMemoryInputBusy(true);
-    setOptionsVisible(false);
+    refreshOptionsBar();
     stopButtonEl.disabled = false;
-    setBubble("", true);
-    setStatus("等待回复…", false);
+    setBubble("", true, { thinking: true, thinkingHint: "证官回复中…" });
     renderMap();
 
     abortController = new AbortController();
@@ -1130,16 +1120,15 @@
       state.isStreaming = true;
       state.optionsLoading = true;
       setMemoryInputBusy(true);
-      setOptionsVisible(false);
+      refreshOptionsBar();
       stopButtonEl.disabled = false;
       setBubble(
         [...session.messages]
           .reverse()
           .find((m) => m.role === "assistant" && m.status === "done")?.content || "",
         true,
-        { thinking: true }
+        { thinking: true, thinkingHint: "证官休庭收束…" }
       );
-      setStatus("证官休庭收束…", false);
       abortController = new AbortController();
       try {
         const fail = await requestFailureSequence({
@@ -1178,14 +1167,16 @@
     state.isStreaming = true;
     state.optionsLoading = true;
     setMemoryInputBusy(true);
-    setOptionsVisible(false);
+    refreshOptionsBar();
     stopButtonEl.disabled = false;
     const thinkingBubble =
       [...session.messages]
         .reverse()
         .find((m) => m.role === "assistant" && m.status === "done")?.content || "";
-    setBubble(thinkingBubble, true, { thinking: true });
-    setStatus("证官推导中…", false);
+    setBubble(thinkingBubble, true, {
+      thinking: true,
+      thinkingHint: "证官推导中…",
+    });
     renderMap();
 
     abortController = new AbortController();
@@ -1683,7 +1674,8 @@
   document.addEventListener("pom-auth-logout", refreshAuthStatus);
 
   resizeCanvas();
-  setOptionsVisible(false);
+  refreshOptionsBar();
+  syncProofBlackboard();
   setMemoryInputVisible(false);
   setBubble("");
   refreshAuthStatus();

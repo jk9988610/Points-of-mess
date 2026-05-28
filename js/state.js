@@ -18,7 +18,7 @@
   }
 
   function defaultPlayerPosition() {
-    return { x: 0.45, y: 0.56 };
+    return { x: 0.38, y: 0.52 };
   }
 
   /** 刷新后清空对话，便于重复测试；仅保留玩家在地图上的位置 */
