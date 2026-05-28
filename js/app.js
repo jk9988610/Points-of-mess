@@ -1092,6 +1092,35 @@
                 lemmaDone ? "引理栈已证毕，等待结局判定" : "摘要后无开放引理",
                 ["options-skip"]
               );
+            } else if (
+              pendingAfter.length &&
+              (!state.currentOptions || !state.currentOptions.length)
+            ) {
+              try {
+                const regen = await window.GameOptionsAi?.generateOptions?.({
+                  character,
+                  archetype,
+                  session,
+                  signal,
+                  plotSummary: session.plotSummary,
+                  onionContext: onionExtra,
+                  logTag: "拆分·②选项·摘要后补发",
+                });
+                if (regen?.length) {
+                  state.currentOptions = regen;
+                  window.PomDebug?.logLocal(
+                    "选项补发",
+                    `摘要后挂出 ${pendingAfter.length} 条待证`,
+                    ["options-regen"]
+                  );
+                }
+              } catch (e) {
+                if (e.name !== "AbortError") {
+                  window.PomDebug?.logLocalWarn("选项补发失败", e.message, [
+                    "options-regen",
+                  ]);
+                }
+              }
             }
             if (
               window.GameEvidence?.grantPlayerEvidence &&

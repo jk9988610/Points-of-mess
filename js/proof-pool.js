@@ -385,8 +385,32 @@
     delete session.proverDisplayName;
   }
 
-  function findProblemById(problemId) {
+  function problemExistsInPool(id) {
+    const pid = String(id || "").trim();
+    if (!pid) {
+      return false;
+    }
+    return (
+      CURATED_PROBLEMS.some((p) => p.id === pid) ||
+      CONCLUSION_TEMPLATES.some((p) => p.id === pid)
+    );
+  }
+
+  function resolveProblemId(problemId) {
     const id = String(problemId || "").trim();
+    if (!id) {
+      return "";
+    }
+    if (problemExistsInPool(id)) {
+      return id;
+    }
+    const m = id.match(/^composed-([a-z0-9-]+)-[a-z0-9]{4}$/i);
+    const resolved = m ? m[1] : id;
+    return problemExistsInPool(resolved) ? resolved : id;
+  }
+
+  function findProblemById(problemId) {
+    const id = resolveProblemId(problemId);
     if (!id) {
       return null;
     }

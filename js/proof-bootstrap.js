@@ -70,8 +70,11 @@ ${hint}
     const prover = blueprint?.proverName || "证官";
     const problemId = blueprint?.problemId || "";
     const poolProblem = window.GameProofPool?.findProblemById?.(problemId);
-    const minLemmaSteps =
-      window.GameProofPool?.getMinLemmaStepsForEnding?.(problemId) || 2;
+    const chainLen = window.GameProofPool?.getLemmaChain?.(problemId)?.length || 0;
+    const minLemmaSteps = poolProblem
+      ? window.GameProofPool?.getMinLemmaStepsForEnding?.(problemId) || chainLen || 2
+      : 1;
+    const minKeypoints = poolProblem ? Math.max(1, minLemmaSteps) : 1;
     return {
       proofTheme: true,
       aiDriven: true,
@@ -84,7 +87,7 @@ ${hint}
       goal,
       endingMinConfirmed: 2,
       endingCoreKeywords: poolProblem?.endingCoreKeywords || [],
-      endingMinKeypointTurns: 2,
+      endingMinKeypointTurns: minKeypoints,
       maxOpenClaims: 1,
       argumentProfile: {
         maxOpenClaims: 1,
