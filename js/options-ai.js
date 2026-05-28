@@ -155,7 +155,7 @@
     const name = character.name;
     const epilogueSystem = `${roleStyleFromSystem(archetype.system)}${plotSummaryBlock(plotSummary)}
 【结局轮·宣布】本局目标已达成：${goal}
-你是「${name}」。用 1～2 句中文（≤40 字）向玩家**点明结局**（目标已实现、局势如何收束），勿再追问 [待核实]。
+你是「${name}」。用 1～2 句中文（≤40 字）向玩家**点明结局**（目标已实现、局势如何收束）。${CHARACTER_REPLY_RULE}
 只输出角色台词，不要 JSON。`;
 
     const raw = await window.ChatApi.completeChat({
@@ -231,7 +231,7 @@
     const failLine = String(archetype.failureLine || "你不肯说指使者，我没时间了。").trim();
     const failSystem = `${roleStyleFromSystem(archetype.system)}${plotSummaryBlock(plotSummary)}
 【失败轮】玩家多轮回避 #1「${p1}」。你是「${name}」。
-用 1～2 句（≤40 字）结束对峙，参考语气：「${failLine}」
+用 1～2 句（≤40 字）结束对峙，参考语气：「${failLine}」。${CHARACTER_REPLY_RULE}
 只输出角色台词，不要 JSON。`;
 
     const raw = await window.ChatApi.completeChat({
@@ -343,6 +343,36 @@
     return !t || /^[.…·\s]+$/.test(t) || t.length < 2;
   }
 
+  /** 角色 reply 不得向玩家发问 */
+  function isCharacterReplyQuestion(text) {
+    const t = String(text || "").trim();
+    if (!t) {
+      return false;
+    }
+    if (/[？?]/.test(t)) {
+      return true;
+    }
+    if (/吗[。！]?$/.test(t) || /呢[。！]?$/.test(t)) {
+      return true;
+    }
+    return false;
+  }
+
+  const CHARACTER_REPLY_RULE =
+    "角色 reply 只能陈述/供述/否认/顶回，**禁止问句**（无 ？/?，不以吗/呢 发问）。";
+
+  function filterCharacterReply(reply) {
+    const t = String(reply || "").trim();
+    if (!t || isWeakReply(t)) {
+      return "";
+    }
+    if (isCharacterReplyQuestion(t)) {
+      window.PomDebug?.logLocalWarn("角色问句已拒", t.slice(0, 80), ["reply"]);
+      return "";
+    }
+    return t;
+  }
+
   function buildCombinedSystem(archetype, turn) {
     const base = `你是文字冒险游戏的对话引擎：同时生成角色台词（reply）与下一轮玩家选项（options）。
 
@@ -385,7 +415,7 @@ ${buildIntentHintsForApi()}
 
 【输出】
 ${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."},{"intent":"close","line":"..."}]}。'}
-reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoint/followup 不得照抄旧句**，followup 须引用本轮 reply；close 由程序固定。${closeBlock}`;
+reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 三项须含 intent 与 line；**keypoint/followup 不得照抄旧句**，followup 须引用本轮 reply；close 由程序固定。${closeBlock}`;
   }
 
   function presetOptions(archetype) {
@@ -481,8 +511,8 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
   function replyFromRaw(raw) {
     try {
       const obj = extractJsonObject(raw);
-      const reply = String(obj.reply || "").trim();
-      if (reply && !isWeakReply(reply)) {
+      const reply = filterCharacterReply(String(obj.reply || "").trim());
+      if (reply) {
         return reply;
       }
     } catch {
@@ -497,10 +527,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     }
     const first = text.split("\n").find((l) => l.trim()) || text;
     const candidate = first.trim().slice(0, 120);
-    if (candidate && !isWeakReply(candidate)) {
-      return candidate;
-    }
-    return "";
+    return filterCharacterReply(candidate);
   }
 
   function lastUsableAssistantLine(session, archetype) {
@@ -601,7 +628,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     replyContext,
   }) {
     const replySystem = `${roleStyleFromSystem(systemPrompt)}${plotSummaryBlock(plotSummary, replyContext)}
-只输出角色的一句台词：1～2 句中文，≤40 字。不要 JSON、不要 markdown、不要解释。`;
+只输出角色的一句台词：1～2 句中文，≤40 字。${CHARACTER_REPLY_RULE} 不要 JSON、markdown、解释。`;
 
     const raw = await window.ChatApi.completeChat({
       systemPrompt: replySystem,
@@ -613,7 +640,7 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     });
 
     const reply = replyFromRaw(raw);
-    if (reply && !isWeakReply(reply)) {
+    if (reply) {
       return reply;
     }
     throw new Error("无法解析角色回复");
