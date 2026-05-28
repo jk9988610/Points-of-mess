@@ -6,27 +6,43 @@
   /** 摘要总字数上限（产品：尽量写满，专名只增不删） */
   const SUMMARY_MAX_CHARS = 1200;
 
-  const SUMMARY_SYSTEM = `你是剧情档案维护员。根据「已有摘要」与「新增对话」更新档案，服务**单一本局目标**。
+  const SUMMARY_SYSTEM = `你是剧情档案维护员。结构像论证题：**一个本局目标 + 已确认前提 + 仅一条待证**（三条件推一问；对局过程中 [已确认] 可增多，[待核实#1] 始终至多 1 条）。
 
-【输出格式】仅两段：
+【输出】仅两段（不要输出【本局目标】，由程序保留）：
 【剧情档案】
 - [已确认] …
-- [待核实] …（全篇最多 **2 条**）
+- [待核实#1] …（全篇最多 1 条）
 【关系与态度】
 - …
 
-【硬性规则】
-1. 递进更新；[已确认] 专名只增不删；全文 ≤ ${SUMMARY_MAX_CHARS} 字。只输出摘要，无 markdown。
-2. 锋利台词中已明确的人名、指使者、账本去向/经手人 → 必须写入 [已确认]（可标「锋利供述：」），并**删掉或收窄**已被回答的 [待核实]。
-3. 玩家亮牌/供述 → [已确认] 玩家供述：…
-4. **禁止**用更空泛的问题替换已得到姓名的待核实（例：已确认「指使者是赵家老二」后，勿把待核实改成「赵家老二身份及动机」；应收窄为「账本现下落」等仍缺的事实）。
-5. [待核实] 最多保留 2 条，且必须是 [已确认] 中仍无法回答的问题。
-6. 仅依据已有摘要与新增对话，禁止幻觉。
-7. 若新增对话仅为旁询/态度/来意（无新专名、无账本/指使者供述），**勿**新增「谁派玩家来」类 [待核实]；勿把僵局写成双方互逼指使者。`;
+【规则】
+1. 递进更新；[已确认] 专名只增不删；全文 ≤ ${SUMMARY_MAX_CHARS} 字；无 markdown。
+2. 对话已说清的人名/去向 → [已确认]（可标「锋利供述：」）；玩家亮牌 → [已确认] 玩家供述：…
+3. 已解答的 [待核实#1] 须删除；若仍有缺口，改写为新的 #1（仍只 1 条）。
+4. 勿用更空泛问句替换已有答案（例：已确认「指使者是 B」→ #1 应收窄为「物证 X 现下落」等，勿改成「B 的身份动机」）。
+5. 仅旁询/态度/来意、无新专名 → 勿新增 #1；勿把僵局写成双方互逼核心秘密。
+6. 只依据已有摘要与新增对话，禁止幻觉。`;
 
-  const SUMMARY_USER_PREFIX = `自检：锋利/玩家已说清的人名与去向须进 [已确认]；已解答的待核实须删或收窄；待核实≤2条。只输出两段摘要。
+  const SUMMARY_USER_PREFIX = `自检：说清的事实进 [已确认]；#1 至多 1 条且已答必删/收窄。只输出【剧情档案】【关系与态度】两段。
 
 `;
+
+  /** 压缩后保留种子里的【本局目标】段（模型不输出目标） */
+  function preserveGoalBlock(previousSummary, newSummary) {
+    const prev = String(previousSummary || "").trim();
+    const next = String(newSummary || "").trim();
+    if (!prev || !next) {
+      return next || prev;
+    }
+    if (next.includes("【本局目标】")) {
+      return next;
+    }
+    const goalBlock = prev.match(/【本局目标】[\s\S]*?(?=【|$)/)?.[0]?.trim();
+    if (!goalBlock) {
+      return next;
+    }
+    return `${goalBlock}\n\n${next}`.trim();
+  }
 
   function countOptionTurns(sessionMessages) {
     return sessionMessages.filter(
@@ -43,6 +59,14 @@
       window.PomDebug?.logLocalWarn(
         "摘要格式",
         "缺少【剧情档案】段（A+）；摘录将走旧格式回退",
+        ["summary"]
+      );
+    }
+    const pendingCount = (body.match(/\[待核实/gi) || []).length;
+    if (pendingCount > 1) {
+      window.PomDebug?.logLocalWarn(
+        "摘要格式",
+        `[待核实] 出现 ${pendingCount} 次，应为至多 1 条`,
         ["summary"]
       );
     }
@@ -142,7 +166,10 @@
       debugLabel: "拆分·③摘要",
     });
 
-    let text = String(summary || "").trim();
+    let text = preserveGoalBlock(
+      session.plotSummary,
+      String(summary || "").trim()
+    );
     if (text.length > SUMMARY_MAX_CHARS) {
       window.PomDebug?.logLocalWarn(
         "摘要超长已截断",
@@ -168,6 +195,7 @@
   window.GameSummary = {
     SUMMARY_EVERY_OPTION_TURNS,
     SUMMARY_MAX_CHARS,
+    preserveGoalBlock,
     shouldRefreshPlotSummary,
     willRefreshPlotSummaryThisPick,
     maybeRefreshPlotSummary,

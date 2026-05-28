@@ -51,11 +51,12 @@ function extractPendingLines(text) {
 
 const seed = {
   goal: "查明：谁在背后操控这一切",
-  confirmed: ["锋利曾被阻拦"],
-  pending: ["阻拦者指使者", "账本下落"],
+  confirmed: ["前提甲", "前提乙", "前提丙"],
+  pending: ["待证：幕后者是谁"],
   attitude: ["戒备"],
 };
 const plot = buildSeedPlotSummary(seed);
+const confirmedCount = (plot.match(/\[已确认\]/g) || []).length;
 if (!plot.includes("【本局目标】（唯一") || !plot.includes("[待核实#1]")) {
   console.error("seed format missing sections");
   process.exit(1);
@@ -64,8 +65,12 @@ if (!extractGoal(plot).includes("操控")) {
   console.error("extractGoal failed");
   process.exit(1);
 }
-if (extractPendingLines(plot).length !== 2) {
-  console.error("extractPendingLines failed");
+if (confirmedCount !== 3) {
+  console.error("seed expects 3 [已确认], got", confirmedCount);
+  process.exit(1);
+}
+if (extractPendingLines(plot).length !== 1) {
+  console.error("extractPendingLines expects 1 pending");
   process.exit(1);
 }
 console.log("verify-onion-seed: ok");

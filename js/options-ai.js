@@ -52,15 +52,13 @@
 
   function buildOptionsSystemDuo(characterName) {
     const name = String(characterName || "锋利").trim() || "锋利";
-    return `你是选项撰稿人。玩家与「${name}」对峙。输出玩家下一句台词（中文一句 ≤35 字）。
+    return `你是选项撰稿人。玩家与「${name}」对峙。输出玩家下一句（中文 ≤35 字）。
 
-【硬性分工·不可违反】
-- keypoint（推进）：**唯一**推进本局目标的选项。必须用【玩家可亮牌】里的 offer 原句，或核对锋利刚说的专名。
-- followup（询问）：旁敲侧击——来意、态度、关系、场面；**不得**含：指使者、账本、谁派、陈四、刘老三、换你说、别绕、谁先答。
+【分工】
+- keypoint（推进）：唯一推进本局目标；须用【玩家可亮牌】offer 原句，或核对锋利刚说的专名。
+- followup（询问）：来意/态度/关系；禁核心密语、亮牌交换、互怼逼供。
 
-【禁止】两条同义；followup 写成第二句推进。
-
-只输出 JSON：
+禁止两条同义。只输出 JSON：
 {"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."}]}`;
   }
 

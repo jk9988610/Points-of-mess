@@ -119,4 +119,11 @@ node scripts/verify-trade-onion.js
 - 选项程序校正：followup 若写成逼供 → 替换为 `inquireLines` 池
 - `detectPlayerNamesMastermind`：问句不再误触发
 
-*最后更新：2026-05 · v0.5.33*
+## 10. v0.5.34（3 推 1 · prompt 简化）
+
+- 种子摘要：**1 目标 + 3 [已确认] + 1 [待核实#1]**（论证题式）
+- 摘要 prompt：待核实至多 1 条；示例专名用字母 A/B/X；不输出【本局目标】
+- 压摘要后程序 **preserveGoalBlock** 保留目标段
+- API 约束块示例去真实人名（玩法仍用预设专名）
+
+*最后更新：2026-05 · v0.5.34*
