@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <script>
+    (function () {
+      if (!/^https?:/.test(location.protocol)) return;
+      if (/[?&]fresh=/.test(location.search)) return;
+      if (sessionStorage.getItem("pom_fresh_redirect") === "1") return;
+      sessionStorage.setItem("pom_fresh_redirect", "1");
+      var q = "fresh=" + Date.now();
+      var path = location.pathname.replace(/\/?index\.html$/i, "/");
+      if (!path.endsWith("/")) path += "/";
+      location.replace(path + "?" + q + location.hash);
+    })();
+  </script>
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var bust = params.get("v") || params.get("fresh") || String(Date.now());
+      window.__POM_CACHE_BUST = bust;
+      document.write(
+        '<script src="js/version.js?v=' + encodeURIComponent(bust) + '"><\/script>'
+      );
+    })();
+  </script>
+  <script>
+    (function () {
+      var v = window.POM_VERSION || "";
+      if (!v) return;
+      document.write(
+        '<link rel="stylesheet" href="styles/map.css?v=' +
+          encodeURIComponent(v) +
+          '">'
+      );
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Points-of-mess</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1 class="app-title">Points-of-mess <span class="app-version" id="appVersion"></span></h1>
+      <a class="stop-button stop-button--ghost" href="play.html" title="绕过 Chrome 旧缓存进入最新版">更新</a>
+      <button class="stop-button stop-button--ghost" type="button" id="logoutBtn">退出</button>
+      <button class="stop-button" type="button" id="stopGeneration" disabled>停止</button>
+    </header>
+
+    <section class="debug-panel" aria-label="调试信息">
+      <div class="debug-toolbar">
+        <span class="debug-title">调试</span>
+        <span class="debug-legend" aria-hidden="true">
+          <span class="legend-ai-out">■ 发AI</span>
+          <span class="legend-ai-in">■ AI回</span>
+          <span class="legend-local">■ 本地</span>
+        </span>
+        <button type="button" class="debug-btn" id="copyTurnDebugBtn" title="从最近一次玩家选选项起复制">复制本轮</button>
+        <button type="button" class="debug-btn" id="copyDebugBtn">复制全部</button>
+        <button type="button" class="debug-btn" id="debugCopyPrefsBtn" title="选择调试面板显示与复制的类型">打印选择</button>
+        <button type="button" class="debug-btn" id="clearDebugBtn">清空</button>
+      </div>
+      <dialog class="debug-prefs-dialog" id="debugCopyPrefsDialog">
+        <form id="debugCopyPrefsForm" method="dialog" class="debug-prefs-form">
+          <p class="debug-prefs-title">选择要在面板显示并参与复制的类型</p>
+        </form>
+      </dialog>
+      <div class="debug-log" id="debugLog" role="log" aria-live="polite"></div>
+    </section>
+
+    <div class="map-stage" id="mapStage">
+      <canvas id="gameCanvas" aria-label="宇宙地图"></canvas>
+      <div class="speech-bubble speech-bubble--npc" id="speechBubble" role="status" aria-live="polite">
+        <p class="speech-bubble-text" id="speechBubbleText"></p>
+      </div>
+      <div class="speech-bubble speech-bubble--player" id="playerSpeechBubble" role="status" aria-live="polite">
+        <p class="speech-bubble-text" id="playerSpeechBubbleText"></p>
+      </div>
+      <p class="map-hint" id="mapHint">点击空地移动 · 靠近📄读文档或与证官对论</p>
+    </div>
+
+    <div class="doc-viewer hidden" id="docViewer" role="dialog" aria-modal="true" aria-labelledby="docViewerTitle">
+      <div class="doc-viewer-backdrop" id="docViewerBackdrop"></div>
+      <div class="doc-viewer-panel">
+        <header class="doc-viewer-header">
+          <h2 class="doc-viewer-title" id="docViewerTitle">文档</h2>
+          <button type="button" class="doc-viewer-close" id="docViewerClose" aria-label="关闭">×</button>
+        </header>
+        <article class="doc-viewer-body" id="docViewerBody"></article>
+      </div>
+    </div>
+
+    <div class="login-gate" id="loginGate">
+      <form class="login-card" id="loginForm" autocomplete="on">
+        <h2 class="login-title">登录</h2>
+        <p class="login-hint">
+          <strong>账号</strong> <code>jk9988610</code> 仅为进门（假门禁）。<strong>下方必须填</strong>
+          <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">DeepSeek API 密钥</a>
+          （<code>sk-</code> 开头整段复制），不能填随便的口令；浏览器可记住。
+        </p>
+        <label class="login-field">
+          <span>账号（假门禁）</span>
+          <input
+            type="text"
+            id="loginAccount"
+            name="username"
+            autocomplete="username"
+            autocapitalize="off"
+            spellcheck="false"
+            required
+          />
+        </label>
+        <label class="login-field">
+          <span>DeepSeek API 密钥</span>
+          <input
+            type="password"
+            id="loginSecret"
+            name="password"
+            autocomplete="current-password"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="sk-…"
+            required
+          />
+        </label>
+        <label class="login-remember">
+          <input type="checkbox" id="loginRemember" checked />
+          在本机记住（localStorage）
+        </label>
+        <p class="login-error" id="loginError" hidden></p>
+        <button type="submit" class="login-submit">进入</button>
+      </form>
+    </div>
+
+    <div class="status-banner" id="statusBanner" role="status"></div>
+
+    <section class="memory-input-bar hidden" id="memoryInputBar" aria-label="记忆测试自由输入" hidden>
+      <p class="memory-input-hint" hidden>输入框：API 只发 <code>messages:[{user:你的原话}]</code>，无 system、无历史</p>
+      <div class="memory-input-row">
+        <input
+          type="text"
+          id="memoryInput"
+          class="memory-input-field"
+          autocomplete="off"
+          enterkeyhint="send"
+          placeholder="例如：你第二轮回复的原话是什么？"
+          maxlength="200"
+        />
+        <button type="button" class="memory-input-send" id="memoryInputSend">发送</button>
+      </div>
+    </section>
+
+    <nav class="options-bar hidden" id="optionsBar" aria-label="对话选项">
+      <button type="button" class="option-btn option-btn--advance" data-option-id="1" data-intent="advance">
+        <span class="option-line">生成中…</span>
+      </button>
+      <button type="button" class="option-btn option-btn--advance" data-option-id="2" data-intent="decoy">
+        <span class="option-line">生成中…</span>
+      </button>
+      <button type="button" class="option-btn option-btn--advance" data-option-id="3" data-intent="decoy">
+        <span class="option-line">生成中…</span>
+      </button>
+    </nav>
+  </div>
+
+  <script>
+    (function () {
+      var bust =
+        window.__POM_CACHE_BUST ||
+        window.POM_VERSION ||
+        new URLSearchParams(location.search).get("v") ||
+        String(Date.now());
+      document.write(
+        '<script src="js/boot.js?v=' + encodeURIComponent(bust) + '"><\/script>'
+      );
+    })();
+  </script>
+</body>
+</html>

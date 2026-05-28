@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>强制更新 Points-of-mess</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: system-ui, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 24px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    a { color: #818cf8; }
+    code { color: #fde68a; }
+    .ver { font-weight: 700; color: #86efac; }
+    .err { color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <div>
+    <p id="status">正在从服务器读取最新版本号（不读本地缓存）…</p>
+    <p class="ver" id="verLabel"></p>
+    <p id="hint" hidden>若未自动跳转，请点：<a id="link" href="#">进入游戏</a></p>
+    <p style="font-size:0.85rem;color:#94a3b8">
+      仍无效时：Chrome → 设置 → 隐私 → 清除浏览数据 → 仅勾选「缓存的图片和文件」→ 时间范围选「过去 1 小时」→ 针对
+      <code>jk9988610.github.io</code>
+    </p>
+  </div>
+  <script>
+    (function () {
+      var status = document.getElementById("status");
+      var label = document.getElementById("verLabel");
+      var hint = document.getElementById("hint");
+      var link = document.getElementById("link");
+
+      function go(live) {
+        var v = live || String(Date.now());
+        if (label) {
+          label.textContent = "v" + v;
+        }
+        var target =
+          "index.html?fresh=" + Date.now() + "&v=" + encodeURIComponent(v) + "&from=refresh";
+        if (link) {
+          link.href = target;
+        }
+        try {
+          sessionStorage.removeItem("pom_fresh_redirect");
+          Object.keys(sessionStorage).forEach(function (k) {
+            if (k.indexOf("pom_auto_refresh_") === 0) {
+              sessionStorage.removeItem(k);
+            }
+          });
+        } catch (e) {}
+        location.replace(target);
+      }
+
+      fetch("js/version.js?probe=" + Date.now(), { cache: "no-store" })
+        .then(function (res) {
+          return res.text();
+        })
+        .then(function (text) {
+          var match = text.match(/POM_VERSION\s*=\s*"([^"]+)"/);
+          var live = match && match[1];
+          if (!live) {
+            throw new Error("无法解析版本号");
+          }
+          if (status) {
+            status.textContent = "已获取线上版本，正在跳转…";
+          }
+          go(live);
+        })
+        .catch(function (err) {
+          if (status) {
+            status.innerHTML =
+              '<span class="err">拉取 version.js 失败</span>（' +
+              (err.message || err) +
+              "）";
+          }
+          if (hint) {
+            hint.hidden = false;
+          }
+          go(String(Date.now()));
+        });
+    })();
+  </script>
+</body>
+</html>
