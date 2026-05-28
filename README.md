@@ -35,7 +35,7 @@
 3. push 到 `main` 后 Actions 自动部署，或手动 Run workflow  
 4. 强刷站点  
 
-验收：线上 https://jk9988610.github.io/Points-of-mess/js/version.js 与 `main` 的 `POM_VERSION` 一致（当前 **0.6.0**）。缓存问题见 [docs/PAGES-FIX.md](docs/PAGES-FIX.md)。
+验收：线上 https://jk9988610.github.io/Points-of-mess/js/version.js 与 `main` 的 `POM_VERSION` 一致（当前 **0.6.2**）。缓存问题见 [docs/PAGES-FIX.md](docs/PAGES-FIX.md)。
 
 > **注意：** 仓库与 Pages **不含** API 密钥；登录后密钥仅存本机浏览器。
 
