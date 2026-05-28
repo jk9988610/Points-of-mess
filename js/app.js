@@ -79,6 +79,26 @@
   const statusBannerEl = document.getElementById("statusBanner");
   const stopButtonEl = document.getElementById("stopGeneration");
   const hintEl = document.getElementById("mapHint");
+  const proofBlackboardEl = document.getElementById("proofBlackboard");
+
+  function syncProofBlackboard() {
+    if (!proofBlackboardEl) {
+      return;
+    }
+    const session = state.talkingId ? getSession(state, state.talkingId) : null;
+    const plot = session?.plotSummary || "";
+    const show = Boolean(state.talkingId && String(plot).trim());
+    if (!show) {
+      proofBlackboardEl.classList.add("hidden");
+      proofBlackboardEl.classList.remove("proof-blackboard--active");
+      const body = document.getElementById("proofBlackboardBody");
+      if (body) {
+        body.innerHTML = "";
+      }
+      return;
+    }
+    window.GameProofBoard?.updateProofBoard?.(proofBlackboardEl, plot);
+  }
 
   const CHAR_BUBBLE_GAP = 36;
 
@@ -250,6 +270,8 @@
       }
       renderOptionButtons(state.currentOptions, state.optionsLoading);
     }
+
+    syncProofBlackboard();
 
     if (!state.talkingId || !active) {
       return;
@@ -462,6 +484,7 @@
       memoryInputEl.value = "";
     }
     stopButtonEl.disabled = true;
+    syncProofBlackboard();
     renderMap();
     window.PomDebug?.logLocal("结束对话");
   }

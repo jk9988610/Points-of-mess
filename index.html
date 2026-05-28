@@ -73,6 +73,18 @@
     </section>
 
     <div class="map-stage" id="mapStage">
+      <aside
+        class="proof-blackboard hidden"
+        id="proofBlackboard"
+        aria-label="论证黑板"
+        aria-live="polite"
+      >
+        <header class="proof-blackboard__header">
+          <span class="proof-blackboard__title">论证黑板</span>
+          <span class="proof-blackboard__subtitle">G / P / L 含义</span>
+        </header>
+        <div class="proof-blackboard__body" id="proofBlackboardBody" data-proof-board-body></div>
+      </aside>
       <canvas id="gameCanvas" aria-label="宇宙地图"></canvas>
       <div class="speech-bubble speech-bubble--npc" id="speechBubble" role="status" aria-live="polite">
         <p class="speech-bubble-text" id="speechBubbleText"></p>
