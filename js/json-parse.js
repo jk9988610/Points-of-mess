@@ -45,7 +45,7 @@
 
     const options = [];
     const intentRe =
-      /"intent"\s*:\s*"(advance|clarify|explore|premise|keypoint|followup|close|pause)"\s*,\s*"line"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+      /"intent"\s*:\s*"(advance|decoy|clarify|explore|premise|keypoint|followup|close|pause)"\s*,\s*"line"\s*:\s*"((?:\\.|[^"\\])*)"/g;
     let m;
     while ((m = intentRe.exec(text)) !== null) {
       options.push({

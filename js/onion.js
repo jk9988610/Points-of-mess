@@ -22,6 +22,9 @@
     if (t === "advance" || t === "keypoint") {
       return "keypoint";
     }
+    if (t === "decoy") {
+      return "decoy";
+    }
     if (t === "clarify" || t === "explore" || t === "premise" || t === "followup") {
       return "followup";
     }
@@ -30,6 +33,10 @@
 
   function isAdvancePickIntent(intent) {
     return resolveEngineIntent(intent) === "keypoint";
+  }
+
+  function isDecoyPickIntent(intent) {
+    return resolveEngineIntent(intent) === "decoy";
   }
 
   /** 从 seed 读取论证配置（兼容 argumentProfile 与旧字段） */
@@ -346,9 +353,10 @@
     parts.push(
       "",
       "【选项写法】",
-      "advance（推证）：须实质推进开放引理 Lk。",
-      "clarify / explore / premise：了解论题、证法或前提，不推进证明。",
-      "恰好一条 advance；三条了解类互不重复。"
+      "advance（正确推证）与 decoy（似真误推）：两条推证句外观同为「推证」，程序随机排布 A/B。",
+      "decoy 须似真但不可推进当前 Lk（跳步、误用前提、方向反了等）。",
+      "clarify / explore：帮助证辩者理解论题或证法，不推进证明；应含可核对线索。",
+      "恰好一条 advance、一条 decoy；两了解类互不重复。"
     );
     if (inquireStreak >= 2) {
       parts.push("连续多轮未选 advance：本轮 advance 须直指待证 Lk。");
@@ -412,8 +420,9 @@
 
     if (pickIntent === "followup") {
       lines.push(
-        "【了解轮】证辩者询问题意/证法/前提；用陈述解释，禁止问句",
-        "本句可不给出新推导步，但禁止推托「去查手册」或反咬证辩者"
+        "【了解轮】证辩者询问题意/证法；用陈述解释，禁止问句",
+        "本句可不给出新推导步，但须给出可核对线索，帮助判断哪条推证更稳",
+        "禁止推托「去查手册」或反咬证辩者"
       );
       if (countRecentFollowupStreak(context?.session) >= 2) {
         lines.push("证辩者多轮了解：可加一句可核对推导步破冰，仍用陈述");
@@ -422,7 +431,12 @@
       return `\n【证明规则·本轮】\n${lines.map((l) => `- ${l}`).join("\n")}\n`;
     }
 
-    if (context?.playerConcreteReveal && pickIntent === "keypoint") {
+    if (context?.wrongProofPick) {
+      lines.push(
+        "证辩者选了**错误推证**（decoy）；指出跳步/误用前提/方向错误，不给新进展",
+        "用陈述句，禁止问句"
+      );
+    } else if (context?.playerConcreteReveal && pickIntent === "keypoint") {
       lines.push(
         "证辩者已出示引理（含可核对专名）。须兑现交换：直接给出一条新推导步",
         "禁止推托；禁止只顶回不给步；**禁止问句**"
@@ -1349,7 +1363,10 @@
     if (!session) {
       return getNeglectState(session, seed);
     }
-    if (pickIntent === "followup") {
+    if (pickIntent === "followup" || window.GameProofIntents?.isInquireIntent?.(pickIntent)) {
+      return getNeglectState(session, seed);
+    }
+    if (window.GameProofIntents?.isDecoyIntent?.(pickIntent)) {
       return getNeglectState(session, seed);
     }
     const pending = extractPendingLines(plotSummary);
@@ -1442,6 +1459,7 @@
       playerLine: String(extra?.playerLine || ""),
       emptyPromiseBankrupt: bankrupt,
       emptyPromiseCount: emptyCount,
+      wrongProofPick: Boolean(extra?.wrongProofPick),
     };
   }
 
@@ -1562,6 +1580,7 @@
     isProofTheme,
     resolveEngineIntent,
     isAdvancePickIntent,
+    isDecoyPickIntent,
     getArgumentProfile,
     getMaxOpenClaims,
     getMinPremisesForEnding,

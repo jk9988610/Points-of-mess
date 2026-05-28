@@ -19,16 +19,16 @@ ${hint}
   "opening":"证官开场 1～2 句（≤40字，陈述式，禁止问句）",
   "plotSummary":"完整证明席（【论证目标】论题 G +【证明席】[前提]、[待证#1] L1、- [依赖] 若要证 G，则需证 L1；≤900字）",
   "options":[
-    {"intent":"advance","line":"证辩者推进证明（≤35字，须能推进待证 L1）"},
-    {"intent":"clarify","line":"了解论题/待证含义（≤35字，不推进）"},
-    {"intent":"explore","line":"了解证法结构（≤35字，不推进）"},
-    {"intent":"premise","line":"了解某前提（≤35字，不推进）"}
+    {"intent":"advance","line":"证辩者正确推证（≤35字，须能推进待证 L1）"},
+    {"intent":"decoy","line":"似真误推（≤35字，跳步或误用前提，不可推进 L1）"},
+    {"intent":"clarify","line":"了解论题/待证含义（≤35字，含可核对线索，不推进）"},
+    {"intent":"explore","line":"了解证法结构（≤35字，含线索，不推进）"}
   ]
 }
 
 【规则】
-1. options 恰好 4 条，intent 各一；advance 仅 1 条且必须能推进证明
-2. 三条了解类语义互不重复；禁止休庭/离开
+1. options 恰好 4 条：advance、decoy、clarify、explore 各一；advance 须能推进 L1，decoy 须似真但不可推进
+2. 两了解类语义互不重复；禁止休庭/离开
 3. plotSummary 用数学证明体标记；待证至多 1 条；[依赖] 只写命题编号（G/Lk），不写引理全文
 4. 禁止【关系与态度】段`;
   }
@@ -49,11 +49,11 @@ ${hint}
         line: String(item?.line || item?.text || "").trim(),
       }))
       .filter((o) => o.intent && o.line);
-    const options = window.GameProofIntents?.attachOptionIds?.(parsed) || [];
-    const check = window.GameProofIntents?.validateProofOptions?.(options);
-    if (!check?.ok) {
-      throw new Error(check?.reason || "选项校验失败");
+    const checkRaw = window.GameProofIntents?.validateProofOptions?.(parsed);
+    if (!checkRaw?.ok) {
+      throw new Error(checkRaw?.reason || "选项校验失败");
     }
+    const options = window.GameProofIntents?.attachOptionIds?.(parsed) || [];
     return { opening, plotSummary, options };
   }
 

@@ -335,6 +335,7 @@
 
   const INTENT_ARIA = {
     advance: "推证",
+    decoy: "推证",
     clarify: "题意",
     explore: "证法",
     premise: "前提",
@@ -377,7 +378,8 @@
       }
       btn.classList.toggle(
         "option-btn--advance",
-        opt?.intent === "advance" || opt?.intent === "keypoint"
+        window.GameProofIntents?.isProofStepIntent?.(opt?.intent) ||
+          opt?.intent === "keypoint"
       );
       btn.classList.toggle("option-btn--close", opt?.intent === "close");
       btn.disabled = disabled || !opt?.line || loading;
@@ -614,31 +616,76 @@
     syncSpeechBubbles(false);
   }
 
-  function finishEpisodeAfterClose() {
+  async function finishEpisodeAfterClose() {
     const characterId = state.talkingId;
     if (characterId) {
       const session = getSession(state, characterId);
       session.messages = [];
       session.plotSummary = "";
       session.lastSummaryAtOptionTurn = 0;
+      resetSessionProgressFlags(session);
+      persist(state);
+    }
+    state.currentOptions = null;
+    state.optionsLoading = false;
+    state.playerBubbleText = "";
+    stopButtonEl.disabled = true;
+    window.PomDebug?.logLocal(
+      "本局结局结束",
+      "自动从池中抽取下一题",
+      ["ui"]
+    );
+    if (characterId && isNearPlayer(state.player, getCharacter(characterId))) {
+      setStatus("论证闭合，抽取下一题…", false);
+      state.episodeAwaitingRestart = false;
+      state.dialogueHungUp = false;
+      renderMap();
+      syncSpeechBubbles(false);
+      await startTalking(characterId);
+      return;
+    }
+    state.episodeAwaitingRestart = true;
+    state.dialogueHungUp = true;
+    setOptionsVisible(false);
+    setMemoryInputVisible(false);
+    setStatus("本局已结束。靠近证官可继续下一题。", false);
+    renderMap();
+    syncSpeechBubbles(false);
+  }
+
+  async function finishEpisodeAfterFailure() {
+    const characterId = state.talkingId;
+    if (characterId) {
+      const session = getSession(state, characterId);
+      session.messages = [];
+      session.plotSummary = "";
       session.lastSummaryAtOptionTurn = 0;
       resetSessionProgressFlags(session);
       persist(state);
     }
     state.currentOptions = null;
     state.optionsLoading = false;
+    state.playerBubbleText = "";
+    stopButtonEl.disabled = true;
+    window.PomDebug?.logLocal(
+      "本局失败",
+      "自动从池中抽取下一题",
+      ["ui"]
+    );
+    if (characterId && isNearPlayer(state.player, getCharacter(characterId))) {
+      setStatus("本局未证毕，抽取下一题…", false);
+      state.episodeAwaitingRestart = false;
+      state.dialogueHungUp = false;
+      renderMap();
+      syncSpeechBubbles(false);
+      await startTalking(characterId);
+      return;
+    }
     state.episodeAwaitingRestart = true;
     state.dialogueHungUp = true;
     setOptionsVisible(false);
     setMemoryInputVisible(false);
-    setPlayerBubble("");
-    stopButtonEl.disabled = true;
-    window.PomDebug?.logLocal(
-      "本局结局结束",
-      "已重置会话并挂起 · 再点证官重新开始",
-      ["ui"]
-    );
-    setStatus("本局已结束。再点证官重新开始。", false);
+    setStatus("本局失败。靠近证官可继续下一题。", false);
     renderMap();
     syncSpeechBubbles(false);
   }
@@ -657,34 +704,6 @@
     session.lastPickIntent = "";
     session.keypointTurnCount = 0;
     window.GameProofPool?.clearSessionProof?.(session);
-  }
-
-  function finishEpisodeAfterFailure() {
-    const characterId = state.talkingId;
-    if (characterId) {
-      const session = getSession(state, characterId);
-      session.messages = [];
-      session.plotSummary = "";
-      session.lastSummaryAtOptionTurn = 0;
-      resetSessionProgressFlags(session);
-      persist(state);
-    }
-    state.currentOptions = null;
-    state.optionsLoading = false;
-    state.episodeAwaitingRestart = true;
-    state.dialogueHungUp = true;
-    setOptionsVisible(false);
-    setMemoryInputVisible(false);
-    setPlayerBubble("");
-    stopButtonEl.disabled = true;
-    window.PomDebug?.logLocal(
-      "本局失败",
-      "回避 #1 达上限 · 已重置并挂起 · 再点证官重新开始",
-      ["ui"]
-    );
-    setStatus("本局失败。再点证官重新开始。", false);
-    renderMap();
-    syncSpeechBubbles(false);
   }
 
   function handleSuspendOption() {
@@ -887,9 +906,13 @@
       ) || { shouldWarn: false, shouldFail: false };
 
     session.lastPickIntent = pick.intent;
-    if (!window.GameProofIntents?.isAdvanceIntent?.(pick.intent)) {
+    if (window.GameProofIntents?.isInquireIntent?.(pick.intent)) {
       window.GameOnion?.advanceInquireIndex?.(session);
     }
+
+    const wrongProofPick = Boolean(
+      window.GameProofIntents?.isDecoyIntent?.(pick.intent) || pick.isCorrect === false
+    );
 
     window.PomDebug?.logUser("玩家选择", {
       intent: pick.intent,
@@ -910,11 +933,9 @@
       createdAt: Date.now(),
       status: "done",
     });
-    window.GameOnion?.markKnowledgeSpent?.(
-      session,
-      apiLine,
-      seed
-    );
+    if (window.GameProofIntents?.isAdvanceIntent?.(pick.intent)) {
+      window.GameOnion?.markKnowledgeSpent?.(session, apiLine, seed);
+    }
     persist(state);
     setPlayerBubble(rawLine);
 
@@ -995,6 +1016,7 @@
       playerLine: apiLine,
       emptyPromiseBankrupt,
       emptyPromiseCount,
+      wrongProofPick,
     };
 
     const willSummary = window.GameSummary?.willRefreshPlotSummaryThisPick?.(session);

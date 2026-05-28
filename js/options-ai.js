@@ -2,9 +2,9 @@
   const OPTION_SPECS =
     window.GameProofIntents?.PROOF_OPTION_SPECS || [
       { id: 1, intent: "advance", label: "推证" },
-      { id: 2, intent: "clarify", label: "题意" },
-      { id: 3, intent: "explore", label: "证法" },
-      { id: 4, intent: "premise", label: "前提" },
+      { id: 2, intent: "decoy", label: "推证" },
+      { id: 3, intent: "clarify", label: "题意" },
+      { id: 4, intent: "explore", label: "证法" },
     ];
 
   /** @deprecated 兼容旧引用 */
@@ -68,23 +68,23 @@
     return `你是证明题选项撰稿人。证辩者与「${name}」对论。输出证辩者下一句（中文 ≤35 字）。
 
 【选项类型】共 4 条，intent 各一：
-- advance（推证）：**唯一**推进论题 G / 待证 Lk；给出引理交换或推导请求，须实质推进一步
-- clarify（题意）：了解论题 G 或待证 Lk 含义，不推进证明
-- explore（证法）：了解证法结构/反证或分步思路，不推进证明
-- premise（前提）：了解某条前提为何成立或如何用，不推进证明
+- advance（正确推证）：须实质推进当前待证 Lk / 论题 G
+- decoy（误推证）：表面像推证，但跳步、误用前提或方向错误，**不可**推进 Lk
+- clarify（题意）：了解论题 G 或 Lk 含义；给出可核对线索，不推进证明
+- explore（证法）：了解证法结构/反证或分步思路；给出可核对线索，不推进证明
 
-三条了解类语义互不重复。禁止休庭/离开。偏逻辑表述，避免复杂公式与繁琐计算。
+decoy 与 advance 语气同为推证请求，难度相近，便于 A/B 辨伪。两了解类互不重复。禁止休庭/离开。偏逻辑，少公式。
 只输出 JSON：
-{"options":[{"intent":"advance","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."},{"intent":"premise","line":"..."}]}`;
+{"options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."}]}`;
   }
 
   const buildOptionsSystemDuo = buildOptionsSystemProof;
 
   function buildIntentHintsForApi() {
-    return `- advance（推证）
+    return `- advance（正确推证）
+- decoy（误推证）
 - clarify（题意）
 - explore（证法）
-- premise（前提）
 - 结束证辩`;
   }
 
@@ -345,11 +345,11 @@
         parsed.push({ intent, line: line.replace(/^「+/, "").replace(/」+$/, "") });
       }
     }
-    const options = window.GameProofIntents?.attachOptionIds?.(parsed) || [];
-    const check = window.GameProofIntents?.validateProofOptions?.(options);
-    if (!check?.ok) {
-      throw new Error(check?.reason || "选项格式无效");
+    const checkRaw = window.GameProofIntents?.validateProofOptions?.(parsed);
+    if (!checkRaw?.ok) {
+      throw new Error(checkRaw?.reason || "选项格式无效");
     }
+    const options = window.GameProofIntents?.attachOptionIds?.(parsed) || [];
     return options;
   }
 
@@ -371,9 +371,9 @@
     return buildProofOptionsList(
       window.GameProofIntents?.attachOptionIds?.([
         { intent: "advance", line: duo.keypoint },
+        { intent: "decoy", line: "这步似可跳过 L1，直接证 G？" },
         { intent: "clarify", line: duo.followup },
         { intent: "explore", line: "这步证法结构是什么？" },
-        { intent: "premise", line: "前提 P1 如何理解？" },
       ]) || []
     );
   }
@@ -448,7 +448,7 @@ ${archetype.system}
       return `${base}
 
 非收束轮示例：
-{"reply":"先把逻辑步讲实，我再补一步。","options":[{"intent":"advance","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."},{"intent":"premise","line":"..."}]}
+{"reply":"先把逻辑步讲实，我再补一步。","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."}]}
 
 收束轮示例：
 {"reply":"G 已证毕，休庭。"}`;
@@ -473,8 +473,8 @@ ${summaryBlock}
 ${buildIntentHintsForApi()}
 
 【输出】
-${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"advance","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."},{"intent":"premise","line":"..."}]}。'}
-reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 4 条且 intent 各一；**advance 必须能推进证明**；了解类不得照抄旧句。${closeBlock}`;
+${turn.isClose ? "只输出 {\"reply\":\"...\"}。" : '输出 {"reply":"...","options":[{"intent":"advance","line":"..."},{"intent":"decoy","line":"..."},{"intent":"clarify","line":"..."},{"intent":"explore","line":"..."}]}。'}
+reply：1～2 句，≤40 字；${CHARACTER_REPLY_RULE} options 须 4 条且 intent 各一；**advance 正确、decoy 误推**；了解类含线索、不得照抄旧句。${closeBlock}`;
   }
 
   function presetOptions(archetype) {
