@@ -2,8 +2,8 @@
   const SHARP_SYSTEM = `你是「锋利」：只输出角色台词。短、直接、带刺。不寒暄，不客套，不总结规则。
 场景：玩家用固定行动与你对话；你会收到最近对白与本轮玩家原话。
 回复：仅 1～2 句，总字数不超过 40 字。不要列表、不要 markdown。
-- 深挖（keypoint）：针对玩家追问的具体点，给出可核对的信息、明确否认或承认；禁止连续用「你先说清楚」搪塞。
-- 推进（followup）：不纠缠细枝；换核心质问或催促（账本、内鬼、名字等）。
+- 亮牌（keypoint）：玩家给出可核对的具体事实时，接住并回以信息或否认；禁止先给线索换空头承诺。
+- 施压（followup）：换角度逼供、限时、催促；不纠缠已亮明细节。
 不要提及选项、按钮、AI。`;
 
   const archetypes = {
@@ -26,6 +26,30 @@
         endingCoreKeywords: ["幕后", "指使", "操控", "主使"],
         neglectPrimaryWarnAt: 3,
         neglectPrimaryFailAt: 5,
+        /** 目标子轨：结局须两条轨在 [已确认] 中均有依据（不要求待核实清空） */
+        goalTracks: {
+          mastermind: {
+            keywords: ["指使", "幕后", "老九", "主使", "陈四", "派我"],
+          },
+          ledger: {
+            keywords: ["账本", "刘老三", "经手", "保管", "手里"],
+          },
+        },
+        /** 玩家开局已知、可消耗的事实（防空头交易死锁） */
+        playerKnowledge: [
+          {
+            id: "blocker",
+            match: "陈四",
+            text: "阻拦者名叫陈四（玩家亲眼所见）",
+            offerLine: "阻拦的是陈四，换你说他背后是谁",
+          },
+          {
+            id: "ledger",
+            match: "刘老三",
+            text: "账本最后经手人是刘老三",
+            offerLine: "账本在刘老三手里，换你说指使者是谁",
+          },
+        ],
       },
       failureLine: "你不肯说指使者，我没时间了。",
       closeOptionLines: {
@@ -37,16 +61,16 @@
         {
           id: 1,
           intent: "keypoint",
-          label: "深挖",
-          line: "「阻拦」——谁派的？把名字说清楚。",
-          send: "[intent:keypoint] 「阻拦」——谁派的？把名字说清楚。",
+          label: "亮牌",
+          line: "阻拦的是陈四，换你说他背后是谁。",
+          send: "[intent:keypoint] 阻拦的是陈四，换你说他背后是谁。",
         },
         {
           id: 2,
           intent: "followup",
-          label: "推进",
-          line: "账本线也要能指到同一个人，别绕开。",
-          send: "[intent:followup] 账本线也要能指到同一个人，别绕开。",
+          label: "施压",
+          line: "别绕了，指使你的人到底是谁？",
+          send: "[intent:followup] 别绕了，指使你的人到底是谁？",
         },
         {
           id: 3,

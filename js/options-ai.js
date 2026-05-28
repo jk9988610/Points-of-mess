@@ -1,7 +1,7 @@
 (function () {
   const OPTION_SCHEMA = [
-    { id: 1, intent: "keypoint", label: "深挖" },
-    { id: 2, intent: "followup", label: "推进" },
+    { id: 1, intent: "keypoint", label: "亮牌" },
+    { id: 2, intent: "followup", label: "施压" },
     { id: 3, intent: "suspend", label: "挂起" },
   ];
 
@@ -52,16 +52,15 @@
 
   function buildOptionsSystemDuo(characterName) {
     const name = String(characterName || "锋利").trim() || "锋利";
-    return `你是选项撰稿人。玩家与「${name}」对峙。选项=玩家说的话（问句/祈使/交易）。
+    return `你是选项撰稿人。玩家与「${name}」对峙。选项=玩家说的话。
 
-- keypoint（深挖）：对准【程序·洋葱】#1。
-- followup（推进）：对准 #2 或另一待核实。
+- keypoint（亮牌）：从【玩家已知】选 offer 句，或确认/核对锋利上一句；须含具体人名/地点/物证。
+- followup（施压）：逼供、限时、换角度；对准本局目标或当前待核实，但**不**写空头「若我说…你就…」。
 
-【交易·先亮牌】若写交换句，line 中**必须包含玩家已给出的具体信息**（人名/地点/物证），再要求对方回报。
-- ❌ 禁止：「账本下落换你一句实话」「若我说指使者你就说老九」等空头承诺
-- ✅ 允许：「账本在刘老三手里，换你说陈四背后是谁」
+❌ 禁止：「账本下落换你一句实话」等空换。
+✅ 亮牌例：「阻拦的是陈四，换你说他背后是谁」；施压例：「别绕了，指使者到底是谁？」
 
-禁止两条同义或 line 相同；禁止连续两轮都只问「你先告诉我X」。
+禁止两条同义；禁止连续两轮都只问「你先告诉我X」。
 
 只输出 JSON（无 markdown）：
 {"options":[{"intent":"keypoint","line":"..."},{"intent":"followup","line":"..."}]}
@@ -70,9 +69,25 @@
 
   /** 仅合并 API 备用路径；挂起按钮不进模型上下文 */
   function buildIntentHintsForApi() {
-    return `- keypoint（深挖）
-- followup（推进）
+    return `- keypoint（亮牌）
+- followup（施压）
 - 结束对话`;
+  }
+
+  function applyGoalDrivenOptions(archetype, session, duo, onionContext) {
+    const seed = archetype?.onionSeed;
+    const reveal = window.GameOnion?.pickProgramRevealLine?.(session, seed);
+    if (!reveal) {
+      return duo;
+    }
+    const stall = (onionContext?.stallTurns ?? 0) >= 2;
+    const keypoint = String(duo?.keypoint || "").trim();
+    const hollow = window.GameOnion?.detectHollowTradeOffer?.(keypoint);
+    const concrete = window.GameOnion?.hasConcretePlayerInfo?.(keypoint);
+    if (stall || hollow || !concrete) {
+      return { ...duo, keypoint: reveal };
+    }
+    return duo;
   }
 
   function fixedSuspendLine(archetype) {
@@ -698,7 +713,8 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
       duo = parseDuoOptionsFromRaw(raw);
     }
 
-    return buildHybridOptions(archetype, duo);
+    const merged = applyGoalDrivenOptions(archetype, session, duo, onionContext);
+    return buildHybridOptions(archetype, merged);
   }
 
   async function callCombinedOnce({ systemPrompt, apiMessages, isClose, signal }) {
@@ -738,6 +754,8 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
     const onionContext = {
       stallTurns: session?.stallTurns ?? 0,
       emptyPromiseCount: session?.emptyPromiseCount ?? 0,
+      session,
+      seed: archetype?.onionSeed,
     };
     const retry = window.PomApiRetry?.withApiRetries;
 
@@ -958,6 +976,8 @@ reply：1～2 句，≤40 字。options 三项须含 intent 与 line；**keypoin
           onionContext: {
             stallTurns: session?.stallTurns ?? 0,
             emptyPromiseCount: session?.emptyPromiseCount ?? 0,
+            session,
+            seed: archetype?.onionSeed,
           },
         });
         return { reply, options };

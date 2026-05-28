@@ -133,12 +133,17 @@
       return "";
     }
     const stallTurns = context?.stallTurns ?? 0;
+    const knowledge = formatPlayerKnowledgeForOptions(context?.session, context?.seed);
     const parts = [
-      "【程序·洋葱中层】",
-      "仅一个本局核心目标；#1/#2 是并行中层线索，都指向同一幕后，不是两个终局。",
-      "keypoint 对准 #1；followup 对准 #2。交易句须先亮牌（见下方规则）。",
+      "【程序·目标驱动选项】",
+      "唯一本局目标；子轨 #1 指使链 / #2 账本线，均服务同一幕后。",
+      "keypoint（亮牌）：须陈述【玩家已知】中的具体事实，或确认锋利上一句；可写「…，换你说…」",
+      "followup（施压）：逼供、限时、换角度；禁止空头「若我说…你就…」",
       "禁止「你必须先答另一条线」式拒绝。",
     ];
+    if (knowledge) {
+      parts.push(knowledge);
+    }
     if (goal) {
       parts.push(`本局核心目标：${goal}`);
     }
@@ -146,7 +151,9 @@
       parts.push(`#${i + 1} ${p}`);
     });
     if (stallTurns >= 2) {
-      parts.push("（僵局：选项须含让步/交换，迫使双方各让一步）");
+      parts.push(
+        "（僵局：keypoint 必须从【玩家已知】选一条 offerLine 亮牌；followup 施压但不空换）"
+      );
     }
     if (context?.emptyPromiseCount >= 2) {
       parts.push(
@@ -225,9 +232,16 @@
       if (pending[0]) {
         lines.push(`#1 仍为：${pending[0]}`);
       }
-    } else if (pickIntent === "keypoint" && pending[0]) {
+    } else if (pickIntent === "keypoint") {
       lines.push(
-        `玩家针对 #1「${pending[0]}」：须具体回答、承认或否认，禁止「你先说清楚」搪塞`
+        "玩家亮牌（keypoint）：已给出或可核对的具体事实；须接住并回以信息、否认或交换，禁止空换"
+      );
+      if (pending[0]) {
+        lines.push(`当前优先待核实：${pending[0]}`);
+      }
+    } else if (pickIntent === "followup" && pending[0]) {
+      lines.push(
+        `玩家施压（followup）：可逼供、限时；针对「${pending[0]}」或账本线，勿整轮拒答`
       );
     } else if (pending[0]) {
       lines.push(`优先回应中层 #1：${pending[0]}`);
@@ -365,6 +379,99 @@
     return (session?.emptyPromiseCount || 0) >= 2;
   }
 
+  function getPlayerKnowledgeList(seed) {
+    const raw = seed?.playerKnowledge;
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw
+      .map((k) => ({
+        id: String(k?.id || "").trim(),
+        match: String(k?.match || "").trim(),
+        text: String(k?.text || "").trim(),
+        offerLine: String(k?.offerLine || k?.text || "").trim(),
+      }))
+      .filter((k) => k.id && k.offerLine);
+  }
+
+  function getAvailableKnowledge(session, seed) {
+    const spent = session?.spentPlayerKnowledge || [];
+    return getPlayerKnowledgeList(seed).filter((k) => !spent.includes(k.id));
+  }
+
+  function formatPlayerKnowledgeForOptions(session, seed) {
+    const avail = getAvailableKnowledge(session, seed);
+    if (!avail.length) {
+      return "【玩家已知】（已用尽，keypoint 须确认锋利上一句或陈述新事实）";
+    }
+    const lines = avail.map(
+      (k, i) => `  ${i + 1}. ${k.text} → offer:「${k.offerLine}」`
+    );
+    return `【玩家已知】（keypoint 优先用 offer 亮牌）\n${lines.join("\n")}`;
+  }
+
+  function pickProgramRevealLine(session, seed) {
+    const next = getAvailableKnowledge(session, seed)[0];
+    return next?.offerLine || "";
+  }
+
+  function markKnowledgeSpent(session, playerLine, seed) {
+    if (!session) {
+      return false;
+    }
+    if (!Array.isArray(session.spentPlayerKnowledge)) {
+      session.spentPlayerKnowledge = [];
+    }
+    const line = String(playerLine || "");
+    let marked = false;
+    for (const k of getPlayerKnowledgeList(seed)) {
+      if (session.spentPlayerKnowledge.includes(k.id)) {
+        continue;
+      }
+      if (k.match && line.includes(k.match)) {
+        session.spentPlayerKnowledge.push(k.id);
+        marked = true;
+      }
+    }
+    return marked;
+  }
+
+  function detectPlayerRevealedKnowledge(playerLine, seed) {
+    const line = String(playerLine || "");
+    return getPlayerKnowledgeList(seed).some(
+      (k) => k.match && line.includes(k.match)
+    );
+  }
+
+  function detectLedgerTrackProgress(playerLine, seed) {
+    const line = String(playerLine || "");
+    const kws = seed?.goalTracks?.ledger?.keywords || [
+      "账本",
+      "经手",
+      "保管",
+      "刘老三",
+    ];
+    return kws.some((k) => line.includes(String(k).trim()));
+  }
+
+  function hasGoalTracksAchieved(plotSummary, seed) {
+    const tracks = seed?.goalTracks;
+    if (!tracks || typeof tracks !== "object") {
+      return null;
+    }
+    const confirmed = extractConfirmedLines(plotSummary).join("\n");
+    for (const key of Object.keys(tracks)) {
+      const kws = tracks[key]?.keywords;
+      if (!Array.isArray(kws) || kws.length === 0) {
+        continue;
+      }
+      if (!kws.some((k) => confirmed.includes(String(k).trim()))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /** 回合初：根据玩家本轮台词更新回避 #1 计数（与摘要是否压缩无关） */
   function bumpNeglectBeforeReply(session, playerLine, plotSummary, seed) {
     if (!session) {
@@ -378,6 +485,20 @@
     if (detectPlayerNamesMastermind(playerLine)) {
       session.neglectPrimaryRounds = 0;
       return getNeglectState(session, seed);
+    }
+    if (seed?.goalTracks) {
+      if (detectPlayerRevealedKnowledge(playerLine, seed)) {
+        session.neglectPrimaryRounds = 0;
+        return getNeglectState(session, seed);
+      }
+      if (detectLedgerTrackProgress(playerLine, seed)) {
+        return getNeglectState(session, seed);
+      }
+      const mastermindKws = seed.goalTracks.mastermind?.keywords || [];
+      if (mastermindKws.some((k) => String(playerLine).includes(String(k).trim()))) {
+        session.neglectPrimaryRounds = 0;
+        return getNeglectState(session, seed);
+      }
     }
     session.neglectPrimaryRounds = (session.neglectPrimaryRounds || 0) + 1;
     return getNeglectState(session, seed);
@@ -475,14 +596,10 @@
     return keywords.some((k) => confirmed.includes(String(k).trim()));
   }
 
-  /** 中层剥完、核心条数足够且档案已写出「幕后/指使」等 → 可进入结局 */
+  /** 目标子轨齐备或（旧）待核实清空 → 可进入结局 */
   function isReadyForEnding(plotSummary, seed) {
     const goal = extractGoal(plotSummary);
     if (!goal) {
-      return false;
-    }
-    const pending = extractPendingLines(plotSummary);
-    if (pending.length > 0) {
       return false;
     }
     const minConfirmed = Number(seed?.endingMinConfirmed) > 0 ? seed.endingMinConfirmed : 2;
@@ -490,7 +607,18 @@
     if (confirmed < minConfirmed) {
       return false;
     }
-    return hasCoreGoalAchieved(plotSummary, seed);
+    if (!hasCoreGoalAchieved(plotSummary, seed)) {
+      return false;
+    }
+    const tracksOk = hasGoalTracksAchieved(plotSummary, seed);
+    if (tracksOk === true) {
+      return true;
+    }
+    if (tracksOk === false) {
+      return false;
+    }
+    const pending = extractPendingLines(plotSummary);
+    return pending.length === 0;
   }
 
   window.GameOnion = {
@@ -519,5 +647,12 @@
     getNeglectState,
     updateStallCounters,
     replyContextFromSession,
+    getPlayerKnowledgeList,
+    getAvailableKnowledge,
+    pickProgramRevealLine,
+    markKnowledgeSpent,
+    detectPlayerRevealedKnowledge,
+    hasGoalTracksAchieved,
+    formatPlayerKnowledgeForOptions,
   };
 })();
