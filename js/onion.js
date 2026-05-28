@@ -92,25 +92,123 @@
     s = s.replace(/【关系与态度】[\s\S]*$/g, "").trim();
     s = s.replace(/\n- \[证毕\]\s*G[^\n]*/gi, "");
     s = s.replace(/\n- \[证毕#G\][^\n]*/gi, "");
+    s = s.replace(/【待证#(\d+)】/gi, "[待证#$1]");
+    s = s.replace(/\n\s*证明过程\s*[：:][\s\S]*/gi, "");
     const lines = [];
     for (const raw of s.split("\n")) {
       let line = raw;
+      const t = line.trim();
+      if (!t) {
+        lines.push(line);
+        continue;
+      }
+      if (/^证明过程\s*[：:]/.test(t) || /^故至多|^论题\s*G\s*得证/.test(t)) {
+        continue;
+      }
       const depInline = line.match(
         /^(\s*)若要证\s+(G|L[\d.]+)\s*，\s*则需证\s+(G|L[\d.]+)\s*[：:]\s*.+$/
       );
       if (depInline) {
         line = `- [依赖] 若要证 ${depInline[2]}，则需证 ${depInline[3]}`;
-      } else if (/^\s*若要证\s+(G|L[\d.]+)\s*，\s*则需证\s+(G|L[\d.]+)\s*$/.test(line.trim())) {
-        const m = line.trim().match(/若要证\s+(G|L[\d.]+)\s*，\s*则需证\s+(G|L[\d.]+)/);
+      } else if (/^\s*若要证\s+(G|L[\d.]+)\s*，\s*则需证\s+(G|L[\d.]+)\s*$/.test(t)) {
+        const m = t.match(/若要证\s+(G|L[\d.]+)\s*，\s*则需证\s+(G|L[\d.]+)/);
         if (m) {
           line = `- [依赖] 若要证 ${m[1]}，则需证 ${m[2]}`;
         }
       } else if (/^\s*-\s*\[依赖\]\s*/.test(line)) {
         line = line.replace(/^\s*-\s*\[依赖\]\s*/, "- [依赖] ");
+      } else if (/^前提\s*P(\d+)\s*[：:]/i.test(t)) {
+        const pm = t.match(/^前提\s*P(\d+)\s*[：:]\s*(.+)$/i);
+        if (pm) {
+          line = `- [前提] P${pm[1]}：${pm[2].trim()}`;
+        }
+      } else if (/^待证#?(\d+)\s+L\1\s*[：:]/i.test(t)) {
+        const tm = t.match(/^待证#?(\d+)\s+L\1\s*[：:]\s*(.+)$/i);
+        if (tm) {
+          line = `- [待证#${tm[1]}] L${tm[1]}：${tm[2].trim()}`;
+        }
+      } else if (/^\[待证#?(\d+)\]\s*(?:L\1\s*)?[：:]/i.test(t)) {
+        const tm = t.match(/^\[待证#?(\d+)\]\s*(?:L\1\s*)?[：:]\s*(.+)$/i);
+        if (tm) {
+          line = `- [待证#${tm[1]}] L${tm[1]}：${tm[2].trim()}`;
+        }
       }
       lines.push(line);
     }
     return lines.join("\n").trim();
+  }
+
+  /** 开局档案：压成可解析的证明席（删跳步正文、补全小节） */
+  function repairBootstrapPlotArchive(text) {
+    let s = normalizeProofArchive(String(text || "").trim());
+    if (!s) {
+      return s;
+    }
+    const goalBlock =
+      s.match(/【论证目标】[\s\S]*?(?=【证明席】|$)/)?.[0]?.trim() || "";
+    const body = extractArchiveBody(s) || s.replace(/^[\s\S]*?【证明席】/i, "").trim();
+    const premises = [];
+    const pending = [];
+    const deps = [];
+    const other = [];
+    let sawProcess = false;
+    for (const line of body.split("\n")) {
+      const t = line.trim();
+      if (!t || /^【/.test(t)) {
+        if (/^【证明进程】/.test(t)) {
+          sawProcess = true;
+        }
+        continue;
+      }
+      if (/^证明过程\s*[：:]/.test(t)) {
+        break;
+      }
+      if (/\[前提\]|^前提\s*P\d/i.test(t)) {
+        premises.push(line.trim().replace(/^前提\s*P/i, "- [前提] P"));
+        continue;
+      }
+      const pend = parsePendingFromLine(t.startsWith("-") ? t : `- ${t}`);
+      if (pend) {
+        pending.push(
+          `- [待证#${pend.orderKey}] L${pend.orderKey}：${pend.text.replace(/^L\d+[：:]\s*/i, "")}`
+        );
+        continue;
+      }
+      if (/\[依赖\]|^\s*若要证/.test(t)) {
+        deps.push(t.replace(/^[-*•]\s*/, "").replace(/^\[依赖\]\s*/, "- [依赖] "));
+        continue;
+      }
+      if (/\[已证\]|\[证毕/.test(t)) {
+        other.push(line);
+        continue;
+      }
+      if (/^假设|^同理|^因此|^故至多/.test(t) && !/\[/.test(t)) {
+        continue;
+      }
+      if (!sawProcess && /^- /.test(line)) {
+        other.push(line);
+      }
+    }
+    const parts = [];
+    if (goalBlock) {
+      parts.push(goalBlock, "");
+    }
+    parts.push("【证明席】");
+    if (premises.length) {
+      parts.push("【前提集】", ...premises.map((l) => (l.startsWith("-") ? l : `- ${l}`)));
+    }
+    parts.push("", "【证明进程】");
+    if (pending.length) {
+      parts.push(...pending);
+      if (!deps.some((d) => /\[依赖\]/.test(d))) {
+        parts.push(formatDependencyLine("G", "L1"));
+      } else {
+        parts.push(...deps.map((d) => (d.startsWith("-") ? d : `- ${d}`)));
+      }
+    } else {
+      parts.push(...other, ...deps);
+    }
+    return parts.join("\n").trim();
   }
 
   /** 命题间推导依赖（非单句内因果） */
@@ -186,6 +284,22 @@
       return {
         orderKey: "1",
         text: trimmed.replace(/^[-*•]\s*\[待核实\]\s*/i, "").trim(),
+      };
+    }
+    m = trimmed.match(/^[-*•]?\s*待证#?(\d+)\s+L\1\s*[：:]\s*(.*)$/i);
+    if (m) {
+      return {
+        orderKey: m[1] || "1",
+        text: (`L${m[1] || "1"}：` + (m[2] || "")).trim(),
+      };
+    }
+    m = trimmed.match(
+      /^[-*•]?\s*\[待证#?(\d+)\]\s*(?:L\1\s*)?[：:]\s*(.*)$/i
+    );
+    if (m) {
+      return {
+        orderKey: m[1] || "1",
+        text: (`L${m[1] || "1"}：` + (m[2] || "")).trim(),
       };
     }
     return null;
@@ -1684,6 +1798,7 @@
     getMinPremisesForEnding,
     openClaims,
     normalizeProofArchive,
+    repairBootstrapPlotArchive,
     extractArchiveBody,
     extractQedOrders,
     formatDependencyLine,
